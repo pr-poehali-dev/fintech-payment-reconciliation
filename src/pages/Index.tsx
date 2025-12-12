@@ -1,8 +1,22 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import Icon from '@/components/ui/icon';
+import {
+  LineChart,
+  Line,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell
+} from 'recharts';
 
 const revenueData = [
   { month: 'Янв', amount: 4200 },
@@ -14,9 +28,9 @@ const revenueData = [
 ];
 
 const reconciliationData = [
-  { name: 'Сверено', value: 85 },
-  { name: 'Расхождения', value: 12 },
-  { name: 'Ожидают', value: 3 }
+  { name: 'Сверено', value: 85, color: 'hsl(var(--primary))' },
+  { name: 'Расхождения', value: 12, color: 'hsl(var(--accent))' },
+  { name: 'Ожидают', value: 3, color: 'hsl(var(--muted))' }
 ];
 
 const paymentsData = [
@@ -38,6 +52,11 @@ const recentTransactions = [
 
 const Index = () => {
   const [activeModule, setActiveModule] = useState('dashboard');
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const modules = [
     { id: 'dashboard', name: 'Дашборд', icon: 'LayoutDashboard' },
@@ -48,9 +67,6 @@ const Index = () => {
     { id: 'access', name: 'Доступ', icon: 'Users' },
     { id: 'settings', name: 'Настройки', icon: 'Settings' }
   ];
-
-  const maxRevenue = Math.max(...revenueData.map(d => d.amount));
-  const maxPayments = Math.max(...paymentsData.map(d => d.count));
 
   return (
     <div className="min-h-screen bg-background">
@@ -171,166 +187,162 @@ const Index = () => {
               </Card>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-              <Card className="lg:col-span-2 border-border bg-card">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Icon name="TrendingUp" size={20} />
-                    Динамика выручки
-                  </CardTitle>
-                  <CardDescription>Помесячная статистика за полгода</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="h-[300px] flex items-end justify-around gap-4 px-4">
-                    {revenueData.map((item, index) => (
-                      <div key={index} className="flex-1 flex flex-col items-center gap-2">
-                        <div className="relative w-full bg-muted rounded-t-lg overflow-hidden group cursor-pointer transition-all hover:scale-105">
-                          <div 
-                            className="w-full bg-gradient-to-t from-primary to-primary/60 rounded-t-lg transition-all duration-500"
-                            style={{ 
-                              height: `${(item.amount / maxRevenue) * 250}px`,
-                              minHeight: '30px'
+            {mounted && (
+              <>
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+                  <Card className="lg:col-span-2 border-border bg-card">
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <Icon name="TrendingUp" size={20} />
+                        Динамика выручки
+                      </CardTitle>
+                      <CardDescription>Помесячная статистика за полгода</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <ResponsiveContainer width="100%" height={300}>
+                        <LineChart data={revenueData}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                          <XAxis dataKey="month" stroke="hsl(var(--muted-foreground))" />
+                          <YAxis stroke="hsl(var(--muted-foreground))" />
+                          <Tooltip
+                            contentStyle={{
+                              backgroundColor: 'hsl(var(--card))',
+                              border: '1px solid hsl(var(--border))',
+                              borderRadius: '8px'
                             }}
+                          />
+                          <Line
+                            type="monotone"
+                            dataKey="amount"
+                            stroke="hsl(var(--primary))"
+                            strokeWidth={3}
+                            dot={{ fill: 'hsl(var(--primary))', r: 5 }}
+                          />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </CardContent>
+                  </Card>
+
+                  <Card className="border-border bg-card">
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <Icon name="PieChart" size={20} />
+                        Статус сверки
+                      </CardTitle>
+                      <CardDescription>Распределение по статусам</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <ResponsiveContainer width="100%" height={250}>
+                        <PieChart>
+                          <Pie
+                            data={reconciliationData}
+                            cx="50%"
+                            cy="50%"
+                            innerRadius={60}
+                            outerRadius={90}
+                            paddingAngle={5}
+                            dataKey="value"
                           >
-                            <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                              <span className="text-xs font-bold text-white bg-black/50 px-2 py-1 rounded">
-                                {item.amount.toLocaleString()} ₽
-                              </span>
+                            {reconciliationData.map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={entry.color} />
+                            ))}
+                          </Pie>
+                          <Tooltip />
+                        </PieChart>
+                      </ResponsiveContainer>
+                      <div className="space-y-2 mt-4">
+                        {reconciliationData.map((item) => (
+                          <div key={item.name} className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <div className="w-3 h-3 rounded-full" style={{ backgroundColor: item.color }} />
+                              <span className="text-sm text-muted-foreground">{item.name}</span>
+                            </div>
+                            <span className="text-sm font-medium">{item.value}%</span>
+                          </div>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <Card className="border-border bg-card">
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <Icon name="BarChart3" size={20} />
+                        Активность по дням недели
+                      </CardTitle>
+                      <CardDescription>Количество платежей за неделю</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <ResponsiveContainer width="100%" height={250}>
+                        <BarChart data={paymentsData}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                          <XAxis dataKey="day" stroke="hsl(var(--muted-foreground))" />
+                          <YAxis stroke="hsl(var(--muted-foreground))" />
+                          <Tooltip
+                            contentStyle={{
+                              backgroundColor: 'hsl(var(--card))',
+                              border: '1px solid hsl(var(--border))',
+                              borderRadius: '8px'
+                            }}
+                          />
+                          <Bar dataKey="count" fill="hsl(var(--secondary))" radius={[8, 8, 0, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </CardContent>
+                  </Card>
+
+                  <Card className="border-border bg-card">
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <Icon name="Activity" size={20} />
+                        Последние транзакции
+                      </CardTitle>
+                      <CardDescription>Актуальные операции сегодня</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-4">
+                        {recentTransactions.map((tx) => (
+                          <div key={tx.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors">
+                            <div className="flex items-center gap-3">
+                              <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                                tx.status === 'success' ? 'bg-green-500/20' :
+                                tx.status === 'warning' ? 'bg-yellow-500/20' :
+                                'bg-blue-500/20'
+                              }`}>
+                                <Icon
+                                  name={
+                                    tx.status === 'success' ? 'CheckCircle' :
+                                    tx.status === 'warning' ? 'AlertTriangle' :
+                                    'Clock'
+                                  }
+                                  size={20}
+                                  className={
+                                    tx.status === 'success' ? 'text-green-500' :
+                                    tx.status === 'warning' ? 'text-yellow-500' :
+                                    'text-blue-500'
+                                  }
+                                />
+                              </div>
+                              <div>
+                                <p className="text-sm font-medium text-foreground">{tx.description}</p>
+                                <p className="text-xs text-muted-foreground">{tx.time}</p>
+                              </div>
+                            </div>
+                            <div className={`text-right ${tx.amount > 0 ? 'text-green-500' : 'text-red-500'}`}>
+                              <p className="text-lg font-bold">
+                                {tx.amount > 0 ? '+' : ''}{tx.amount.toLocaleString()} ₽
+                              </p>
                             </div>
                           </div>
-                        </div>
-                        <span className="text-xs text-muted-foreground font-medium">{item.month}</span>
+                        ))}
                       </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="border-border bg-card">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Icon name="PieChart" size={20} />
-                    Статус сверки
-                  </CardTitle>
-                  <CardDescription>Распределение по статусам</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    {reconciliationData.map((item, index) => {
-                      const colors = ['bg-green-500', 'bg-accent', 'bg-muted'];
-                      const textColors = ['text-green-500', 'text-accent', 'text-muted-foreground'];
-                      return (
-                        <div key={index} className="space-y-2">
-                          <div className="flex items-center justify-between">
-                            <span className="text-sm text-muted-foreground">{item.name}</span>
-                            <span className={`text-lg font-bold ${textColors[index]}`}>{item.value}%</span>
-                          </div>
-                          <div className="h-3 bg-muted rounded-full overflow-hidden">
-                            <div 
-                              className={`h-full ${colors[index]} transition-all duration-500 rounded-full`}
-                              style={{ width: `${item.value}%` }}
-                            />
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                  <div className="mt-6 p-4 bg-green-500/10 rounded-lg border border-green-500/20">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Icon name="CheckCircle2" size={20} className="text-green-500" />
-                      <span className="text-sm font-medium text-foreground">Отличная работа!</span>
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      85% операций сверено автоматически
-                    </p>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <Card className="border-border bg-card">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Icon name="BarChart3" size={20} />
-                    Активность по дням недели
-                  </CardTitle>
-                  <CardDescription>Количество платежей за неделю</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="h-[250px] flex items-end justify-around gap-3">
-                    {paymentsData.map((item, index) => (
-                      <div key={index} className="flex-1 flex flex-col items-center gap-2">
-                        <div className="relative w-full bg-muted rounded-t-lg overflow-hidden group cursor-pointer transition-all hover:scale-110">
-                          <div 
-                            className="w-full bg-gradient-to-t from-secondary to-secondary/60 rounded-t-lg transition-all duration-500"
-                            style={{ 
-                              height: `${(item.count / maxPayments) * 200}px`,
-                              minHeight: '20px'
-                            }}
-                          >
-                            <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                              <span className="text-xs font-bold text-white bg-black/50 px-2 py-1 rounded">
-                                {item.count}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                        <span className="text-xs text-muted-foreground font-medium">{item.day}</span>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="border-border bg-card">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Icon name="Activity" size={20} />
-                    Последние транзакции
-                  </CardTitle>
-                  <CardDescription>Актуальные операции сегодня</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    {recentTransactions.map((tx) => (
-                      <div key={tx.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors">
-                        <div className="flex items-center gap-3">
-                          <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                            tx.status === 'success' ? 'bg-green-500/20' :
-                            tx.status === 'warning' ? 'bg-yellow-500/20' :
-                            'bg-blue-500/20'
-                          }`}>
-                            <Icon
-                              name={
-                                tx.status === 'success' ? 'CheckCircle' :
-                                tx.status === 'warning' ? 'AlertTriangle' :
-                                'Clock'
-                              }
-                              size={20}
-                              className={
-                                tx.status === 'success' ? 'text-green-500' :
-                                tx.status === 'warning' ? 'text-yellow-500' :
-                                'text-blue-500'
-                              }
-                            />
-                          </div>
-                          <div>
-                            <p className="text-sm font-medium text-foreground">{tx.description}</p>
-                            <p className="text-xs text-muted-foreground">{tx.time}</p>
-                          </div>
-                        </div>
-                        <div className={`text-right ${tx.amount > 0 ? 'text-green-500' : 'text-red-500'}`}>
-                          <p className="text-lg font-bold">
-                            {tx.amount > 0 ? '+' : ''}{tx.amount.toLocaleString()} ₽
-                          </p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
+                    </CardContent>
+                  </Card>
+                </div>
+              </>
+            )}
           </div>
         )}
 
