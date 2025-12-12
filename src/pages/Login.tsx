@@ -258,7 +258,7 @@ const Login = () => {
                   Нажимая «Войти», вы принимаете пользовательское соглашение и политику конфиденциальности
                 </p>
               </>
-            ) : (
+            ) : step === 'code' ? (
               <>
                 <div className="space-y-6">
                   <div className="flex justify-center">
