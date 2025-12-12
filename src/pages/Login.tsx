@@ -346,11 +346,5 @@ const Login = () => {
 };
 
 export default Login;
-          </CardContent>
-        </Card>
-      </div>
-    </div>
-  );
-};
 
 export default Login;
