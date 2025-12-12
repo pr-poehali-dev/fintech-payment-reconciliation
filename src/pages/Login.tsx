@@ -175,12 +175,14 @@ const Login = () => {
         <Card className="shadow-2xl border-0 animate-scale-in">
           <CardHeader className="text-center pb-4">
             <CardTitle className="text-2xl font-display">
-              {step === 'phone' ? 'Введите номер телефона или почту' : 'Введите код'}
+              {step === 'phone' ? 'Введите номер телефона или почту' : step === 'code' ? 'Введите код' : 'Доступ заблокирован'}
             </CardTitle>
             <CardDescription className="text-base">
               {step === 'phone' 
                 ? 'Чтобы войти или зарегистрироваться'
-                : `Код отправлен в ${selectedMessenger === 'whatsapp' ? 'WhatsApp' : selectedMessenger === 'telegram' ? 'Telegram' : 'Max'}`
+                : step === 'code'
+                ? `Код отправлен в ${selectedMessenger === 'whatsapp' ? 'WhatsApp' : selectedMessenger === 'telegram' ? 'Telegram' : 'Max'}`
+                : 'Превышен лимит попыток ввода кода'
               }
             </CardDescription>
           </CardHeader>
