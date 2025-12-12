@@ -16,6 +16,7 @@ const Login = () => {
   const [selectedMessenger, setSelectedMessenger] = useState<MessengerType>(null);
   const [code, setCode] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [sentCode, setSentCode] = useState('');
   const { toast } = useToast();
 
   const messengers = [
@@ -35,6 +36,7 @@ const Login = () => {
       };
       
       const generatedCode = Math.floor(100000 + Math.random() * 900000).toString();
+      setSentCode(generatedCode);
       
       try {
         const response = await fetch(functionUrls['send-message'], {
@@ -78,7 +80,16 @@ const Login = () => {
 
   const handleVerifyCode = () => {
     if (code.length === 6) {
-      window.location.href = '/';
+      if (code === sentCode) {
+        window.location.href = '/';
+      } else {
+        toast({
+          title: 'Неверный код',
+          description: 'Проверьте правильность введенного кода',
+          variant: 'destructive'
+        });
+        setCode('');
+      }
     }
   };
 
@@ -236,10 +247,11 @@ const Login = () => {
                     </p>
                     <Button 
                       variant="link" 
-                      onClick={() => setStep('phone')}
+                      onClick={handleSendCode}
+                      disabled={isLoading}
                       className="text-primary"
                     >
-                      Отправить повторно
+                      {isLoading ? 'Отправка...' : 'Отправить повторно'}
                     </Button>
                   </div>
                 </div>
@@ -257,6 +269,7 @@ const Login = () => {
                   onClick={() => {
                     setStep('phone');
                     setCode('');
+                    setSentCode('');
                   }}
                   className="w-full"
                 >
