@@ -3,6 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import Icon from '@/components/ui/icon';
+import NotificationCenter from '@/components/NotificationCenter';
 import {
   LineChart,
   Line,
@@ -53,6 +54,8 @@ const recentTransactions = [
 const Index = () => {
   const [activeModule, setActiveModule] = useState('dashboard');
   const [mounted, setMounted] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [unreadCount] = useState(3);
 
   useEffect(() => {
     setMounted(true);
@@ -70,6 +73,41 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-background">
+      {showNotifications && (
+        <NotificationCenter onClose={() => setShowNotifications(false)} />
+      )}
+      
+      <header className="fixed top-0 left-64 right-0 h-16 bg-background/95 backdrop-blur-sm border-b border-border z-40 px-8 flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <h3 className="text-lg font-semibold text-foreground">
+            {modules.find(m => m.id === activeModule)?.name || 'Дашборд'}
+          </h3>
+        </div>
+        
+        <div className="flex items-center gap-3">
+          <Button variant="outline" size="sm" className="gap-2">
+            <Icon name="Download" size={16} />
+            Экспорт
+          </Button>
+          
+          <div className="relative">
+            <Button 
+              variant="outline" 
+              size="icon"
+              onClick={() => setShowNotifications(true)}
+              className="relative"
+            >
+              <Icon name="Bell" size={20} />
+              {unreadCount > 0 && (
+                <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center animate-scale-in">
+                  {unreadCount}
+                </span>
+              )}
+            </Button>
+          </div>
+        </div>
+      </header>
+
       <aside className="fixed left-0 top-0 h-full w-64 bg-sidebar border-r border-sidebar-border p-4 animate-slide-in-right">
         <div className="mb-8">
           <h1 className="text-2xl font-display font-bold text-primary flex items-center gap-2">
@@ -113,7 +151,7 @@ const Index = () => {
         </div>
       </aside>
 
-      <main className="ml-64 p-8">
+      <main className="ml-64 mt-16 p-8">
         {activeModule === 'dashboard' && (
           <div className="animate-fade-in">
             <div className="mb-8">
