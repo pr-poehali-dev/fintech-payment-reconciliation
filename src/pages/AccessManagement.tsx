@@ -7,6 +7,8 @@ import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
 import Icon from '@/components/ui/icon';
+import { useToast } from '@/hooks/use-toast';
+import functionUrls from '../../backend/func2url.json';
 import {
   Dialog,
   DialogContent,
@@ -140,6 +142,8 @@ const AccessManagement = () => {
   const [showInviteDialog, setShowInviteDialog] = useState(false);
   const [showRoleDialog, setShowRoleDialog] = useState(false);
   const [inviteLink, setInviteLink] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const { toast } = useToast();
   
   const [newUser, setNewUser] = useState({
     phone: '+7',
@@ -162,20 +166,69 @@ const AccessManagement = () => {
     setInviteLink(link);
   };
 
-  const handleInviteUser = () => {
+  const handleInviteUser = async () => {
     if (newUser.phone && newUser.fullName && newUser.role) {
-      generateInviteLink();
-      const user: User = {
-        id: users.length + 1,
-        fullName: newUser.fullName,
-        email: newUser.email,
-        phone: newUser.phone,
-        role: newUser.role,
-        status: 'pending',
-        modules: roles.find(r => r.id === newUser.role)?.modules || [],
-        lastActive: 'Не заходил'
+      setIsLoading(true);
+      
+      const providerMap: Record<string, string> = {
+        'whatsapp': 'ek_wa',
+        'telegram': 'ek_tg',
+        'max': 'ek_max'
       };
-      setUsers([...users, user]);
+      
+      const token = Math.random().toString(36).substring(2, 15);
+      const link = `https://finsync.app/invite/${token}`;
+      
+      try {
+        const response = await fetch(functionUrls['send-message'], {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            provider: providerMap[newUser.messenger],
+            recipient: newUser.phone.replace(/\D/g, ''),
+            message: `Привет, ${newUser.fullName}! Вас пригласили в FinSync.\n\nВаша ссылка для регистрации: ${link}\n\nРоль: ${roles.find(r => r.id === newUser.role)?.name}`
+          })
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok && data.success) {
+          setInviteLink(link);
+          
+          const user: User = {
+            id: users.length + 1,
+            fullName: newUser.fullName,
+            email: newUser.email,
+            phone: newUser.phone,
+            role: newUser.role,
+            status: 'pending',
+            modules: roles.find(r => r.id === newUser.role)?.modules || [],
+            lastActive: 'Не заходил'
+          };
+          setUsers([...users, user]);
+          
+          toast({
+            title: 'Приглашение отправлено',
+            description: `Пользователь ${newUser.fullName} получит приглашение в ${newUser.messenger}`,
+          });
+        } else {
+          toast({
+            title: 'Ошибка отправки',
+            description: data.error || 'Не удалось отправить приглашение',
+            variant: 'destructive'
+          });
+        }
+      } catch (error) {
+        toast({
+          title: 'Ошибка',
+          description: 'Проблема с подключением к серверу',
+          variant: 'destructive'
+        });
+      } finally {
+        setIsLoading(false);
+      }
     }
   };
 
@@ -376,10 +429,15 @@ const AccessManagement = () => {
 
                 <Button 
                   onClick={handleInviteUser}
-                  disabled={!newUser.phone || !newUser.fullName || !newUser.role}
+                  disabled={!newUser.phone || !newUser.fullName || !newUser.role || isLoading}
                   className="w-full"
                 >
-                  {inviteLink ? 'Отправить ещё одно приглашение' : 'Отправить приглашение'}
+                  {isLoading ? (
+                    <>
+                      <Icon name="Loader2" size={16} className="mr-2 animate-spin" />
+                      Отправка...
+                    </>
+                  ) : inviteLink ? 'Отправить ещё одно приглашение' : 'Отправить приглашение'}
                 </Button>
               </div>
             </DialogContent>

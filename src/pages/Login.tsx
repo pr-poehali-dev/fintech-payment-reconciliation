@@ -5,6 +5,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import Icon from '@/components/ui/icon';
 import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
+import { useToast } from '@/hooks/use-toast';
+import functionUrls from '../../backend/func2url.json';
 
 type MessengerType = 'whatsapp' | 'telegram' | 'max' | null;
 
@@ -13,6 +15,8 @@ const Login = () => {
   const [phone, setPhone] = useState('+7');
   const [selectedMessenger, setSelectedMessenger] = useState<MessengerType>(null);
   const [code, setCode] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const { toast } = useToast();
 
   const messengers = [
     { id: 'whatsapp' as MessengerType, icon: 'MessageCircle', label: 'WhatsApp', color: 'hover:bg-green-500/10' },
@@ -20,9 +24,55 @@ const Login = () => {
     { id: 'max' as MessengerType, icon: 'Mail', label: 'Max', color: 'hover:bg-purple-500/10' }
   ];
 
-  const handleSendCode = () => {
+  const handleSendCode = async () => {
     if (phone.length >= 12 && selectedMessenger) {
-      setStep('code');
+      setIsLoading(true);
+      
+      const providerMap: Record<string, string> = {
+        'whatsapp': 'ek_wa',
+        'telegram': 'ek_tg',
+        'max': 'ek_max'
+      };
+      
+      const generatedCode = Math.floor(100000 + Math.random() * 900000).toString();
+      
+      try {
+        const response = await fetch(functionUrls['send-message'], {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            provider: providerMap[selectedMessenger],
+            recipient: phone.replace(/\D/g, ''),
+            message: `Ваш код для входа в FinSync: ${generatedCode}`
+          })
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok && data.success) {
+          toast({
+            title: 'Код отправлен',
+            description: `Проверьте ${selectedMessenger === 'whatsapp' ? 'WhatsApp' : selectedMessenger === 'telegram' ? 'Telegram' : 'Max'}`,
+          });
+          setStep('code');
+        } else {
+          toast({
+            title: 'Ошибка отправки',
+            description: data.error || 'Не удалось отправить код',
+            variant: 'destructive'
+          });
+        }
+      } catch (error) {
+        toast({
+          title: 'Ошибка',
+          description: 'Проблема с подключением к серверу',
+          variant: 'destructive'
+        });
+      } finally {
+        setIsLoading(false);
+      }
     }
   };
 
@@ -145,10 +195,15 @@ const Login = () => {
 
                 <Button 
                   onClick={handleSendCode}
-                  disabled={phone.replace(/\D/g, '').length < 11 || !selectedMessenger}
+                  disabled={phone.replace(/\D/g, '').length < 11 || !selectedMessenger || isLoading}
                   className="w-full h-14 text-lg font-semibold bg-gradient-to-r from-primary to-blue-600 hover:from-primary/90 hover:to-blue-600/90 transition-all"
                 >
-                  Войти
+                  {isLoading ? (
+                    <>
+                      <Icon name="Loader2" size={20} className="mr-2 animate-spin" />
+                      Отправка...
+                    </>
+                  ) : 'Войти'}
                 </Button>
 
                 <p className="text-xs text-center text-muted-foreground px-4">

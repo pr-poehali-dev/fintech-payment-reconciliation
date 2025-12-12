@@ -1,0 +1,34 @@
+{
+  "tests": [
+    {
+      "name": "Send message to Max messenger",
+      "method": "POST",
+      "path": "/",
+      "body": {
+        "provider": "ek_max",
+        "recipient": "+79991234567",
+        "message": "Тестовое сообщение из FinSync"
+      },
+      "expectedStatus": 200,
+      "expectedBody": {
+        "success": true,
+        "provider": "string",
+        "recipient": "string"
+      },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Missing required fields",
+      "method": "POST",
+      "path": "/",
+      "body": {
+        "provider": "ek_max"
+      },
+      "expectedStatus": 400,
+      "expectedBody": {
+        "error": "string"
+      },
+      "bodyMatcher": "partial"
+    }
+  ]
+}
