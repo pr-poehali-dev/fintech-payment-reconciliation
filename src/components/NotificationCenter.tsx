@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
 import Icon from '@/components/ui/icon';
@@ -167,7 +166,7 @@ const NotificationCenter = ({ onClose }: NotificationCenterProps) => {
             )}
           </div>
 
-          <ScrollArea className="flex-1 p-4">
+          <div className="flex-1 overflow-y-auto p-4">
             <div className="space-y-3">
               {filteredNotifications.length === 0 ? (
                 <div className="text-center py-12">
@@ -235,7 +234,7 @@ const NotificationCenter = ({ onClose }: NotificationCenterProps) => {
                 })
               )}
             </div>
-          </ScrollArea>
+          </div>
 
           <div className="p-4 border-t border-border">
             <Card className="bg-muted/50">
