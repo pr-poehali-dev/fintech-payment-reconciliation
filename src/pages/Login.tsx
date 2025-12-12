@@ -11,13 +11,18 @@ import functionUrls from '../../backend/func2url.json';
 type MessengerType = 'whatsapp' | 'telegram' | 'max' | null;
 
 const Login = () => {
-  const [step, setStep] = useState<'phone' | 'code'>('phone');
+  const [step, setStep] = useState<'phone' | 'code' | 'blocked'>('phone');
   const [phone, setPhone] = useState('+7');
   const [selectedMessenger, setSelectedMessenger] = useState<MessengerType>(null);
   const [code, setCode] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [sentCode, setSentCode] = useState('');
+  const [attempts, setAttempts] = useState(0);
+  const [blockTime, setBlockTime] = useState(0);
   const { toast } = useToast();
+
+  const MAX_ATTEMPTS = 3;
+  const BLOCK_DURATION = 300;
 
   const messengers = [
     { id: 'whatsapp' as MessengerType, icon: 'MessageCircle', label: 'WhatsApp', color: 'hover:bg-green-500/10' },
@@ -81,13 +86,43 @@ const Login = () => {
   const handleVerifyCode = () => {
     if (code.length === 6) {
       if (code === sentCode) {
+        setAttempts(0);
         window.location.href = '/';
       } else {
-        toast({
-          title: 'Неверный код',
-          description: 'Проверьте правильность введенного кода',
-          variant: 'destructive'
-        });
+        const newAttempts = attempts + 1;
+        setAttempts(newAttempts);
+        
+        if (newAttempts >= MAX_ATTEMPTS) {
+          setStep('blocked');
+          setBlockTime(BLOCK_DURATION);
+          
+          const timer = setInterval(() => {
+            setBlockTime((prev) => {
+              if (prev <= 1) {
+                clearInterval(timer);
+                setStep('phone');
+                setAttempts(0);
+                setCode('');
+                setSentCode('');
+                return 0;
+              }
+              return prev - 1;
+            });
+          }, 1000);
+          
+          toast({
+            title: 'Превышен лимит попыток',
+            description: `Попробуйте снова через ${Math.floor(BLOCK_DURATION / 60)} минут`,
+            variant: 'destructive'
+          });
+        } else {
+          toast({
+            title: 'Неверный код',
+            description: `Осталось попыток: ${MAX_ATTEMPTS - newAttempts}`,
+            variant: 'destructive'
+          });
+        }
+        
         setCode('');
       }
     }
@@ -270,6 +305,7 @@ const Login = () => {
                     setStep('phone');
                     setCode('');
                     setSentCode('');
+                    setAttempts(0);
                   }}
                   className="w-full"
                 >
@@ -277,7 +313,39 @@ const Login = () => {
                   Изменить номер
                 </Button>
               </>
+            ) : (
+              <>
+                <div className="space-y-6">
+                  <div className="flex justify-center">
+                    <div className="w-20 h-20 rounded-full bg-red-500/20 flex items-center justify-center">
+                      <Icon name="Ban" size={48} className="text-red-500" />
+                    </div>
+                  </div>
+                  
+                  <div className="text-center space-y-2">
+                    <h3 className="text-xl font-semibold text-foreground">
+                      Слишком много попыток
+                    </h3>
+                    <p className="text-muted-foreground">
+                      Вы ввели неверный код 3 раза.
+                      <br />
+                      Попробуйте снова через:
+                    </p>
+                    <div className="text-4xl font-display font-bold text-red-500 mt-4">
+                      {Math.floor(blockTime / 60)}:{String(blockTime % 60).padStart(2, '0')}
+                    </div>
+                  </div>
+                </div>
+              </>
             )}
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+};
+
+export default Login;
           </CardContent>
         </Card>
       </div>
