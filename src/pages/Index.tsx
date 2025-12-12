@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import Icon from '@/components/ui/icon';
 import NotificationCenter from '@/components/NotificationCenter';
+import AccessManagement from './AccessManagement';
 import {
   LineChart,
   Line,
@@ -449,19 +450,7 @@ const Index = () => {
         )}
 
         {activeModule === 'access' && (
-          <div className="animate-fade-in">
-            <div className="mb-8">
-              <h2 className="text-3xl font-display font-bold text-foreground mb-2">Управление доступом</h2>
-              <p className="text-muted-foreground">Роли и права пользователей</p>
-            </div>
-            <Card className="border-border bg-card">
-              <CardContent className="p-12 text-center">
-                <Icon name="Users" size={64} className="mx-auto mb-4 text-secondary" />
-                <h3 className="text-xl font-display font-bold mb-2">Модуль доступа</h3>
-                <p className="text-muted-foreground">Здесь будет управление правами</p>
-              </CardContent>
-            </Card>
-          </div>
+          <AccessManagement />
         )}
 
         {activeModule === 'settings' && (
