@@ -44,6 +44,8 @@ const PaymentsPage = () => {
   const [selectedPayment, setSelectedPayment] = useState<Payment | null>(null);
   const [showDetails, setShowDetails] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [integrationFilter, setIntegrationFilter] = useState<string>('all');
   const { toast } = useToast();
 
   const ownerId = 1;
@@ -110,16 +112,34 @@ const PaymentsPage = () => {
     });
   };
 
+  const uniqueIntegrations = Array.from(
+    new Set(payments.map(p => p.integration_name))
+  );
+
+  const statusOptions = [
+    { value: 'all', label: 'Все статусы', count: payments.length },
+    { value: 'CONFIRMED', label: 'Подтверждён', count: payments.filter(p => p.status === 'CONFIRMED').length },
+    { value: 'AUTHORIZED', label: 'Авторизован', count: payments.filter(p => p.status === 'AUTHORIZED').length },
+    { value: 'REJECTED', label: 'Отклонён', count: payments.filter(p => p.status === 'REJECTED').length },
+    { value: 'REFUNDED', label: 'Возврат', count: payments.filter(p => p.status === 'REFUNDED').length },
+  ];
+
   const filteredPayments = payments.filter(payment => {
-    if (!searchQuery) return true;
-    const query = searchQuery.toLowerCase();
-    return (
-      payment.payment_id.toLowerCase().includes(query) ||
-      payment.order_id?.toLowerCase().includes(query) ||
-      payment.customer_email?.toLowerCase().includes(query) ||
-      payment.customer_phone?.toLowerCase().includes(query) ||
-      payment.amount.toString().includes(query)
-    );
+    const matchesSearch = !searchQuery || (() => {
+      const query = searchQuery.toLowerCase();
+      return (
+        payment.payment_id.toLowerCase().includes(query) ||
+        payment.order_id?.toLowerCase().includes(query) ||
+        payment.customer_email?.toLowerCase().includes(query) ||
+        payment.customer_phone?.toLowerCase().includes(query) ||
+        payment.amount.toString().includes(query)
+      );
+    })();
+
+    const matchesStatus = statusFilter === 'all' || payment.status === statusFilter;
+    const matchesIntegration = integrationFilter === 'all' || payment.integration_name === integrationFilter;
+
+    return matchesSearch && matchesStatus && matchesIntegration;
   });
 
   const totalAmount = filteredPayments
@@ -191,19 +211,82 @@ const PaymentsPage = () => {
 
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle>Список платежей</CardTitle>
-              <CardDescription>Кликните на строку для просмотра деталей</CardDescription>
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle>Список платежей</CardTitle>
+                <CardDescription>Кликните на строку для просмотра деталей</CardDescription>
+              </div>
+              <div className="w-64">
+                <Input
+                  placeholder="Поиск по ID, сумме, email..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full"
+                />
+              </div>
             </div>
-            <div className="w-64">
-              <Input
-                placeholder="Поиск по ID, сумме, email..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full"
-              />
+
+            <div className="flex gap-3">
+              <div className="flex-1">
+                <label className="text-sm font-medium mb-2 block">Статус</label>
+                <div className="flex gap-2 flex-wrap">
+                  {statusOptions.map((option) => (
+                    <Button
+                      key={option.value}
+                      variant={statusFilter === option.value ? 'default' : 'outline'}
+                      size="sm"
+                      onClick={() => setStatusFilter(option.value)}
+                      className="gap-2"
+                    >
+                      {option.label}
+                      <Badge variant="secondary" className="ml-1">
+                        {option.count}
+                      </Badge>
+                    </Button>
+                  ))}
+                </div>
+              </div>
+
+              {uniqueIntegrations.length > 1 && (
+                <div className="w-64">
+                  <label className="text-sm font-medium mb-2 block">Интеграция</label>
+                  <select
+                    value={integrationFilter}
+                    onChange={(e) => setIntegrationFilter(e.target.value)}
+                    className="w-full h-9 px-3 rounded-md border border-input bg-background text-sm"
+                  >
+                    <option value="all">Все интеграции</option>
+                    {uniqueIntegrations.map((integration) => (
+                      <option key={integration} value={integration}>
+                        {integration}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </div>
+
+            {(statusFilter !== 'all' || integrationFilter !== 'all' || searchQuery) && (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Icon name="Filter" size={16} />
+                <span>
+                  Показано {filteredPayments.length} из {payments.length} платежей
+                </span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setStatusFilter('all');
+                    setIntegrationFilter('all');
+                    setSearchQuery('');
+                  }}
+                  className="ml-auto"
+                >
+                  Сбросить фильтры
+                </Button>
+              </div>
+            )}
           </div>
         </CardHeader>
         <CardContent>
