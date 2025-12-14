@@ -1,0 +1,34 @@
+{
+  "tests": [
+    {
+      "name": "Create Tbank integration",
+      "method": "POST",
+      "body": {
+        "owner_id": 1,
+        "provider_slug": "tbank",
+        "integration_name": "Терминал №1",
+        "config": {
+          "terminal_id": "1234567890",
+          "terminal_password": "test_password"
+        }
+      },
+      "expectedStatus": 200,
+      "expectedBody": {
+        "success": true
+      },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Missing owner_id",
+      "method": "POST",
+      "body": {
+        "provider_slug": "tbank"
+      },
+      "expectedStatus": 400,
+      "expectedBody": {
+        "error": "string"
+      },
+      "bodyMatcher": "partial"
+    }
+  ]
+}

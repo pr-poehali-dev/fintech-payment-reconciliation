@@ -1,0 +1,32 @@
+{
+  "tests": [
+    {
+      "name": "Receive Tbank webhook",
+      "method": "POST",
+      "path": "/",
+      "body": {
+        "TerminalKey": "1234567890",
+        "OrderId": "ORDER-123",
+        "Success": true,
+        "Status": "CONFIRMED",
+        "PaymentId": "12345678",
+        "ErrorCode": "0",
+        "Amount": 25000,
+        "Pan": "430000******0777",
+        "Token": "test_signature"
+      },
+      "expectedStatus": 400,
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Missing token",
+      "method": "POST",
+      "body": {},
+      "expectedStatus": 400,
+      "expectedBody": {
+        "error": "string"
+      },
+      "bodyMatcher": "partial"
+    }
+  ]
+}

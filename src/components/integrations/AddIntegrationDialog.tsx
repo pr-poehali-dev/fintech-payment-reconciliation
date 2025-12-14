@@ -1,0 +1,265 @@
+import { useState } from 'react';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import Icon from '@/components/ui/icon';
+import { useToast } from '@/hooks/use-toast';
+import functionUrls from '../../../backend/func2url.json';
+
+interface Provider {
+  id: number;
+  name: string;
+  slug: string;
+  logo_url: string;
+  description: string;
+}
+
+interface AddIntegrationDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  provider: Provider | null;
+  ownerId: number;
+  onSuccess: () => void;
+}
+
+const AddIntegrationDialog = ({ open, onOpenChange, provider, ownerId, onSuccess }: AddIntegrationDialogProps) => {
+  const [step, setStep] = useState(1);
+  const [isLoading, setIsLoading] = useState(false);
+  const [webhookUrl, setWebhookUrl] = useState('');
+  const [integrationName, setIntegrationName] = useState('');
+  const [config, setConfig] = useState({
+    terminal_id: '',
+    terminal_password: ''
+  });
+  const [webhookSettings, setWebhookSettings] = useState({
+    notify_on_authorized: true,
+    notify_on_confirmed: true,
+    notify_on_rejected: true,
+    notify_on_refunded: true
+  });
+  const { toast } = useToast();
+
+  const handleCreate = async () => {
+    if (!provider) return;
+
+    setIsLoading(true);
+    try {
+      const response = await fetch(functionUrls['integrations-create'], {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          owner_id: ownerId,
+          provider_slug: provider.slug,
+          integration_name: integrationName || provider.name,
+          config,
+          webhook_settings: webhookSettings
+        })
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        setWebhookUrl(data.webhook_url);
+        setStep(2);
+        toast({
+          title: 'Интеграция создана',
+          description: 'Теперь настройте вебхук в личном кабинете банка'
+        });
+      } else {
+        toast({
+          title: 'Ошибка',
+          description: data.error || 'Не удалось создать интеграцию',
+          variant: 'destructive'
+        });
+      }
+    } catch (error) {
+      toast({
+        title: 'Ошибка подключения',
+        description: 'Проверьте интернет-соединение',
+        variant: 'destructive'
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleFinish = () => {
+    setStep(1);
+    setIntegrationName('');
+    setConfig({ terminal_id: '', terminal_password: '' });
+    setWebhookUrl('');
+    onSuccess();
+    onOpenChange(false);
+  };
+
+  const copyToClipboard = () => {
+    navigator.clipboard.writeText(webhookUrl);
+    toast({
+      title: 'Скопировано',
+      description: 'URL скопирован в буфер обмена'
+    });
+  };
+
+  if (!provider) return null;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Подключение {provider.name}</DialogTitle>
+          <DialogDescription>{provider.description}</DialogDescription>
+        </DialogHeader>
+
+        {step === 1 && (
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="integration_name">Название (для удобства)</Label>
+              <Input
+                id="integration_name"
+                placeholder="Например: Терминал на кассе №1"
+                value={integrationName}
+                onChange={(e) => setIntegrationName(e.target.value)}
+              />
+            </div>
+
+            {provider.slug === 'tbank' && (
+              <>
+                <div>
+                  <Label htmlFor="terminal_id">Terminal ID</Label>
+                  <Input
+                    id="terminal_id"
+                    placeholder="1234567890"
+                    value={config.terminal_id}
+                    onChange={(e) => setConfig({ ...config, terminal_id: e.target.value })}
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Найдите в ЛК Т-Банк → Настройки → Терминалы
+                  </p>
+                </div>
+
+                <div>
+                  <Label htmlFor="terminal_password">Terminal Password</Label>
+                  <Input
+                    id="terminal_password"
+                    type="password"
+                    placeholder="•••••••••"
+                    value={config.terminal_password}
+                    onChange={(e) => setConfig({ ...config, terminal_password: e.target.value })}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Уведомления о статусах платежей</Label>
+                  <div className="space-y-2">
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={webhookSettings.notify_on_authorized}
+                        onChange={(e) => setWebhookSettings({ ...webhookSettings, notify_on_authorized: e.target.checked })}
+                      />
+                      <span className="text-sm">Авторизован (AUTHORIZED)</span>
+                    </label>
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={webhookSettings.notify_on_confirmed}
+                        onChange={(e) => setWebhookSettings({ ...webhookSettings, notify_on_confirmed: e.target.checked })}
+                      />
+                      <span className="text-sm">Подтверждён (CONFIRMED)</span>
+                    </label>
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={webhookSettings.notify_on_rejected}
+                        onChange={(e) => setWebhookSettings({ ...webhookSettings, notify_on_rejected: e.target.checked })}
+                      />
+                      <span className="text-sm">Отклонён (REJECTED)</span>
+                    </label>
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={webhookSettings.notify_on_refunded}
+                        onChange={(e) => setWebhookSettings({ ...webhookSettings, notify_on_refunded: e.target.checked })}
+                      />
+                      <span className="text-sm">Возврат (REFUNDED)</span>
+                    </label>
+                  </div>
+                </div>
+              </>
+            )}
+
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => onOpenChange(false)}>
+                Отмена
+              </Button>
+              <Button 
+                onClick={handleCreate} 
+                disabled={isLoading || !config.terminal_id || !config.terminal_password}
+              >
+                {isLoading ? 'Создание...' : 'Далее'}
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {step === 2 && (
+          <div className="space-y-4">
+            <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg">
+              <div className="flex items-center gap-2 mb-2">
+                <Icon name="CheckCircle" className="text-green-600" size={20} />
+                <span className="font-semibold text-green-800 dark:text-green-200">
+                  Интеграция создана!
+                </span>
+              </div>
+            </div>
+
+            <div>
+              <Label>Ваш уникальный URL для вебхуков</Label>
+              <div className="flex gap-2 mt-1">
+                <Input value={webhookUrl} readOnly className="font-mono text-sm" />
+                <Button onClick={copyToClipboard} variant="outline" size="icon">
+                  <Icon name="Copy" size={16} />
+                </Button>
+              </div>
+            </div>
+
+            <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg space-y-3">
+              <div className="flex items-start gap-2">
+                <Icon name="Info" className="text-blue-600 mt-0.5" size={18} />
+                <div className="text-sm">
+                  <p className="font-semibold text-blue-900 dark:text-blue-100 mb-2">
+                    Инструкция по настройке:
+                  </p>
+                  <ol className="list-decimal list-inside space-y-1 text-blue-800 dark:text-blue-200">
+                    <li>Откройте личный кабинет Т-Банк Эквайринг</li>
+                    <li>Перейдите в раздел: Настройки → Уведомления</li>
+                    <li>Вставьте скопированный URL в поле "URL для уведомлений"</li>
+                    <li>Выберите метод: POST</li>
+                    <li>Сохраните настройки</li>
+                  </ol>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 p-3 bg-muted rounded-lg">
+              <input type="checkbox" id="webhook_configured" />
+              <Label htmlFor="webhook_configured" className="cursor-pointer">
+                Я настроил вебхук в личном кабинете
+              </Label>
+            </div>
+
+            <div className="flex justify-end gap-2">
+              <Button onClick={handleFinish}>
+                Готово
+              </Button>
+            </div>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+};
+
+export default AddIntegrationDialog;

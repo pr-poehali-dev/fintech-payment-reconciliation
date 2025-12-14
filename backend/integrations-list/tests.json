@@ -1,0 +1,25 @@
+{
+  "tests": [
+    {
+      "name": "Get integrations list",
+      "method": "GET",
+      "path": "/?owner_id=1",
+      "expectedStatus": 200,
+      "expectedBody": {
+        "categories": "array",
+        "user_integrations": "array"
+      },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Missing owner_id",
+      "method": "GET",
+      "path": "/",
+      "expectedStatus": 400,
+      "expectedBody": {
+        "error": "string"
+      },
+      "bodyMatcher": "partial"
+    }
+  ]
+}
