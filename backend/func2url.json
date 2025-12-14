@@ -1,4 +1,5 @@
 {
+  "payments-list": "https://functions.poehali.dev/fd40ece5-73c6-47ce-acf6-85dd88ffcf63",
   "webhook-receive": "https://functions.poehali.dev/a923b457-57a6-4eb2-b566-9a9d65cb04e8",
   "integrations-create": "https://functions.poehali.dev/d8b73781-e6de-4271-9e37-dc0340c5ffdb",
   "integrations-list": "https://functions.poehali.dev/6d48c29d-7470-4579-a202-ad00aae1abc3",
