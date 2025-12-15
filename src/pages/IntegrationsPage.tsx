@@ -183,11 +183,20 @@ const IntegrationsPage = () => {
 
   const handleFetchReceipts = async (integrationId: number) => {
     setLoadingReceipts(integrationId);
+    
+    const dateTo = new Date();
+    const dateFrom = new Date();
+    dateFrom.setDate(dateFrom.getDate() - 30);
+    
     try {
       const response = await fetch(functionUrls['ofd-fetch-receipts'], {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ integration_id: integrationId })
+        body: JSON.stringify({ 
+          integration_id: integrationId,
+          date_from: dateFrom.toISOString(),
+          date_to: dateTo.toISOString()
+        })
       });
 
       const data = await response.json();
@@ -195,7 +204,7 @@ const IntegrationsPage = () => {
       if (response.ok && data.success) {
         toast({
           title: 'Чеки загружены',
-          description: `Загружено ${data.inserted} из ${data.total_receipts} чеков`
+          description: `Загружено ${data.inserted} из ${data.total_receipts} чеков за последние 30 дней`
         });
       } else {
         toast({
