@@ -62,6 +62,8 @@ const Index = () => {
   const [unreadCount] = useState(3);
   const [stats, setStats] = useState({
     totalPayments: 0,
+    successfulPayments: 0,
+    paymentsRevenue: 0,
     totalReceipts: 0,
     receiptsSum: 0,
     activeIntegrations: 0
@@ -92,11 +94,21 @@ const Index = () => {
       const receipts = receiptsData.receipts || [];
       const integrations = integrationsData.user_integrations || [];
 
+      const successfulPayments = payments.filter((p: any) => 
+        p.status === 'AUTHORIZED' || p.status === 'CONFIRMED'
+      );
+      
+      const paymentsRevenue = successfulPayments.reduce((sum: number, p: any) => 
+        sum + (p.amount || 0), 0
+      );
+      
       const receiptsSum = receipts.reduce((sum: number, r: any) => sum + (r.total_sum || 0), 0);
       const activeIntegrations = integrations.filter((i: any) => i.status === 'active').length;
 
       setStats({
         totalPayments: payments.length,
+        successfulPayments: successfulPayments.length,
+        paymentsRevenue,
         totalReceipts: receipts.length,
         receiptsSum,
         activeIntegrations
@@ -209,15 +221,16 @@ const Index = () => {
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
                     <Icon name="TrendingUp" size={16} />
-                    Выручка за месяц
+                    Выручка из платежей
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="text-3xl font-display font-bold text-foreground">
-                    {stats.receiptsSum.toLocaleString('ru-RU', { style: 'currency', currency: 'RUB', minimumFractionDigits: 0 })}
+                    {stats.paymentsRevenue.toLocaleString('ru-RU', { style: 'currency', currency: 'RUB', minimumFractionDigits: 0 })}
                   </div>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Из чеков ОФД
+                  <p className="text-xs text-green-500 mt-1 flex items-center gap-1">
+                    <Icon name="CheckCircle" size={14} />
+                    {stats.successfulPayments} успешных
                   </p>
                 </CardContent>
               </Card>
@@ -226,13 +239,13 @@ const Index = () => {
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
                     <Icon name="CreditCard" size={16} />
-                    Платежей сегодня
+                    Всего платежей
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="text-3xl font-display font-bold text-foreground">{stats.totalPayments}</div>
                   <p className="text-xs text-muted-foreground mt-1">
-                    Всего платежей
+                    Включая отмененные
                   </p>
                 </CardContent>
               </Card>
