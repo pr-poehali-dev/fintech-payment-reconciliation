@@ -115,6 +115,33 @@ const ReceiptsPage = () => {
     return <Badge variant="outline" className={config.className}>{config.label}</Badge>;
   };
 
+  const getReceiptTypeBadge = (rawData: any) => {
+    const isCorrection = rawData?.IsCorrection || false;
+    if (isCorrection) {
+      return <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">Чек коррекции</Badge>;
+    }
+    return <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">Чек</Badge>;
+  };
+
+  const getCalculationMethodBadge = (rawData: any) => {
+    const items = rawData?.Items || [];
+    if (items.length === 0) return <span className="text-muted-foreground">—</span>;
+    
+    const calculationMethod = items[0]?.CalculationMethod;
+    const methodMap: Record<number, string> = {
+      1: 'Предоплата 100%',
+      2: 'Предоплата',
+      3: 'Аванс',
+      4: 'Полный расчет',
+      5: 'Частичный расчет',
+      6: 'Передача в кредит',
+      7: 'Оплата в кредит'
+    };
+    
+    const label = methodMap[calculationMethod] || `Метод ${calculationMethod}`;
+    return <Badge variant="secondary" className="text-xs">{label}</Badge>;
+  };
+
   const filteredReceipts = receipts.filter(receipt => {
     const matchesSearch = searchQuery === '' || 
       receipt.doc_number?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -243,9 +270,10 @@ const ReceiptsPage = () => {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Источник</TableHead>
-                      <TableHead>Интеграция</TableHead>
+                      <TableHead>Тип чека</TableHead>
                       <TableHead>Дата/Время</TableHead>
                       <TableHead>Тип операции</TableHead>
+                      <TableHead>Признак расчета</TableHead>
                       <TableHead>Номер</TableHead>
                       <TableHead className="text-right">Сумма</TableHead>
                       <TableHead className="text-right">Нал</TableHead>
@@ -263,14 +291,17 @@ const ReceiptsPage = () => {
                         }}
                       >
                         <TableCell>{getSourceBadge(receipt.source)}</TableCell>
-                        <TableCell className="font-medium">
-                          {receipt.integration_name}
+                        <TableCell>
+                          {getReceiptTypeBadge(receipt.raw_data)}
                         </TableCell>
                         <TableCell className="text-sm">
                           {formatDateTime(receipt.document_datetime)}
                         </TableCell>
                         <TableCell>
                           {getOperationTypeBadge(receipt.operation_type)}
+                        </TableCell>
+                        <TableCell>
+                          {getCalculationMethodBadge(receipt.raw_data)}
                         </TableCell>
                         <TableCell className="font-mono text-sm">
                           {receipt.doc_number || '—'}
