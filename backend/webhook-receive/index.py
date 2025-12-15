@@ -142,10 +142,13 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             signature_valid = verify_tbank_token(webhook_data, terminal_password)
             
             if not signature_valid:
-                print(f"[DEBUG] Invalid signature for webhook: {json.dumps(webhook_data)}")
-                print(f"[DEBUG] TEMPORARILY ACCEPTING ANYWAY FOR DEBUGGING")
-            else:
-                print(f"[DEBUG] Valid signature!")
+                print(f"[SECURITY] Invalid signature rejected")
+                return {
+                    'statusCode': 403,
+                    'headers': {'Content-Type': 'application/json'},
+                    'body': json.dumps({'error': 'Invalid signature'}),
+                    'isBase64Encoded': False
+                }
             
             status = webhook_data.get('Status', '')
             print(f"[DEBUG] Webhook status: {status}, settings: {webhook_settings}")
