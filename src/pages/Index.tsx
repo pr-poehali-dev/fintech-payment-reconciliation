@@ -66,6 +66,12 @@ const Index = () => {
     setMounted(true);
   }, []);
 
+  useEffect(() => {
+    if (activeModule === 'receipts') {
+      navigate('/receipts');
+    }
+  }, [activeModule, navigate]);
+
   const modules = [
     { id: 'dashboard', name: 'Дашборд', icon: 'LayoutDashboard' },
     { id: 'payments', name: 'Платежи', icon: 'CreditCard' },
@@ -393,7 +399,7 @@ const Index = () => {
           <PaymentsPage />
         )}
 
-        {activeModule === 'receipts' && navigate('/receipts')}
+
 
         {activeModule === 'reconciliation' && (
           <div className="animate-fade-in">
