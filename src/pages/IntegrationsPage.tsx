@@ -186,7 +186,7 @@ const IntegrationsPage = () => {
     
     const dateTo = new Date();
     const dateFrom = new Date();
-    dateFrom.setDate(dateFrom.getDate() - 30);
+    dateFrom.setDate(dateFrom.getDate() - 7);
     
     try {
       const response = await fetch(functionUrls['ofd-fetch-receipts'], {
@@ -204,7 +204,7 @@ const IntegrationsPage = () => {
       if (response.ok && data.success) {
         toast({
           title: 'Чеки загружены',
-          description: `Загружено ${data.inserted} из ${data.total_receipts} чеков за последние 30 дней`
+          description: `Загружено ${data.inserted} из ${data.total_receipts} чеков за последние 7 дней`
         });
       } else {
         console.error('OFD Error Details:', data);
