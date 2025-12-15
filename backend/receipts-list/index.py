@@ -2,6 +2,7 @@ import json
 import os
 import psycopg2
 from typing import Dict, Any
+from decimal import Decimal
 
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     '''
@@ -93,11 +94,14 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     
     receipts = []
     for row in rows:
-        receipt = dict(zip(columns, row))
-        if receipt.get('document_datetime'):
-            receipt['document_datetime'] = receipt['document_datetime'].isoformat()
-        if receipt.get('created_at'):
-            receipt['created_at'] = receipt['created_at'].isoformat()
+        receipt = {}
+        for col, val in zip(columns, row):
+            if isinstance(val, Decimal):
+                receipt[col] = float(val)
+            elif hasattr(val, 'isoformat'):
+                receipt[col] = val.isoformat()
+            else:
+                receipt[col] = val
         receipts.append(receipt)
     
     cur.execute('''
