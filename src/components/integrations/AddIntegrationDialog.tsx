@@ -296,6 +296,50 @@ const AddIntegrationDialog = ({ open, onOpenChange, provider, editingIntegration
               </>
             )}
 
+            {selectedProvider.slug === 'ofdru' && (
+              <>
+                <div>
+                  <Label htmlFor="inn">ИНН организации</Label>
+                  <Input
+                    id="inn"
+                    placeholder="1234567890"
+                    value={config.inn || ''}
+                    onChange={(e) => setConfig({ ...config, inn: e.target.value })}
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    ИНН юридического лица (10 или 12 цифр)
+                  </p>
+                </div>
+
+                <div>
+                  <Label htmlFor="kkt">Регистрационный номер ККТ</Label>
+                  <Input
+                    id="kkt"
+                    placeholder="0000111122223333"
+                    value={config.kkt || ''}
+                    onChange={(e) => setConfig({ ...config, kkt: e.target.value })}
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Номер контрольно-кассовой техники
+                  </p>
+                </div>
+
+                <div>
+                  <Label htmlFor="auth_token">Токен API</Label>
+                  <Input
+                    id="auth_token"
+                    type="password"
+                    placeholder="•••••••••"
+                    value={config.auth_token || ''}
+                    onChange={(e) => setConfig({ ...config, auth_token: e.target.value })}
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Получите в ЛК OFD.RU → Настройки → Управление передачей данных → Ключи доступа API OFD
+                  </p>
+                </div>
+              </>
+            )}
+
             <div>
               <Label htmlFor="forward_url">URL для переадресации (опционально)</Label>
               <Input
@@ -315,7 +359,7 @@ const AddIntegrationDialog = ({ open, onOpenChange, provider, editingIntegration
               </Button>
               <Button 
                 onClick={handleCreate} 
-                disabled={isLoading || !config.terminal_id || !config.terminal_password}
+                disabled={isLoading || (selectedProvider.slug === 'tbank' && (!config.terminal_id || !config.terminal_password)) || (selectedProvider.slug === 'ofdru' && (!config.inn || !config.kkt || !config.auth_token))}
               >
                 {isLoading ? (
                   editingIntegration ? 'Сохранение...' : 'Создание...'

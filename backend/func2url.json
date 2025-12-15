@@ -1,4 +1,5 @@
 {
+  "ofd-fetch-receipts": "https://functions.poehali.dev/c7fad594-b60b-47fb-8f73-31b629f1e0a2",
   "webhook-logs": "https://functions.poehali.dev/9987ee55-a2c0-4639-8a6a-240dbe6c9c22",
   "integrations-update": "https://functions.poehali.dev/360f393a-72e4-4056-9fcf-7e0abd345e79",
   "integrations-delete": "https://functions.poehali.dev/9600d197-8da9-45d5-80b0-5675164fc1f4",

@@ -1,0 +1,25 @@
+{
+  "tests": [
+    {
+      "name": "Missing integration_id",
+      "method": "POST",
+      "body": {
+        "date_from": "2025-01-01T00:00:00",
+        "date_to": "2025-01-02T00:00:00"
+      },
+      "expectedStatus": 400,
+      "expectedBody": {
+        "error": "integration_id required"
+      }
+    },
+    {
+      "name": "GET request returns error",
+      "method": "GET",
+      "expectedStatus": 200,
+      "expectedBody": {
+        "error": true,
+        "message": "Запрос с заданными параметрами не поддерживается"
+      }
+    }
+  ]
+}
