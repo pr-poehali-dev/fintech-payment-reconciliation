@@ -124,8 +124,14 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             method='GET'
         )
         
+        print(f"[DEBUG] Request headers: {req.headers}")
+        print(f"[DEBUG] Auth token (first 10 chars): {auth_token[:10] if auth_token else 'None'}")
+        
         with urllib.request.urlopen(req, timeout=30) as response:
             response_body = response.read().decode('utf-8')
+            print(f"[DEBUG] Response status: {response.status}")
+            print(f"[DEBUG] Response body: {response_body[:500]}")
+            
             receipts_data = json.loads(response_body)
             
             if isinstance(receipts_data, dict) and receipts_data.get('Status') == 'Failed':
@@ -140,11 +146,15 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                         'success': False,
                         'error': f'OFD API returned error: {receipts_data.get("Errors", [])}',
                         'error_details': receipts_data,
+                        'raw_response': response_body,
                         'debug': {
                             'full_url': full_url,
                             'date_from': date_from,
                             'date_to': date_to,
-                            'api_url': api_url
+                            'api_url': api_url,
+                            'inn': inn,
+                            'kkt': kkt,
+                            'token_length': len(auth_token) if auth_token else 0
                         }
                     }),
                     'isBase64Encoded': False

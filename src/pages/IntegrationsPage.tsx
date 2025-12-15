@@ -184,8 +184,8 @@ const IntegrationsPage = () => {
   const handleFetchReceipts = async (integrationId: number) => {
     setLoadingReceipts(integrationId);
     
-    const dateTo = new Date('2025-11-18T23:59:59');
     const dateFrom = new Date('2025-11-18T00:00:00');
+    const dateTo = new Date('2025-11-18T23:59:59');
     
     try {
       const response = await fetch(functionUrls['ofd-fetch-receipts'], {
