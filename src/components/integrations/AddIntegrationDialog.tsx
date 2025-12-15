@@ -49,7 +49,8 @@ const AddIntegrationDialog = ({ open, onOpenChange, provider, editingIntegration
     notify_on_authorized: true,
     notify_on_confirmed: true,
     notify_on_rejected: true,
-    notify_on_refunded: true
+    notify_on_refunded: true,
+    notify_on_canceled: true
   });
   const [forwardUrl, setForwardUrl] = useState(editingIntegration?.forward_url || '');
   const { toast } = useToast();
@@ -65,7 +66,8 @@ const AddIntegrationDialog = ({ open, onOpenChange, provider, editingIntegration
           notify_on_authorized: true,
           notify_on_confirmed: true,
           notify_on_rejected: true,
-          notify_on_refunded: true
+          notify_on_refunded: true,
+          notify_on_canceled: true
         });
         setForwardUrl(editingIntegration.forward_url || '');
       } else {
@@ -290,6 +292,14 @@ const AddIntegrationDialog = ({ open, onOpenChange, provider, editingIntegration
                         onChange={(e) => setWebhookSettings({ ...webhookSettings, notify_on_refunded: e.target.checked })}
                       />
                       <span className="text-sm">Возврат (REFUNDED)</span>
+                    </label>
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={webhookSettings.notify_on_canceled}
+                        onChange={(e) => setWebhookSettings({ ...webhookSettings, notify_on_canceled: e.target.checked })}
+                      />
+                      <span className="text-sm">Отменён (CANCELED)</span>
                     </label>
                   </div>
                 </div>
