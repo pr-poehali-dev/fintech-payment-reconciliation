@@ -1,0 +1,23 @@
+{
+  "tests": [
+    {
+      "name": "Missing owner_id",
+      "method": "GET",
+      "path": "/",
+      "expectedStatus": 400,
+      "expectedBody": {
+        "error": "owner_id required"
+      }
+    },
+    {
+      "name": "Get receipts with owner_id",
+      "method": "GET",
+      "path": "/?owner_id=1&limit=10&offset=0",
+      "expectedStatus": 200,
+      "expectedBody": {
+        "success": true
+      },
+      "bodyMatcher": "partial"
+    }
+  ]
+}

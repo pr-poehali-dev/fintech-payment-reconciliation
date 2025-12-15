@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -55,6 +56,7 @@ const recentTransactions = [
 ];
 
 const Index = () => {
+  const navigate = useNavigate();
   const [activeModule, setActiveModule] = useState('dashboard');
   const [mounted, setMounted] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
@@ -391,21 +393,7 @@ const Index = () => {
           <PaymentsPage />
         )}
 
-        {activeModule === 'receipts' && (
-          <div className="animate-fade-in">
-            <div className="mb-8">
-              <h2 className="text-3xl font-display font-bold text-foreground mb-2">Чеки</h2>
-              <p className="text-muted-foreground">Учет и обработка кассовых чеков</p>
-            </div>
-            <Card className="border-border bg-card">
-              <CardContent className="p-12 text-center">
-                <Icon name="Receipt" size={64} className="mx-auto mb-4 text-secondary" />
-                <h3 className="text-xl font-display font-bold mb-2">Модуль чеков</h3>
-                <p className="text-muted-foreground">Здесь будет работа с чеками</p>
-              </CardContent>
-            </Card>
-          </div>
-        )}
+        {activeModule === 'receipts' && navigate('/receipts')}
 
         {activeModule === 'reconciliation' && (
           <div className="animate-fade-in">

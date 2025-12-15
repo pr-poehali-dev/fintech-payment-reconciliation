@@ -9,6 +9,7 @@ import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
 import WebhookLogsPage from "./pages/WebhookLogsPage";
 import WebhookTestPage from "./pages/WebhookTestPage";
+import ReceiptsPage from "./pages/ReceiptsPage";
 
 const queryClient = new QueryClient();
 
@@ -22,6 +23,7 @@ const App = () => (
           <Route path="/login" element={<Login />} />
           <Route path="/" element={<Index />} />
           <Route path="/webhook-logs/:integrationId" element={<WebhookLogsPage />} />
+          <Route path="/receipts" element={<ReceiptsPage />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>
