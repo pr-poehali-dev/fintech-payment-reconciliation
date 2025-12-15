@@ -10,37 +10,45 @@ from typing import Dict, Any
 def verify_tbank_token(data: Dict[str, Any], terminal_password: str) -> bool:
     '''
     Проверка подписи вебхука от Тбанка
-    Алгоритм: исключить Token и вложенные объекты, добавить Password,
-    Success конвертировать в строку true/false, отсортировать и сконкатенировать
-    https://developer.tbank.ru/eacq/intro/developer/notification
+    Алгоритм согласно https://developer.tbank.ru/eacq/intro/developer/token:
+    1. Собрать параметры (исключить Token и вложенные объекты)
+    2. Добавить Password
+    3. Отсортировать по ключу
+    4. Сконкатенировать значения
+    5. SHA-256
     '''
     received_token = data.get('Token', '')
     if not received_token:
         return False
     
-    values_to_hash = []
-    for key in sorted(data.keys()):
+    params_to_hash = {}
+    
+    for key, value in data.items():
         if key == 'Token':
             continue
-        
-        value = data[key]
         
         if isinstance(value, (dict, list)):
             continue
         
         if isinstance(value, bool):
-            values_to_hash.append('true' if value else 'false')
+            params_to_hash[key] = 'true' if value else 'false'
         else:
-            values_to_hash.append(str(value))
+            params_to_hash[key] = str(value)
     
-    values_to_hash.append(terminal_password)
+    params_to_hash['Password'] = terminal_password
     
-    concatenated = ''.join(values_to_hash)
+    sorted_keys = sorted(params_to_hash.keys())
+    values_list = [params_to_hash[key] for key in sorted_keys]
+    concatenated = ''.join(values_list)
+    
     calculated_token = hashlib.sha256(concatenated.encode('utf-8')).hexdigest()
     
-    print(f"[DEBUG SIGNATURE] Concatenated string: {concatenated}")
-    print(f"[DEBUG SIGNATURE] Calculated token: {calculated_token}")
-    print(f"[DEBUG SIGNATURE] Received token: {received_token}")
+    print(f"[DEBUG SIGNATURE] Params: {params_to_hash}")
+    print(f"[DEBUG SIGNATURE] Sorted keys: {sorted_keys}")
+    print(f"[DEBUG SIGNATURE] Values: {values_list}")
+    print(f"[DEBUG SIGNATURE] Concatenated: {concatenated}")
+    print(f"[DEBUG SIGNATURE] Calculated: {calculated_token}")
+    print(f"[DEBUG SIGNATURE] Received: {received_token}")
     print(f"[DEBUG SIGNATURE] Match: {calculated_token == received_token}")
     
     return calculated_token == received_token
