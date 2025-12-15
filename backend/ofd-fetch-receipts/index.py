@@ -89,23 +89,23 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     
     if not date_from:
         dt_from = datetime.now() - timedelta(days=30)
-        date_from = dt_from.strftime('%Y-%m-%dT00:00:00')
+        date_from = dt_from.strftime('%d.%m.%Y')
     else:
         try:
             dt = datetime.fromisoformat(date_from.replace('Z', '+00:00'))
-            date_from = dt.strftime('%Y-%m-%dT00:00:00')
+            date_from = dt.strftime('%d.%m.%Y')
         except:
             dt_from = datetime.now() - timedelta(days=30)
-            date_from = dt_from.strftime('%Y-%m-%dT00:00:00')
+            date_from = dt_from.strftime('%d.%m.%Y')
     
     if not date_to:
-        date_to = datetime.now().strftime('%Y-%m-%dT23:59:59')
+        date_to = datetime.now().strftime('%d.%m.%Y')
     else:
         try:
             dt = datetime.fromisoformat(date_to.replace('Z', '+00:00'))
-            date_to = dt.strftime('%Y-%m-%dT23:59:59')
+            date_to = dt.strftime('%d.%m.%Y')
         except:
-            date_to = datetime.now().strftime('%Y-%m-%dT23:59:59')
+            date_to = datetime.now().strftime('%d.%m.%Y')
     
     test_url = f'{api_url}/api/integration/v2/inn/{inn}/kkts'
     test_params = urllib.parse.urlencode({'AuthToken': auth_token})
@@ -124,8 +124,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     ofd_url = f'{api_url}/api/integration/v2/inn/{inn}/kkt/{kkt}/receipts'
     
     params = urllib.parse.urlencode({
-        'DateFrom': date_from,
-        'DateTo': date_to,
+        'dateFrom': date_from,
+        'dateTo': date_to,
         'AuthToken': auth_token
     })
     
