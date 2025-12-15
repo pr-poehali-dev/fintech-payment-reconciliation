@@ -103,8 +103,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 ui.webhook_settings,
                 p.slug,
                 ui.forward_url
-            FROM user_integrations ui
-            JOIN integration_providers p ON p.id = ui.provider_id
+            FROM t_p83864310_fintech_payment_reco.user_integrations ui
+            JOIN t_p83864310_fintech_payment_reco.integration_providers p ON p.id = ui.provider_id
             WHERE ui.webhook_token = %s AND ui.status = 'active'
         ''', (webhook_token,))
         
@@ -151,7 +151,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             
             webhook_payment_id = None
             cur.execute('''
-                INSERT INTO webhook_payments (
+                INSERT INTO t_p83864310_fintech_payment_reco.webhook_payments (
                     integration_id, owner_id, payment_id, terminal_key,
                     amount, order_id, status, payment_status, error_code,
                     customer_email, customer_phone, pan, card_type, exp_date,
@@ -182,7 +182,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 webhook_payment_id = result[0]
         
         cur.execute('''
-            UPDATE user_integrations 
+            UPDATE t_p83864310_fintech_payment_reco.user_integrations 
             SET last_webhook_at = NOW(), 
                 webhook_count = webhook_count + 1,
                 updated_at = NOW()
