@@ -3,6 +3,8 @@ import os
 import hashlib
 import psycopg2
 import urllib.request
+import urllib.error
+import time
 from typing import Dict, Any
 
 def verify_tbank_token(data: Dict[str, Any], terminal_password: str) -> bool:
@@ -135,6 +137,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     'isBase64Encoded': False
                 }
             
+            webhook_payment_id = None
             cur.execute('''
                 INSERT INTO webhook_payments (
                     integration_id, owner_id, payment_id, terminal_key,
@@ -143,6 +146,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     raw_data
                 ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT DO NOTHING
+                RETURNING id
             ''', (
                 integration_id,
                 owner_id,
@@ -160,6 +164,10 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 webhook_data.get('ExpDate'),
                 json.dumps(webhook_data)
             ))
+            
+            result = cur.fetchone()
+            if result:
+                webhook_payment_id = result[0]
         
         cur.execute('''
             UPDATE user_integrations 
@@ -172,6 +180,10 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         conn.commit()
         
         if forward_url:
+            start_time = int(time.time() * 1000)
+            status_code = None
+            error_message = None
+            
             try:
                 req = urllib.request.Request(
                     forward_url,
@@ -180,9 +192,25 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     method='POST'
                 )
                 with urllib.request.urlopen(req, timeout=5) as response:
-                    pass
-            except Exception:
-                pass
+                    status_code = response.status
+            except urllib.error.HTTPError as e:
+                status_code = e.code
+                error_message = f"HTTP {e.code}: {e.reason}"
+            except urllib.error.URLError as e:
+                status_code = 0
+                error_message = f"URL Error: {str(e.reason)}"
+            except Exception as e:
+                status_code = 0
+                error_message = f"Error: {str(e)}"
+            
+            response_time = int(time.time() * 1000) - start_time
+            
+            cur.execute('''
+                INSERT INTO t_p83864310_fintech_payment_reco.webhook_forward_logs 
+                (webhook_payment_id, forward_url, status_code, error_message, response_time_ms)
+                VALUES (%s, %s, %s, %s, %s)
+            ''', (webhook_payment_id, forward_url, status_code, error_message, response_time))
+            conn.commit()
         
         return {
             'statusCode': 200,

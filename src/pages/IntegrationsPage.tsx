@@ -271,6 +271,22 @@ const IntegrationsPage = () => {
                           {`${functionUrls['webhook-receive']}/${integration.webhook_token}`}
                         </code>
                       </div>
+                      {integration.forward_url && (
+                        <div className="text-sm">
+                          <span className="text-muted-foreground">Переадресация: </span>
+                          <span className="font-mono text-xs">{integration.forward_url}</span>
+                        </div>
+                      )}
+                      <div className="pt-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => window.open(`/webhook-logs/${integration.id}`, '_blank')}
+                        >
+                          <Icon name="FileText" size={16} className="mr-2" />
+                          Логи переадресации
+                        </Button>
+                      </div>
                     </CardContent>
                   </Card>
                 ))}
