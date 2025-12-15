@@ -107,6 +107,20 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         except:
             date_to = datetime.now().strftime('%Y-%m-%dT23:59:59')
     
+    test_url = f'{api_url}/api/integration/v2/inn/{inn}/kkts'
+    test_params = urllib.parse.urlencode({'AuthToken': auth_token})
+    test_full_url = f'{test_url}?{test_params}'
+    
+    print(f"[DEBUG] Testing token with kkts endpoint: {test_full_url[:100]}...")
+    
+    try:
+        test_req = urllib.request.Request(test_full_url, method='GET')
+        with urllib.request.urlopen(test_req, timeout=10) as test_response:
+            test_body = test_response.read().decode('utf-8')
+            print(f"[DEBUG] Token test successful! Response: {test_body[:200]}")
+    except Exception as test_error:
+        print(f"[DEBUG] Token test failed: {str(test_error)}")
+    
     ofd_url = f'{api_url}/api/integration/v2/inn/{inn}/kkt/{kkt}/receipts'
     
     params = urllib.parse.urlencode({
