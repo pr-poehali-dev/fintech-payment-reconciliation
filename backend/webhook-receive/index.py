@@ -38,6 +38,11 @@ def verify_tbank_token(data: Dict[str, Any], terminal_password: str) -> bool:
     concatenated = ''.join(values_to_hash)
     calculated_token = hashlib.sha256(concatenated.encode('utf-8')).hexdigest()
     
+    print(f"[DEBUG SIGNATURE] Concatenated string: {concatenated}")
+    print(f"[DEBUG SIGNATURE] Calculated token: {calculated_token}")
+    print(f"[DEBUG SIGNATURE] Received token: {received_token}")
+    print(f"[DEBUG SIGNATURE] Match: {calculated_token == received_token}")
+    
     return calculated_token == received_token
 
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
