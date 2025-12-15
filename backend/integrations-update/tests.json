@@ -1,0 +1,34 @@
+{
+  "tests": [
+    {
+      "name": "Update integration successfully",
+      "method": "PUT",
+      "path": "/",
+      "body": {
+        "integration_id": 1,
+        "owner_id": 1,
+        "integration_name": "Updated name",
+        "config": {
+          "terminal_id": "123",
+          "terminal_password": "pass"
+        }
+      },
+      "expectedStatus": 200,
+      "expectedBody": {
+        "success": true
+      },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Missing parameters",
+      "method": "PUT",
+      "path": "/",
+      "body": {},
+      "expectedStatus": 400,
+      "expectedBody": {
+        "error": "string"
+      },
+      "bodyMatcher": "partial"
+    }
+  ]
+}

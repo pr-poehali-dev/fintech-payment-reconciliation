@@ -97,7 +97,10 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 ui.created_at,
                 p.name as provider_name,
                 p.slug as provider_slug,
-                c.slug as category_slug
+                c.slug as category_slug,
+                ui.provider_id,
+                ui.config,
+                ui.webhook_settings
             FROM user_integrations ui
             JOIN integration_providers p ON p.id = ui.provider_id
             JOIN integration_categories c ON c.id = p.category_id
@@ -117,7 +120,10 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 'created_at': row[6].isoformat() if row[6] else None,
                 'provider_name': row[7],
                 'provider_slug': row[8],
-                'category_slug': row[9]
+                'category_slug': row[9],
+                'provider_id': row[10],
+                'config': row[11],
+                'webhook_settings': row[12]
             })
         
         return {

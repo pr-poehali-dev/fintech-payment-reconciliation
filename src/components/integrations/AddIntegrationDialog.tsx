@@ -16,24 +16,35 @@ interface Provider {
   description: string;
 }
 
+interface UserIntegration {
+  id: number;
+  integration_name: string;
+  provider_id: number;
+  config: any;
+  webhook_settings: any;
+}
+
 interface AddIntegrationDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   provider: Provider | null;
+  editingIntegration: UserIntegration | null;
+  allProviders: Provider[];
   ownerId: number;
   onSuccess: () => void;
 }
 
-const AddIntegrationDialog = ({ open, onOpenChange, provider, ownerId, onSuccess }: AddIntegrationDialogProps) => {
-  const [step, setStep] = useState(1);
+const AddIntegrationDialog = ({ open, onOpenChange, provider, editingIntegration, allProviders, ownerId, onSuccess }: AddIntegrationDialogProps) => {
+  const [step, setStep] = useState(editingIntegration ? 1 : 0);
+  const [selectedProvider, setSelectedProvider] = useState<Provider | null>(provider || (editingIntegration ? allProviders.find(p => p.id === editingIntegration.provider_id) || null : null));
   const [isLoading, setIsLoading] = useState(false);
   const [webhookUrl, setWebhookUrl] = useState('');
-  const [integrationName, setIntegrationName] = useState('');
-  const [config, setConfig] = useState({
+  const [integrationName, setIntegrationName] = useState(editingIntegration?.integration_name || '');
+  const [config, setConfig] = useState(editingIntegration?.config || {
     terminal_id: '',
     terminal_password: ''
   });
-  const [webhookSettings, setWebhookSettings] = useState({
+  const [webhookSettings, setWebhookSettings] = useState(editingIntegration?.webhook_settings || {
     notify_on_authorized: true,
     notify_on_confirmed: true,
     notify_on_rejected: true,
@@ -42,37 +53,64 @@ const AddIntegrationDialog = ({ open, onOpenChange, provider, ownerId, onSuccess
   const { toast } = useToast();
 
   const handleCreate = async () => {
-    if (!provider) return;
+    if (!selectedProvider) return;
 
     setIsLoading(true);
     try {
-      const response = await fetch(functionUrls['integrations-create'], {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          owner_id: ownerId,
-          provider_slug: provider.slug,
-          integration_name: integrationName || provider.name,
-          config,
-          webhook_settings: webhookSettings
-        })
-      });
-
-      const data = await response.json();
-
-      if (response.ok && data.success) {
-        setWebhookUrl(data.webhook_url);
-        setStep(2);
-        toast({
-          title: 'Интеграция создана',
-          description: 'Теперь настройте вебхук в личном кабинете банка'
+      if (editingIntegration) {
+        const response = await fetch(functionUrls['integrations-update'], {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            integration_id: editingIntegration.id,
+            owner_id: ownerId,
+            integration_name: integrationName,
+            config,
+            webhook_settings: webhookSettings
+          })
         });
+
+        const data = await response.json();
+
+        if (response.ok && data.success) {
+          toast({ title: 'Интеграция обновлена' });
+          handleFinish();
+        } else {
+          toast({
+            title: 'Ошибка',
+            description: data.error || 'Не удалось обновить',
+            variant: 'destructive'
+          });
+        }
       } else {
-        toast({
-          title: 'Ошибка',
-          description: data.error || 'Не удалось создать интеграцию',
-          variant: 'destructive'
+        const response = await fetch(functionUrls['integrations-create'], {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            owner_id: ownerId,
+            provider_slug: selectedProvider.slug,
+            integration_name: integrationName || selectedProvider.name,
+            config,
+            webhook_settings: webhookSettings
+          })
         });
+
+        const data = await response.json();
+
+        if (response.ok && data.success) {
+          setWebhookUrl(data.webhook_url);
+          setStep(2);
+          toast({
+            title: 'Интеграция создана',
+            description: 'Теперь настройте вебхук в личном кабинете банка'
+          });
+        } else {
+          toast({
+            title: 'Ошибка',
+            description: data.error || 'Не удалось создать интеграцию',
+            variant: 'destructive'
+          });
+        }
       }
     } catch (error) {
       toast({
@@ -86,7 +124,8 @@ const AddIntegrationDialog = ({ open, onOpenChange, provider, ownerId, onSuccess
   };
 
   const handleFinish = () => {
-    setStep(1);
+    setStep(0);
+    setSelectedProvider(null);
     setIntegrationName('');
     setConfig({ terminal_id: '', terminal_password: '' });
     setWebhookUrl('');
@@ -102,17 +141,49 @@ const AddIntegrationDialog = ({ open, onOpenChange, provider, ownerId, onSuccess
     });
   };
 
-  if (!provider) return null;
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Подключение {provider.name}</DialogTitle>
-          <DialogDescription>{provider.description}</DialogDescription>
+          <DialogTitle>
+            {editingIntegration ? 'Редактирование интеграции' : 'Добавление интеграции'}
+          </DialogTitle>
+          <DialogDescription>
+            {editingIntegration ? 'Измените настройки интеграции' : 'Выберите провайдера и заполните настройки'}
+          </DialogDescription>
         </DialogHeader>
 
-        {step === 1 && (
+        {step === 0 && !editingIntegration && (
+          <div className="space-y-4">
+            <div>
+              <Label>Выберите провайдера</Label>
+              <div className="grid grid-cols-2 gap-3 mt-2">
+                {allProviders.map((prov) => (
+                  <Button
+                    key={prov.id}
+                    variant={selectedProvider?.id === prov.id ? 'default' : 'outline'}
+                    className="h-auto py-4 flex-col gap-2"
+                    onClick={() => {
+                      setSelectedProvider(prov);
+                      setStep(1);
+                    }}
+                  >
+                    <span className="font-semibold">{prov.name}</span>
+                    <span className="text-xs opacity-80">{prov.description}</span>
+                  </Button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex justify-end">
+              <Button variant="outline" onClick={() => onOpenChange(false)}>
+                Отмена
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {step === 1 && selectedProvider && (
           <div className="space-y-4">
             <div>
               <Label htmlFor="integration_name">Название (для удобства)</Label>
@@ -124,7 +195,7 @@ const AddIntegrationDialog = ({ open, onOpenChange, provider, ownerId, onSuccess
               />
             </div>
 
-            {provider.slug === 'tbank' && (
+            {selectedProvider.slug === 'tbank' && (
               <>
                 <div>
                   <Label htmlFor="terminal_id">Terminal ID</Label>
@@ -198,7 +269,11 @@ const AddIntegrationDialog = ({ open, onOpenChange, provider, ownerId, onSuccess
                 onClick={handleCreate} 
                 disabled={isLoading || !config.terminal_id || !config.terminal_password}
               >
-                {isLoading ? 'Создание...' : 'Далее'}
+                {isLoading ? (
+                  editingIntegration ? 'Сохранение...' : 'Создание...'
+                ) : (
+                  editingIntegration ? 'Сохранить' : 'Далее'
+                )}
               </Button>
             </div>
           </div>

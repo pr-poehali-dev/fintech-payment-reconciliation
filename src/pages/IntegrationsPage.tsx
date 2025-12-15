@@ -34,12 +34,17 @@ interface UserIntegration {
   provider_name: string;
   provider_slug: string;
   category_slug: string;
+  provider_id: number;
+  config: any;
+  webhook_settings: any;
 }
 
 const IntegrationsPage = () => {
   const [categories, setCategories] = useState<Category[]>([]);
   const [userIntegrations, setUserIntegrations] = useState<UserIntegration[]>([]);
+  const [allProviders, setAllProviders] = useState<Provider[]>([]);
   const [selectedProvider, setSelectedProvider] = useState<Provider | null>(null);
+  const [editingIntegration, setEditingIntegration] = useState<UserIntegration | null>(null);
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
@@ -55,6 +60,12 @@ const IntegrationsPage = () => {
       if (response.ok) {
         setCategories(data.categories || []);
         setUserIntegrations(data.user_integrations || []);
+        
+        const providers: Provider[] = [];
+        (data.categories || []).forEach((cat: Category) => {
+          providers.push(...cat.providers);
+        });
+        setAllProviders(providers);
       } else {
         toast({
           title: 'Ошибка загрузки',
@@ -77,9 +88,47 @@ const IntegrationsPage = () => {
     fetchIntegrations();
   }, []);
 
-  const handleAddProvider = (provider: Provider) => {
-    setSelectedProvider(provider);
+  const handleAddNew = () => {
+    setSelectedProvider(null);
+    setEditingIntegration(null);
     setShowAddDialog(true);
+  };
+
+  const handleEdit = (integration: UserIntegration) => {
+    const provider = allProviders.find(p => p.id === integration.provider_id);
+    setSelectedProvider(provider || null);
+    setEditingIntegration(integration);
+    setShowAddDialog(true);
+  };
+
+  const handleDelete = async (integrationId: number) => {
+    if (!confirm('Удалить эту интеграцию? Вебхуки перестанут поступать.')) return;
+
+    try {
+      const response = await fetch(functionUrls['integrations-delete'], {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ integration_id: integrationId, owner_id: ownerId })
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        toast({ title: 'Интеграция удалена' });
+        fetchIntegrations();
+      } else {
+        toast({
+          title: 'Ошибка',
+          description: data.error || 'Не удалось удалить',
+          variant: 'destructive'
+        });
+      }
+    } catch (error) {
+      toast({
+        title: 'Ошибка подключения',
+        variant: 'destructive'
+      });
+    }
   };
 
   const copyWebhookUrl = (token: string) => {
@@ -118,6 +167,10 @@ const IntegrationsPage = () => {
     );
   }
 
+  const getCategoryIntegrations = (categorySlug: string) => {
+    return userIntegrations.filter(ui => ui.category_slug === categorySlug);
+  };
+
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="flex items-center justify-between">
@@ -127,113 +180,102 @@ const IntegrationsPage = () => {
         </div>
       </div>
 
-      {userIntegrations.length > 0 && (
-        <div>
-          <h3 className="text-xl font-semibold mb-3">Активные интеграции</h3>
-          <div className="grid gap-4">
-            {userIntegrations.map((integration) => (
-              <Card key={integration.id}>
-                <CardHeader>
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <CardTitle className="text-lg">{integration.integration_name}</CardTitle>
-                      <CardDescription>{integration.provider_name}</CardDescription>
-                    </div>
-                    <Badge variant={integration.status === 'active' ? 'default' : 'secondary'}>
-                      {integration.status === 'active' ? 'Активно' : 'Неактивно'}
-                    </Badge>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">Последний вебхук:</span>
-                    <span className="font-medium">{formatDate(integration.last_webhook_at)}</span>
-                  </div>
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">Всего вебхуков:</span>
-                    <span className="font-medium">{integration.webhook_count}</span>
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-sm text-muted-foreground">Webhook URL:</span>
-                      <Button 
-                        variant="ghost" 
-                        size="sm"
-                        onClick={() => copyWebhookUrl(integration.webhook_token)}
-                      >
-                        <Icon name="Copy" size={14} />
-                      </Button>
-                    </div>
-                    <code className="text-xs bg-muted p-2 rounded block overflow-x-auto">
-                      {`${functionUrls['webhook-receive']}/${integration.webhook_token}`}
-                    </code>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </div>
-      )}
-
-      <div>
-        <h3 className="text-xl font-semibold mb-3">Доступные интеграции</h3>
-        {categories.map((category) => (
-          <div key={category.id} className="mb-6">
-            <div className="flex items-center gap-2 mb-3">
-              <Icon name={category.icon as any} size={20} />
-              <h4 className="text-lg font-medium">{category.name}</h4>
+      {categories.map((category) => {
+        const categoryIntegrations = getCategoryIntegrations(category.slug);
+        
+        return (
+          <div key={category.id}>
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <Icon name={category.icon as any} size={20} />
+                <h3 className="text-xl font-semibold">{category.name}</h3>
+              </div>
+              <Button onClick={handleAddNew} size="sm">
+                <Icon name="Plus" size={16} className="mr-2" />
+                Добавить
+              </Button>
             </div>
 
-            {category.providers.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {category.providers.map((provider) => {
-                  const isConnected = userIntegrations.some(
-                    (ui) => ui.provider_slug === provider.slug
-                  );
-
-                  return (
-                    <Card key={provider.id} className="hover:shadow-lg transition-shadow">
-                      <CardHeader>
-                        <CardTitle className="text-base">{provider.name}</CardTitle>
-                        <CardDescription className="text-sm">{provider.description}</CardDescription>
-                      </CardHeader>
-                      <CardContent>
-                        {isConnected ? (
-                          <Badge variant="secondary" className="w-full justify-center">
-                            <Icon name="CheckCircle" size={14} className="mr-1" />
-                            Подключено
+            {categoryIntegrations.length > 0 ? (
+              <div className="grid gap-4 mb-6">
+                {categoryIntegrations.map((integration) => (
+                  <Card key={integration.id}>
+                    <CardHeader>
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <CardTitle className="text-lg">{integration.integration_name}</CardTitle>
+                          <CardDescription>{integration.provider_name}</CardDescription>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Badge variant={integration.status === 'active' ? 'default' : 'secondary'}>
+                            {integration.status === 'active' ? 'Активно' : 'Неактивно'}
                           </Badge>
-                        ) : (
-                          <Button 
-                            onClick={() => handleAddProvider(provider)}
-                            className="w-full"
+                          <Button
+                            variant="ghost"
                             size="sm"
+                            onClick={() => handleEdit(integration)}
                           >
-                            <Icon name="Plus" size={14} className="mr-1" />
-                            Подключить
+                            <Icon name="Settings" size={16} />
                           </Button>
-                        )}
-                      </CardContent>
-                    </Card>
-                  );
-                })}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDelete(integration.id)}
+                          >
+                            <Icon name="Trash2" size={16} />
+                          </Button>
+                        </div>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">Последний вебхук:</span>
+                        <span className="font-medium">{formatDate(integration.last_webhook_at)}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">Всего вебхуков:</span>
+                        <span className="font-medium">{integration.webhook_count}</span>
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-sm text-muted-foreground">Webhook URL:</span>
+                          <Button 
+                            variant="ghost" 
+                            size="sm"
+                            onClick={() => copyWebhookUrl(integration.webhook_token)}
+                          >
+                            <Icon name="Copy" size={14} />
+                          </Button>
+                        </div>
+                        <code className="text-xs bg-muted p-2 rounded block overflow-x-auto">
+                          {`${functionUrls['webhook-receive']}/${integration.webhook_token}`}
+                        </code>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
               </div>
             ) : (
-              <Card>
+              <Card className="mb-6">
                 <CardContent className="py-8 text-center text-muted-foreground">
-                  <Icon name="Package" size={32} className="mx-auto mb-2 opacity-50" />
-                  <p>Интеграции скоро появятся</p>
+                  <Icon name="Inbox" size={32} className="mx-auto mb-2 opacity-50" />
+                  <p>Пока нет интеграций в этой категории</p>
+                  <Button onClick={handleAddNew} variant="link" className="mt-2">
+                    Добавить первую интеграцию
+                  </Button>
                 </CardContent>
               </Card>
             )}
           </div>
-        ))}
-      </div>
+        );
+      })}
 
       <AddIntegrationDialog
         open={showAddDialog}
         onOpenChange={setShowAddDialog}
         provider={selectedProvider}
+        editingIntegration={editingIntegration}
+        allProviders={allProviders}
         ownerId={ownerId}
         onSuccess={fetchIntegrations}
       />

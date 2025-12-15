@@ -1,0 +1,29 @@
+{
+  "tests": [
+    {
+      "name": "Delete integration successfully",
+      "method": "DELETE",
+      "path": "/",
+      "body": {
+        "integration_id": 1,
+        "owner_id": 1
+      },
+      "expectedStatus": 200,
+      "expectedBody": {
+        "success": true
+      },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Missing parameters",
+      "method": "DELETE",
+      "path": "/",
+      "body": {},
+      "expectedStatus": 400,
+      "expectedBody": {
+        "error": "string"
+      },
+      "bodyMatcher": "partial"
+    }
+  ]
+}
