@@ -340,18 +340,20 @@ const AddIntegrationDialog = ({ open, onOpenChange, provider, editingIntegration
               </>
             )}
 
-            <div>
-              <Label htmlFor="forward_url">URL для переадресации (опционально)</Label>
-              <Input
-                id="forward_url"
-                placeholder="https://your-domain.com/webhook"
-                value={forwardUrl}
-                onChange={(e) => setForwardUrl(e.target.value)}
-              />
-              <p className="text-xs text-muted-foreground mt-1">
-                Вебхуки будут дублироваться на указанный адрес после сохранения в БД
-              </p>
-            </div>
+            {selectedProvider.slug !== 'ofdru' && (
+              <div>
+                <Label htmlFor="forward_url">URL для переадресации (опционально)</Label>
+                <Input
+                  id="forward_url"
+                  placeholder="https://your-domain.com/webhook"
+                  value={forwardUrl}
+                  onChange={(e) => setForwardUrl(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Вебхуки будут дублироваться на указанный адрес после сохранения в БД
+                </p>
+              </div>
+            )}
 
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => onOpenChange(false)}>

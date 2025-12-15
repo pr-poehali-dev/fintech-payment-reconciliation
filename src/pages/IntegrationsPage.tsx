@@ -222,7 +222,9 @@ const IntegrationsPage = () => {
 
             {categoryIntegrations.length > 0 ? (
               <div className="grid gap-4 mb-6">
-                {categoryIntegrations.map((integration) => (
+                {categoryIntegrations.map((integration) => {
+                  const isOFD = integration.category_slug === 'ofd';
+                  return (
                   <Card key={integration.id}>
                     <CardHeader>
                       <div className="flex items-start justify-between">
@@ -252,38 +254,53 @@ const IntegrationsPage = () => {
                       </div>
                     </CardHeader>
                     <CardContent className="space-y-3">
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-muted-foreground">Последний вебхук:</span>
-                        <span className="font-medium">{formatDate(integration.last_webhook_at)}</span>
-                      </div>
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-muted-foreground">Всего вебхуков:</span>
-                        <span className="font-medium">{integration.webhook_count}</span>
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="text-sm text-muted-foreground">Webhook URL:</span>
-                          <Button 
-                            variant="ghost" 
-                            size="sm"
-                            onClick={() => copyWebhookUrl(integration.webhook_token)}
-                          >
-                            <Icon name="Copy" size={14} />
-                          </Button>
-                        </div>
-                        <code className="text-xs bg-muted p-2 rounded block overflow-x-auto">
-                          {`${functionUrls['webhook-receive']}?token=${integration.webhook_token}`}
-                        </code>
-                      </div>
-                      {integration.forward_url && (
-                        <div className="text-sm">
-                          <span className="text-muted-foreground">Переадресация: </span>
-                          <span className="font-mono text-xs">{integration.forward_url}</span>
-                        </div>
+                      {isOFD ? (
+                        <>
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-muted-foreground">ИНН:</span>
+                            <span className="font-medium font-mono">{integration.config?.inn || '—'}</span>
+                          </div>
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-muted-foreground">РНМ:</span>
+                            <span className="font-medium font-mono">{integration.config?.kkt || '—'}</span>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-muted-foreground">Последний вебхук:</span>
+                            <span className="font-medium">{formatDate(integration.last_webhook_at)}</span>
+                          </div>
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-muted-foreground">Всего вебхуков:</span>
+                            <span className="font-medium">{integration.webhook_count}</span>
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="text-sm text-muted-foreground">Webhook URL:</span>
+                              <Button 
+                                variant="ghost" 
+                                size="sm"
+                                onClick={() => copyWebhookUrl(integration.webhook_token)}
+                              >
+                                <Icon name="Copy" size={14} />
+                              </Button>
+                            </div>
+                            <code className="text-xs bg-muted p-2 rounded block overflow-x-auto">
+                              {`${functionUrls['webhook-receive']}?token=${integration.webhook_token}`}
+                            </code>
+                          </div>
+                          {integration.forward_url && (
+                            <div className="text-sm">
+                              <span className="text-muted-foreground">Переадресация: </span>
+                              <span className="font-mono text-xs">{integration.forward_url}</span>
+                            </div>
+                          )}
+                        </>
                       )}
                     </CardContent>
                   </Card>
-                ))}
+                )})}
               </div>
             ) : (
               <Card className="mb-6">
