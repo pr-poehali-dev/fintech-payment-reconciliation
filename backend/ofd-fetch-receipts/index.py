@@ -127,19 +127,57 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         with urllib.request.urlopen(req, timeout=30) as response:
             response_body = response.read().decode('utf-8')
             receipts_data = json.loads(response_body)
+            
+            if isinstance(receipts_data, dict) and receipts_data.get('Status') == 'Failed':
+                conn.close()
+                return {
+                    'statusCode': 200,
+                    'headers': {
+                        'Content-Type': 'application/json',
+                        'Access-Control-Allow-Origin': '*'
+                    },
+                    'body': json.dumps({
+                        'success': False,
+                        'error': f'OFD API returned error: {receipts_data.get("Errors", [])}',
+                        'error_details': receipts_data,
+                        'debug': {
+                            'full_url': full_url,
+                            'date_from': date_from,
+                            'date_to': date_to,
+                            'api_url': api_url
+                        }
+                    }),
+                    'isBase64Encoded': False
+                }
     except urllib.error.HTTPError as e:
         error_body = e.read().decode('utf-8') if e.fp else str(e)
         conn.close()
+        
+        error_data = {}
+        try:
+            error_data = json.loads(error_body)
+        except:
+            error_data = {'raw_error': error_body}
+        
         return {
-            'statusCode': e.code,
-            'headers': {'Content-Type': 'application/json'},
+            'statusCode': 200,
+            'headers': {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*'
+            },
             'body': json.dumps({
+                'success': False,
                 'error': f'OFD API error: {error_body}',
+                'error_details': error_data,
                 'debug': {
-                    'url': ofd_url,
-                    'DateFrom': date_from,
-                    'DateTo': date_to,
-                    'has_token': bool(auth_token)
+                    'http_code': e.code,
+                    'full_url': full_url,
+                    'date_from': date_from,
+                    'date_to': date_to,
+                    'has_token': bool(auth_token),
+                    'api_url': api_url,
+                    'inn': inn,
+                    'kkt': kkt
                 }
             }),
             'isBase64Encoded': False
