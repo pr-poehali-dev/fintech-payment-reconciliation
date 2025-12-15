@@ -62,6 +62,7 @@ const PaymentsPage = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [selectedPayment, setSelectedPayment] = useState<Payment | null>(null);
   const [showDetails, setShowDetails] = useState(false);
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [integrationFilter, setIntegrationFilter] = useState<string>('all');
@@ -103,6 +104,19 @@ const PaymentsPage = () => {
   const handleRowClick = (payment: Payment) => {
     setSelectedPayment(payment);
     setShowDetails(true);
+  };
+
+  const toggleRowExpand = (orderId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setExpandedRows(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(orderId)) {
+        newSet.delete(orderId);
+      } else {
+        newSet.add(orderId);
+      }
+      return newSet;
+    });
   };
 
   const getStatusColor = (status: string) => {
@@ -381,53 +395,140 @@ const PaymentsPage = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredGroupedPayments.map((group) => (
-                  <TableRow 
-                    key={group.order_id || group.payment_id} 
-                    className="cursor-pointer hover:bg-muted/50"
-                    onClick={() => handleRowClick(group.payments[0])}
-                  >
-                    <TableCell className="font-mono text-sm">
-                      {formatDate(group.first_created_at)}
-                    </TableCell>
-                    <TableCell>
-                      <div className="font-mono text-sm">
-                        <div>{group.order_id}</div>
-                        <div className="text-xs text-muted-foreground">{group.payment_id}</div>
-                      </div>
-                    </TableCell>
-                    <TableCell className="font-semibold">
-                      {group.amount.toLocaleString('ru-RU')} ₽
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex flex-wrap gap-1">
-                        {group.statuses
-                          .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
-                          .map((s) => (
-                            <Badge 
-                              key={s.id} 
-                              className={`${getStatusColor(s.status)} text-white text-xs`}
-                              title={formatDate(s.created_at)}
-                            >
-                              {s.status}
-                            </Badge>
-                          ))}
-                      </div>
-                    </TableCell>
-                    <TableCell className="font-mono text-sm">
-                      {group.pan || '—'}
-                    </TableCell>
-                    <TableCell>
-                      <div className="text-sm">
-                        <div className="font-medium">{group.integration_name}</div>
-                        <div className="text-xs text-muted-foreground">{group.provider_name}</div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Icon name="ChevronRight" size={16} className="text-muted-foreground" />
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {filteredGroupedPayments.map((group) => {
+                  const rowKey = group.order_id || group.payment_id;
+                  const isExpanded = expandedRows.has(rowKey);
+                  
+                  return (
+                    <>
+                      <TableRow 
+                        key={rowKey} 
+                        className="cursor-pointer hover:bg-muted/50"
+                        onClick={(e) => toggleRowExpand(rowKey, e)}
+                      >
+                        <TableCell className="font-mono text-sm">
+                          {formatDate(group.first_created_at)}
+                        </TableCell>
+                        <TableCell>
+                          <div className="font-mono text-sm">
+                            <div>{group.order_id}</div>
+                            <div className="text-xs text-muted-foreground">{group.payment_id}</div>
+                          </div>
+                        </TableCell>
+                        <TableCell className="font-semibold">
+                          {group.amount.toLocaleString('ru-RU')} ₽
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex flex-wrap gap-1">
+                            {group.statuses
+                              .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+                              .map((s) => (
+                                <Badge 
+                                  key={s.id} 
+                                  className={`${getStatusColor(s.status)} text-white text-xs`}
+                                  title={formatDate(s.created_at)}
+                                >
+                                  {s.status}
+                                </Badge>
+                              ))}
+                          </div>
+                        </TableCell>
+                        <TableCell className="font-mono text-sm">
+                          {group.pan || '—'}
+                        </TableCell>
+                        <TableCell>
+                          <div className="text-sm">
+                            <div className="font-medium">{group.integration_name}</div>
+                            <div className="text-xs text-muted-foreground">{group.provider_name}</div>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Icon 
+                            name={isExpanded ? "ChevronDown" : "ChevronRight"} 
+                            size={16} 
+                            className="text-muted-foreground" 
+                          />
+                        </TableCell>
+                      </TableRow>
+                      
+                      {isExpanded && (
+                        <TableRow key={`${rowKey}-details`}>
+                          <TableCell colSpan={7} className="bg-muted/30 p-0">
+                            <div className="p-4 space-y-3">
+                              <div className="text-sm font-semibold text-muted-foreground mb-3">
+                                История вебхуков ({group.payments.length})
+                              </div>
+                              {group.payments
+                                .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+                                .map((payment, idx) => (
+                                  <div 
+                                    key={payment.id}
+                                    className="bg-background rounded-lg p-4 border border-border hover:border-primary/50 transition-colors cursor-pointer"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleRowClick(payment);
+                                    }}
+                                  >
+                                    <div className="flex items-start justify-between mb-3">
+                                      <div className="flex items-center gap-3">
+                                        <div className="flex items-center justify-center w-8 h-8 rounded-full bg-muted text-sm font-semibold">
+                                          {idx + 1}
+                                        </div>
+                                        <div>
+                                          <Badge className={`${getStatusColor(payment.status)} text-white mb-1`}>
+                                            {payment.status}
+                                          </Badge>
+                                          <div className="text-xs text-muted-foreground font-mono">
+                                            {formatDate(payment.created_at)}
+                                          </div>
+                                        </div>
+                                      </div>
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleRowClick(payment);
+                                        }}
+                                      >
+                                        <Icon name="Eye" size={14} className="mr-1" />
+                                        Детали
+                                      </Button>
+                                    </div>
+                                    
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                                      <div>
+                                        <div className="text-xs text-muted-foreground mb-1">Webhook ID</div>
+                                        <div className="font-mono text-xs">#{payment.id}</div>
+                                      </div>
+                                      {payment.error_code && payment.error_code !== '0' && (
+                                        <div>
+                                          <div className="text-xs text-muted-foreground mb-1">Код ошибки</div>
+                                          <div className="font-mono text-xs text-red-600">{payment.error_code}</div>
+                                        </div>
+                                      )}
+                                      {payment.customer_email && (
+                                        <div>
+                                          <div className="text-xs text-muted-foreground mb-1">Email</div>
+                                          <div className="text-xs truncate">{payment.customer_email}</div>
+                                        </div>
+                                      )}
+                                      {payment.customer_phone && (
+                                        <div>
+                                          <div className="text-xs text-muted-foreground mb-1">Телефон</div>
+                                          <div className="font-mono text-xs">{payment.customer_phone}</div>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                ))}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </>
+                  );
+                })}
               </TableBody>
             </Table>
           )}
