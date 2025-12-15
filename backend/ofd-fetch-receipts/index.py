@@ -86,14 +86,19 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         }
     
     if not date_from:
-        date_from = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%dT00:00:00')
+        date_from = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
     if not date_to:
-        date_to = datetime.now().strftime('%Y-%m-%dT23:59:59')
+        date_to = datetime.now().strftime('%Y-%m-%d')
     
-    ofd_url = f'https://ofd.ru/api/integration/v2/inn/{inn}/kkt/{kkt}/receipts?dateFrom={date_from}&dateTo={date_to}&AuthToken={auth_token}'
+    ofd_url = f'https://ofd.ru/api/integration/v2/inn/{inn}/kkt/{kkt}/receipts'
     
     try:
-        req = urllib.request.Request(ofd_url, method='GET')
+        req = urllib.request.Request(
+            f'{ofd_url}?dateFrom={date_from}&dateTo={date_to}',
+            headers={'AuthToken': auth_token},
+            method='GET'
+        )
+        
         with urllib.request.urlopen(req, timeout=30) as response:
             response_body = response.read().decode('utf-8')
             receipts_data = json.loads(response_body)
@@ -103,7 +108,15 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         return {
             'statusCode': e.code,
             'headers': {'Content-Type': 'application/json'},
-            'body': json.dumps({'error': f'OFD API error: {error_body}'}),
+            'body': json.dumps({
+                'error': f'OFD API error: {error_body}',
+                'debug': {
+                    'url': ofd_url,
+                    'dateFrom': date_from,
+                    'dateTo': date_to,
+                    'has_token': bool(auth_token)
+                }
+            }),
             'isBase64Encoded': False
         }
     except Exception as e:
