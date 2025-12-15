@@ -37,6 +37,25 @@ interface Payment {
   provider_name: string;
 }
 
+interface GroupedPayment {
+  order_id: string;
+  payment_id: string;
+  amount: number;
+  statuses: Array<{
+    status: string;
+    created_at: string;
+    id: number;
+  }>;
+  latest_status: string;
+  first_created_at: string;
+  pan: string;
+  customer_email: string;
+  customer_phone: string;
+  integration_name: string;
+  provider_name: string;
+  payments: Payment[];
+}
+
 const PaymentsPage = () => {
   const [payments, setPayments] = useState<Payment[]>([]);
   const [total, setTotal] = useState(0);
@@ -96,8 +115,10 @@ const PaymentsPage = () => {
         return 'bg-red-500';
       case 'REFUNDED':
         return 'bg-orange-500';
-      default:
+      case 'CANCELED':
         return 'bg-gray-500';
+      default:
+        return 'bg-gray-400';
     }
   };
 
@@ -116,34 +137,78 @@ const PaymentsPage = () => {
     new Set(payments.map(p => p.integration_name))
   );
 
+  const groupPaymentsByOrder = (payments: Payment[]): GroupedPayment[] => {
+    const grouped = new Map<string, GroupedPayment>();
+
+    payments.forEach(payment => {
+      const key = payment.order_id || payment.payment_id;
+      
+      if (!grouped.has(key)) {
+        grouped.set(key, {
+          order_id: payment.order_id,
+          payment_id: payment.payment_id,
+          amount: payment.amount,
+          statuses: [],
+          latest_status: payment.status,
+          first_created_at: payment.created_at,
+          pan: payment.pan,
+          customer_email: payment.customer_email,
+          customer_phone: payment.customer_phone,
+          integration_name: payment.integration_name,
+          provider_name: payment.provider_name,
+          payments: []
+        });
+      }
+
+      const group = grouped.get(key)!;
+      group.statuses.push({
+        status: payment.status,
+        created_at: payment.created_at,
+        id: payment.id
+      });
+      group.payments.push(payment);
+      
+      if (new Date(payment.created_at) > new Date(group.first_created_at)) {
+        group.latest_status = payment.status;
+      }
+    });
+
+    return Array.from(grouped.values()).sort((a, b) => 
+      new Date(b.first_created_at).getTime() - new Date(a.first_created_at).getTime()
+    );
+  };
+
+  const groupedPayments = groupPaymentsByOrder(payments);
+
   const statusOptions = [
-    { value: 'all', label: 'Все статусы', count: payments.length },
-    { value: 'CONFIRMED', label: 'Подтверждён', count: payments.filter(p => p.status === 'CONFIRMED').length },
-    { value: 'AUTHORIZED', label: 'Авторизован', count: payments.filter(p => p.status === 'AUTHORIZED').length },
-    { value: 'REJECTED', label: 'Отклонён', count: payments.filter(p => p.status === 'REJECTED').length },
-    { value: 'REFUNDED', label: 'Возврат', count: payments.filter(p => p.status === 'REFUNDED').length },
+    { value: 'all', label: 'Все статусы', count: groupedPayments.length },
+    { value: 'CONFIRMED', label: 'Подтверждён', count: groupedPayments.filter(p => p.latest_status === 'CONFIRMED').length },
+    { value: 'AUTHORIZED', label: 'Авторизован', count: groupedPayments.filter(p => p.latest_status === 'AUTHORIZED').length },
+    { value: 'REJECTED', label: 'Отклонён', count: groupedPayments.filter(p => p.latest_status === 'REJECTED').length },
+    { value: 'REFUNDED', label: 'Возврат', count: groupedPayments.filter(p => p.latest_status === 'REFUNDED').length },
+    { value: 'CANCELED', label: 'Отменён', count: groupedPayments.filter(p => p.latest_status === 'CANCELED').length },
   ];
 
-  const filteredPayments = payments.filter(payment => {
+  const filteredGroupedPayments = groupedPayments.filter(group => {
     const matchesSearch = !searchQuery || (() => {
       const query = searchQuery.toLowerCase();
       return (
-        payment.payment_id.toLowerCase().includes(query) ||
-        payment.order_id?.toLowerCase().includes(query) ||
-        payment.customer_email?.toLowerCase().includes(query) ||
-        payment.customer_phone?.toLowerCase().includes(query) ||
-        payment.amount.toString().includes(query)
+        group.payment_id.toLowerCase().includes(query) ||
+        group.order_id?.toLowerCase().includes(query) ||
+        group.customer_email?.toLowerCase().includes(query) ||
+        group.customer_phone?.toLowerCase().includes(query) ||
+        group.amount.toString().includes(query)
       );
     })();
 
-    const matchesStatus = statusFilter === 'all' || payment.status === statusFilter;
-    const matchesIntegration = integrationFilter === 'all' || payment.integration_name === integrationFilter;
+    const matchesStatus = statusFilter === 'all' || group.latest_status === statusFilter;
+    const matchesIntegration = integrationFilter === 'all' || group.integration_name === integrationFilter;
 
     return matchesSearch && matchesStatus && matchesIntegration;
   });
 
-  const totalAmount = filteredPayments
-    .filter(p => p.status === 'CONFIRMED')
+  const totalAmount = groupedPayments
+    .filter(p => p.latest_status === 'CONFIRMED')
     .reduce((sum, p) => sum + p.amount, 0);
 
   if (isLoading) {
@@ -174,11 +239,14 @@ const PaymentsPage = () => {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              Всего платежей
+              Всего заказов
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">{total}</div>
+            <div className="text-3xl font-bold">{groupedPayments.length}</div>
+            <p className="text-xs text-muted-foreground mt-1">
+              {total} вебхуков получено
+            </p>
           </CardContent>
         </Card>
 
@@ -190,7 +258,7 @@ const PaymentsPage = () => {
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold text-green-600">
-              {payments.filter(p => p.status === 'CONFIRMED').length}
+              {groupedPayments.filter(p => p.latest_status === 'CONFIRMED').length}
             </div>
           </CardContent>
         </Card>
@@ -271,7 +339,7 @@ const PaymentsPage = () => {
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Icon name="Filter" size={16} />
                 <span>
-                  Показано {filteredPayments.length} из {payments.length} платежей
+                  Показано {filteredGroupedPayments.length} из {groupedPayments.length} заказов
                 </span>
                 <Button
                   variant="ghost"
@@ -290,7 +358,7 @@ const PaymentsPage = () => {
           </div>
         </CardHeader>
         <CardContent>
-          {filteredPayments.length === 0 ? (
+          {filteredGroupedPayments.length === 0 ? (
             <div className="text-center py-12">
               <Icon name="Inbox" size={48} className="mx-auto mb-4 text-muted-foreground opacity-50" />
               <p className="text-muted-foreground">
@@ -304,42 +372,55 @@ const PaymentsPage = () => {
               <TableHeader>
                 <TableRow>
                   <TableHead>Дата</TableHead>
-                  <TableHead>ID платежа</TableHead>
+                  <TableHead>ID заказа / платежа</TableHead>
                   <TableHead>Сумма</TableHead>
-                  <TableHead>Статус</TableHead>
+                  <TableHead>Статусы</TableHead>
                   <TableHead>Карта</TableHead>
                   <TableHead>Интеграция</TableHead>
                   <TableHead></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredPayments.map((payment) => (
+                {filteredGroupedPayments.map((group) => (
                   <TableRow 
-                    key={payment.id} 
+                    key={group.order_id || group.payment_id} 
                     className="cursor-pointer hover:bg-muted/50"
-                    onClick={() => handleRowClick(payment)}
+                    onClick={() => handleRowClick(group.payments[0])}
                   >
                     <TableCell className="font-mono text-sm">
-                      {formatDate(payment.created_at)}
-                    </TableCell>
-                    <TableCell className="font-mono text-sm">
-                      {payment.payment_id}
-                    </TableCell>
-                    <TableCell className="font-semibold">
-                      {payment.amount.toLocaleString('ru-RU')} ₽
+                      {formatDate(group.first_created_at)}
                     </TableCell>
                     <TableCell>
-                      <Badge className={`${getStatusColor(payment.status)} text-white`}>
-                        {payment.status}
-                      </Badge>
+                      <div className="font-mono text-sm">
+                        <div>{group.order_id}</div>
+                        <div className="text-xs text-muted-foreground">{group.payment_id}</div>
+                      </div>
+                    </TableCell>
+                    <TableCell className="font-semibold">
+                      {group.amount.toLocaleString('ru-RU')} ₽
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex flex-wrap gap-1">
+                        {group.statuses
+                          .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+                          .map((s) => (
+                            <Badge 
+                              key={s.id} 
+                              className={`${getStatusColor(s.status)} text-white text-xs`}
+                              title={formatDate(s.created_at)}
+                            >
+                              {s.status}
+                            </Badge>
+                          ))}
+                      </div>
                     </TableCell>
                     <TableCell className="font-mono text-sm">
-                      {payment.pan || '—'}
+                      {group.pan || '—'}
                     </TableCell>
                     <TableCell>
                       <div className="text-sm">
-                        <div className="font-medium">{payment.integration_name}</div>
-                        <div className="text-xs text-muted-foreground">{payment.provider_name}</div>
+                        <div className="font-medium">{group.integration_name}</div>
+                        <div className="text-xs text-muted-foreground">{group.provider_name}</div>
                       </div>
                     </TableCell>
                     <TableCell>
