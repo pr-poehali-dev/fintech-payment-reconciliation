@@ -95,7 +95,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         integration_id, token = cur.fetchone()
         conn.commit()
         
-        webhook_url = f"https://your-domain.com/webhook/{token}"
+        webhook_url = f"https://functions.poehali.dev/a923b457-57a6-4eb2-b566-9a9d65cb04e8/{token}"
         
         return {
             'statusCode': 200,
