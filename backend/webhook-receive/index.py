@@ -63,9 +63,9 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     
     if method != 'POST':
         return {
-            'statusCode': 405,
+            'statusCode': 200,
             'headers': {'Content-Type': 'application/json'},
-            'body': json.dumps({'error': 'Method not allowed'}),
+            'body': json.dumps({'error': True, 'message': 'Запрос с заданными параметрами не поддерживается'}),
             'isBase64Encoded': False
         }
     
