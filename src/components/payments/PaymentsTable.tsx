@@ -1,3 +1,4 @@
+import React from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import Icon from '@/components/ui/icon';
@@ -96,9 +97,8 @@ const PaymentsTable = ({
               const isExpanded = expandedRows.has(rowKey);
               
               return (
-                <>
+                <React.Fragment key={rowKey}>
                   <TableRow 
-                    key={rowKey} 
                     className="cursor-pointer hover:bg-muted/50"
                     onClick={(e) => toggleRowExpand(rowKey, e)}
                   >
@@ -232,7 +232,7 @@ const PaymentsTable = ({
                       </TableCell>
                     </TableRow>
                   )}
-                </>
+                </React.Fragment>
               );
             })
           )}
