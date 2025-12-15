@@ -106,11 +106,11 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     
     ofd_url = f'{api_url}/api/integration/v2/inn/{inn}/kkt/{kkt}/receipts'
     
-    print(f"[DEBUG] OFD Request: {ofd_url}?dateFrom={date_from}&dateTo={date_to}")
+    print(f"[DEBUG] OFD Request: {ofd_url}?DateFrom={date_from}&DateTo={date_to}")
     
     try:
         req = urllib.request.Request(
-            f'{ofd_url}?dateFrom={date_from}&dateTo={date_to}',
+            f'{ofd_url}?DateFrom={date_from}&DateTo={date_to}',
             headers={'AuthToken': auth_token},
             method='GET'
         )
@@ -128,8 +128,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 'error': f'OFD API error: {error_body}',
                 'debug': {
                     'url': ofd_url,
-                    'dateFrom': date_from,
-                    'dateTo': date_to,
+                    'DateFrom': date_from,
+                    'DateTo': date_to,
                     'has_token': bool(auth_token)
                 }
             }),
