@@ -121,11 +121,17 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     except Exception as test_error:
         print(f"[DEBUG] Token test failed: {str(test_error)}")
     
-    ofd_url = f'{api_url}/api/integration/v2/inn/{inn}/kkt/{kkt}/receipts'
+    dt_from_obj = datetime.strptime(date_from, '%d.%m.%Y')
+    dt_to_obj = datetime.strptime(date_to, '%d.%m.%Y')
+    
+    iso_from = dt_from_obj.strftime('%Y-%m-%dT00:00:00')
+    iso_to = dt_to_obj.strftime('%Y-%m-%dT23:59:59')
+    
+    ofd_url = f'{api_url}/api/integration/v2/inn/{inn}/kkt/{kkt}/receipts-with-fpd-short'
     
     params = urllib.parse.urlencode({
-        'dateFrom': date_from,
-        'dateTo': date_to,
+        'dateFrom': iso_from,
+        'dateTo': iso_to,
         'AuthToken': auth_token
     })
     
@@ -162,8 +168,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                         'raw_response': response_body,
                         'debug': {
                             'full_url': full_url,
-                            'date_from': date_from,
-                            'date_to': date_to,
+                            'iso_from': iso_from,
+                            'iso_to': iso_to,
                             'api_url': api_url,
                             'inn': inn,
                             'kkt': kkt,
@@ -195,8 +201,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 'debug': {
                     'http_code': e.code,
                     'full_url': full_url,
-                    'date_from': date_from,
-                    'date_to': date_to,
+                    'iso_from': iso_from,
+                    'iso_to': iso_to,
                     'has_token': bool(auth_token),
                     'api_url': api_url,
                     'inn': inn,
@@ -214,7 +220,12 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             'isBase64Encoded': False
         }
     
-    receipts = receipts_data if isinstance(receipts_data, list) else []
+    if isinstance(receipts_data, dict) and 'Data' in receipts_data:
+        receipts = receipts_data.get('Data', [])
+    elif isinstance(receipts_data, list):
+        receipts = receipts_data
+    else:
+        receipts = []
     
     inserted_count = 0
     for receipt in receipts:
@@ -259,8 +270,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             'success': True,
             'total_receipts': len(receipts),
             'inserted': inserted_count,
-            'date_from': date_from,
-            'date_to': date_to
+            'iso_from': iso_from,
+            'iso_to': iso_to
         }),
         'isBase64Encoded': False
     }
