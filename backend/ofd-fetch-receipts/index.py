@@ -87,11 +87,26 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         }
     
     if not date_from:
-        date_from = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
+        date_from = (datetime.now() - timedelta(days=1)).strftime('%d.%m.%Y')
+    else:
+        try:
+            dt = datetime.fromisoformat(date_from.replace('Z', '+00:00'))
+            date_from = dt.strftime('%d.%m.%Y')
+        except:
+            date_from = (datetime.now() - timedelta(days=1)).strftime('%d.%m.%Y')
+    
     if not date_to:
-        date_to = datetime.now().strftime('%Y-%m-%d')
+        date_to = datetime.now().strftime('%d.%m.%Y')
+    else:
+        try:
+            dt = datetime.fromisoformat(date_to.replace('Z', '+00:00'))
+            date_to = dt.strftime('%d.%m.%Y')
+        except:
+            date_to = datetime.now().strftime('%d.%m.%Y')
     
     ofd_url = f'{api_url}/api/integration/v2/inn/{inn}/kkt/{kkt}/receipts'
+    
+    print(f"[DEBUG] OFD Request: {ofd_url}?dateFrom={date_from}&dateTo={date_to}")
     
     try:
         req = urllib.request.Request(
