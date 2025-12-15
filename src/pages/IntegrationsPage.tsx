@@ -61,6 +61,7 @@ const IntegrationsPage = () => {
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadingReceipts, setLoadingReceipts] = useState<number | null>(null);
   const { toast } = useToast();
   
   const ownerId = 1;
@@ -180,6 +181,39 @@ const IntegrationsPage = () => {
     return date.toLocaleDateString('ru-RU');
   };
 
+  const handleFetchReceipts = async (integrationId: number) => {
+    setLoadingReceipts(integrationId);
+    try {
+      const response = await fetch(functionUrls['ofd-fetch-receipts'], {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ integration_id: integrationId })
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        toast({
+          title: 'Чеки загружены',
+          description: `Загружено ${data.inserted} из ${data.total_receipts} чеков`
+        });
+      } else {
+        toast({
+          title: 'Ошибка загрузки',
+          description: data.error || 'Не удалось загрузить чеки',
+          variant: 'destructive'
+        });
+      }
+    } catch (error) {
+      toast({
+        title: 'Ошибка подключения',
+        variant: 'destructive'
+      });
+    } finally {
+      setLoadingReceipts(null);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-96">
@@ -263,6 +297,26 @@ const IntegrationsPage = () => {
                           <div className="flex items-center justify-between text-sm">
                             <span className="text-muted-foreground">РНМ:</span>
                             <span className="font-medium font-mono">{integration.config?.kkt || '—'}</span>
+                          </div>
+                          <div className="pt-2">
+                            <Button
+                              onClick={() => handleFetchReceipts(integration.id)}
+                              disabled={loadingReceipts === integration.id}
+                              size="sm"
+                              className="w-full"
+                            >
+                              {loadingReceipts === integration.id ? (
+                                <>
+                                  <Icon name="Loader2" className="animate-spin mr-2" size={16} />
+                                  Загружаю...
+                                </>
+                              ) : (
+                                <>
+                                  <Icon name="Download" size={16} className="mr-2" />
+                                  Загрузить чеки
+                                </>
+                              )}
+                            </Button>
                           </div>
                         </>
                       ) : (
