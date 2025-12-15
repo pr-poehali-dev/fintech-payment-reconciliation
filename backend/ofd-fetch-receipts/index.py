@@ -88,20 +88,22 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         }
     
     if not date_from:
-        date_from = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%dT00:00:00')
+        dt_from = datetime.now() - timedelta(days=30)
+        date_from = dt_from.strftime('%Y-%m-%dT00:00:00')
     else:
         try:
             dt = datetime.fromisoformat(date_from.replace('Z', '+00:00'))
-            date_from = dt.strftime('%Y-%m-%dT%H:%M:%S')
+            date_from = dt.strftime('%Y-%m-%dT00:00:00')
         except:
-            date_from = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%dT00:00:00')
+            dt_from = datetime.now() - timedelta(days=30)
+            date_from = dt_from.strftime('%Y-%m-%dT00:00:00')
     
     if not date_to:
         date_to = datetime.now().strftime('%Y-%m-%dT23:59:59')
     else:
         try:
             dt = datetime.fromisoformat(date_to.replace('Z', '+00:00'))
-            date_to = dt.strftime('%Y-%m-%dT%H:%M:%S')
+            date_to = dt.strftime('%Y-%m-%dT23:59:59')
         except:
             date_to = datetime.now().strftime('%Y-%m-%dT23:59:59')
     
