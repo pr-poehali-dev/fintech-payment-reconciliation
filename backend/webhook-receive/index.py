@@ -102,6 +102,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             }
         
         integration_id, owner_id, config, webhook_settings, provider_slug = integration_row
+        
         config = json.loads(config) if isinstance(config, str) else config
         webhook_settings = json.loads(webhook_settings) if isinstance(webhook_settings, str) else webhook_settings
         
