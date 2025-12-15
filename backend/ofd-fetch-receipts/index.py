@@ -75,6 +75,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     inn = config.get('inn')
     kkt = config.get('kkt')
     auth_token = config.get('auth_token')
+    api_url = config.get('api_url', 'https://ofd.ru')
     
     if not all([inn, kkt, auth_token]):
         conn.close()
@@ -90,7 +91,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     if not date_to:
         date_to = datetime.now().strftime('%Y-%m-%d')
     
-    ofd_url = f'https://ofd.ru/api/integration/v2/inn/{inn}/kkt/{kkt}/receipts'
+    ofd_url = f'{api_url}/api/integration/v2/inn/{inn}/kkt/{kkt}/receipts'
     
     try:
         req = urllib.request.Request(

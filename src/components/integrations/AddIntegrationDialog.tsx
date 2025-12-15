@@ -299,6 +299,19 @@ const AddIntegrationDialog = ({ open, onOpenChange, provider, editingIntegration
             {selectedProvider.slug === 'ofdru' && (
               <>
                 <div>
+                  <Label htmlFor="api_url">API сервер</Label>
+                  <Input
+                    id="api_url"
+                    placeholder="https://ofd.ru"
+                    value={config.api_url || 'https://ofd.ru'}
+                    onChange={(e) => setConfig({ ...config, api_url: e.target.value })}
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Используйте https://demo.ofd.ru для тестирования
+                  </p>
+                </div>
+
+                <div>
                   <Label htmlFor="inn">ИНН организации</Label>
                   <Input
                     id="inn"
