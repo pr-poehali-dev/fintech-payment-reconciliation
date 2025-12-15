@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -8,6 +7,7 @@ import NotificationCenter from '@/components/NotificationCenter';
 import AccessManagement from './AccessManagement';
 import IntegrationsPage from './IntegrationsPage';
 import PaymentsPage from './PaymentsPage';
+import ReceiptsPage from './ReceiptsPage';
 import {
   LineChart,
   Line,
@@ -56,7 +56,6 @@ const recentTransactions = [
 ];
 
 const Index = () => {
-  const navigate = useNavigate();
   const [activeModule, setActiveModule] = useState('dashboard');
   const [mounted, setMounted] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
@@ -65,12 +64,6 @@ const Index = () => {
   useEffect(() => {
     setMounted(true);
   }, []);
-
-  useEffect(() => {
-    if (activeModule === 'receipts') {
-      navigate('/receipts');
-    }
-  }, [activeModule, navigate]);
 
   const modules = [
     { id: 'dashboard', name: 'Дашборд', icon: 'LayoutDashboard' },
@@ -397,6 +390,10 @@ const Index = () => {
 
         {activeModule === 'payments' && (
           <PaymentsPage />
+        )}
+
+        {activeModule === 'receipts' && (
+          <ReceiptsPage />
         )}
 
 
