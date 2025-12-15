@@ -10,6 +10,8 @@ from typing import Dict, Any
 def verify_tbank_token(data: Dict[str, Any], terminal_password: str) -> bool:
     '''
     Проверка подписи вебхука от Тбанка
+    Алгоритм: исключить Token и вложенные объекты, добавить Password,
+    Success конвертировать в строку true/false, отсортировать и сконкатенировать
     https://developer.tbank.ru/eacq/intro/developer/notification
     '''
     received_token = data.get('Token', '')
@@ -18,8 +20,18 @@ def verify_tbank_token(data: Dict[str, Any], terminal_password: str) -> bool:
     
     values_to_hash = []
     for key in sorted(data.keys()):
-        if key != 'Token':
-            values_to_hash.append(str(data[key]))
+        if key == 'Token':
+            continue
+        
+        value = data[key]
+        
+        if isinstance(value, (dict, list)):
+            continue
+        
+        if isinstance(value, bool):
+            values_to_hash.append('true' if value else 'false')
+        else:
+            values_to_hash.append(str(value))
     
     values_to_hash.append(terminal_password)
     
