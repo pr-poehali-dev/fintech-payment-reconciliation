@@ -1,7 +1,6 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { ScrollArea } from '@/components/ui/scroll-area';
 
 interface Receipt {
   source: 'ofd' | 'cash_register';
@@ -27,7 +26,6 @@ interface ReceiptDetailsDialogProps {
 }
 
 const ReceiptDetailsDialog = ({ receipt, open, onOpenChange }: ReceiptDetailsDialogProps) => {
-  if (!receipt) return null;
 
   const formatAmount = (amount: number) => {
     return new Intl.NumberFormat('ru-RU', {
@@ -71,9 +69,11 @@ const ReceiptDetailsDialog = ({ receipt, open, onOpenChange }: ReceiptDetailsDia
     return <Badge variant="outline" className={className}>{getOperationTypeLabel(type)}</Badge>;
   };
 
+  if (!receipt) return null;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[90vh]">
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-2xl">Детали чека</DialogTitle>
           <DialogDescription>
@@ -81,8 +81,7 @@ const ReceiptDetailsDialog = ({ receipt, open, onOpenChange }: ReceiptDetailsDia
           </DialogDescription>
         </DialogHeader>
 
-        <ScrollArea className="max-h-[calc(90vh-120px)] pr-4">
-          <div className="space-y-6">
+        <div className="space-y-6 pr-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <div className="text-sm text-muted-foreground mb-1">Источник</div>
@@ -163,7 +162,6 @@ const ReceiptDetailsDialog = ({ receipt, open, onOpenChange }: ReceiptDetailsDia
               </div>
             </div>
           </div>
-        </ScrollArea>
       </DialogContent>
     </Dialog>
   );
