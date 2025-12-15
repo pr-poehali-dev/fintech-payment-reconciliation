@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -51,6 +51,35 @@ const AddIntegrationDialog = ({ open, onOpenChange, provider, editingIntegration
     notify_on_refunded: true
   });
   const { toast } = useToast();
+
+  useEffect(() => {
+    if (open) {
+      if (editingIntegration) {
+        setStep(1);
+        setSelectedProvider(allProviders.find(p => p.id === editingIntegration.provider_id) || null);
+        setIntegrationName(editingIntegration.integration_name || '');
+        setConfig(editingIntegration.config || { terminal_id: '', terminal_password: '' });
+        setWebhookSettings(editingIntegration.webhook_settings || {
+          notify_on_authorized: true,
+          notify_on_confirmed: true,
+          notify_on_rejected: true,
+          notify_on_refunded: true
+        });
+      } else {
+        setStep(0);
+        setSelectedProvider(provider);
+        setIntegrationName('');
+        setConfig({ terminal_id: '', terminal_password: '' });
+        setWebhookSettings({
+          notify_on_authorized: true,
+          notify_on_confirmed: true,
+          notify_on_rejected: true,
+          notify_on_refunded: true
+        });
+      }
+      setWebhookUrl('');
+    }
+  }, [open, editingIntegration, provider, allProviders]);
 
   const handleCreate = async () => {
     if (!selectedProvider) return;
