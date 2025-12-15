@@ -3,6 +3,7 @@ import os
 import psycopg2
 import urllib.request
 import urllib.error
+import urllib.parse
 from typing import Dict, Any
 from datetime import datetime, timedelta
 
@@ -106,11 +107,17 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     
     ofd_url = f'{api_url}/api/integration/v2/inn/{inn}/kkt/{kkt}/receipts'
     
-    print(f"[DEBUG] OFD Request: {ofd_url}?DateFrom={date_from}&DateTo={date_to}")
+    params = urllib.parse.urlencode({
+        'DateFrom': date_from,
+        'DateTo': date_to
+    })
+    
+    full_url = f'{ofd_url}?{params}'
+    print(f"[DEBUG] OFD Request: {full_url}")
     
     try:
         req = urllib.request.Request(
-            f'{ofd_url}?DateFrom={date_from}&DateTo={date_to}',
+            full_url,
             headers={'AuthToken': auth_token},
             method='GET'
         )
