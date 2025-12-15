@@ -172,48 +172,39 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 }
             
             webhook_payment_id = None
-            
             cur.execute('''
-                SELECT id FROM t_p83864310_fintech_payment_reco.webhook_payments 
-                WHERE integration_id = %s AND payment_id = %s AND status = %s
-                LIMIT 1
-            ''', (integration_id, webhook_data.get('PaymentId'), webhook_data.get('Status')))
+                INSERT INTO t_p83864310_fintech_payment_reco.webhook_payments (
+                    integration_id, owner_id, payment_id, terminal_key,
+                    amount, order_id, status, payment_status, error_code,
+                    customer_email, customer_phone, pan, card_type, exp_date,
+                    raw_data
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (integration_id, payment_id, status) DO NOTHING
+                RETURNING id
+            ''', (
+                integration_id,
+                owner_id,
+                webhook_data.get('PaymentId'),
+                webhook_data.get('TerminalKey'),
+                float(webhook_data.get('Amount', 0)) / 100,
+                webhook_data.get('OrderId'),
+                webhook_data.get('Status'),
+                webhook_data.get('PaymentStatus'),
+                webhook_data.get('ErrorCode'),
+                webhook_data.get('CardData', {}).get('Email') if isinstance(webhook_data.get('CardData'), dict) else None,
+                webhook_data.get('Phone'),
+                webhook_data.get('Pan'),
+                webhook_data.get('CardType'),
+                webhook_data.get('ExpDate'),
+                json.dumps(webhook_data)
+            ))
             
-            existing = cur.fetchone()
-            if existing:
-                webhook_payment_id = existing[0]
-                print(f"[DEBUG] Webhook already exists: integration={integration_id}, payment={webhook_data.get('PaymentId')}, status={webhook_data.get('Status')}")
+            result = cur.fetchone()
+            if result:
+                webhook_payment_id = result[0]
+                print(f"[DEBUG] Webhook saved: id={webhook_payment_id}, status={webhook_data.get('Status')}")
             else:
-                cur.execute('''
-                    INSERT INTO t_p83864310_fintech_payment_reco.webhook_payments (
-                        integration_id, owner_id, payment_id, terminal_key,
-                        amount, order_id, status, payment_status, error_code,
-                        customer_email, customer_phone, pan, card_type, exp_date,
-                        raw_data
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                    RETURNING id
-                ''', (
-                    integration_id,
-                    owner_id,
-                    webhook_data.get('PaymentId'),
-                    webhook_data.get('TerminalKey'),
-                    float(webhook_data.get('Amount', 0)) / 100,
-                    webhook_data.get('OrderId'),
-                    webhook_data.get('Status'),
-                    webhook_data.get('PaymentStatus'),
-                    webhook_data.get('ErrorCode'),
-                    webhook_data.get('CardData', {}).get('Email') if isinstance(webhook_data.get('CardData'), dict) else None,
-                    webhook_data.get('Phone'),
-                    webhook_data.get('Pan'),
-                    webhook_data.get('CardType'),
-                    webhook_data.get('ExpDate'),
-                    json.dumps(webhook_data)
-                ))
-                
-                result = cur.fetchone()
-                if result:
-                    webhook_payment_id = result[0]
-                    print(f"[DEBUG] Webhook saved: id={webhook_payment_id}, status={webhook_data.get('Status')}")
+                print(f"[DEBUG] Webhook duplicate skipped: integration={integration_id}, payment={webhook_data.get('PaymentId')}, status={webhook_data.get('Status')}")
         
         cur.execute('''
             UPDATE t_p83864310_fintech_payment_reco.user_integrations 
