@@ -8,6 +8,7 @@ import Index from "./pages/Index";
 import Login from "./pages/Login";
 import NotFound from "./pages/NotFound";
 import WebhookLogsPage from "./pages/WebhookLogsPage";
+import WebhookTestPage from "./pages/WebhookTestPage";
 
 const queryClient = new QueryClient();
 
