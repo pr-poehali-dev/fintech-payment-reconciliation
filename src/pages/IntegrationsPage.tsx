@@ -181,12 +181,12 @@ const IntegrationsPage = () => {
     return date.toLocaleDateString('ru-RU');
   };
 
-  const handleFetchReceipts = async (integrationId: number) => {
+  const handleFetchReceipts = async (integrationId: number, days: number) => {
     setLoadingReceipts(integrationId);
     
     const dateTo = new Date();
     const dateFrom = new Date();
-    dateFrom.setDate(dateFrom.getDate() - 1);
+    dateFrom.setDate(dateFrom.getDate() - days);
     
     try {
       const response = await fetch(functionUrls['ofd-fetch-receipts'], {
@@ -202,9 +202,10 @@ const IntegrationsPage = () => {
       const data = await response.json();
 
       if (response.ok && data.success) {
+        const periodLabel = days === 1 ? 'за вчера' : `за последние ${days} дней`;
         toast({
           title: 'Чеки загружены',
-          description: `Загружено ${data.inserted} из ${data.total_receipts} чеков за последние сутки`
+          description: `Загружено ${data.inserted} из ${data.total_receipts} чеков ${periodLabel}`
         });
       } else {
         console.error('OFD Error Details:', data);
@@ -313,25 +314,29 @@ const IntegrationsPage = () => {
                             <span className="text-muted-foreground">РНМ:</span>
                             <span className="font-medium font-mono">{integration.config?.kkt || '—'}</span>
                           </div>
-                          <div className="pt-2">
-                            <Button
-                              onClick={() => handleFetchReceipts(integration.id)}
-                              disabled={loadingReceipts === integration.id}
-                              size="sm"
-                              className="w-full"
-                            >
-                              {loadingReceipts === integration.id ? (
-                                <>
-                                  <Icon name="Loader2" className="animate-spin mr-2" size={16} />
-                                  Загружаю...
-                                </>
-                              ) : (
-                                <>
-                                  <Icon name="Download" size={16} className="mr-2" />
-                                  Загрузить чеки
-                                </>
-                              )}
-                            </Button>
+                          <div className="pt-2 space-y-2">
+                            <div className="text-xs text-muted-foreground mb-1">
+                              <Icon name="Download" size={12} className="inline mr-1" />
+                              Загрузить чеки
+                            </div>
+                            <div className="grid grid-cols-5 gap-1">
+                              {[1, 7, 30, 60, 90].map((days) => (
+                                <Button
+                                  key={days}
+                                  onClick={() => handleFetchReceipts(integration.id, days)}
+                                  disabled={loadingReceipts === integration.id}
+                                  variant="outline"
+                                  size="sm"
+                                  className="text-xs px-2 h-8"
+                                >
+                                  {loadingReceipts === integration.id ? (
+                                    <Icon name="Loader2" className="animate-spin" size={12} />
+                                  ) : (
+                                    `${days === 1 ? 'Вчера' : days + 'д'}`
+                                  )}
+                                </Button>
+                              ))}
+                            </div>
                           </div>
                         </>
                       ) : (
