@@ -46,6 +46,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     Сохраняет данные платежа в БД для дальнейшей обработки
     '''
     
+    print(f"[DEBUG] Webhook received: {json.dumps(event)}")
+    
     method = event.get('httpMethod', 'POST')
     
     if method == 'OPTIONS':
@@ -125,6 +127,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         if provider_slug == 'tbank':
             terminal_password = config.get('terminal_password', '')
             if not verify_tbank_token(webhook_data, terminal_password):
+                print(f"[DEBUG] Invalid signature for webhook: {json.dumps(webhook_data)}")
                 return {
                     'statusCode': 403,
                     'headers': {'Content-Type': 'application/json'},
@@ -133,6 +136,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 }
             
             status = webhook_data.get('Status', '')
+            print(f"[DEBUG] Webhook status: {status}, settings: {webhook_settings}")
+            
             payment_status_map = {
                 'AUTHORIZED': 'notify_on_authorized',
                 'CONFIRMED': 'notify_on_confirmed',
@@ -142,6 +147,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             
             notify_key = payment_status_map.get(status)
             if notify_key and not webhook_settings.get(notify_key, True):
+                print(f"[DEBUG] Status {status} disabled in settings, skipping save")
                 return {
                     'statusCode': 200,
                     'headers': {'Content-Type': 'text/plain'},
