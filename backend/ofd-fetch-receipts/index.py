@@ -111,21 +111,20 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     
     params = urllib.parse.urlencode({
         'DateFrom': date_from,
-        'DateTo': date_to
+        'DateTo': date_to,
+        'AuthToken': auth_token
     })
     
     full_url = f'{ofd_url}?{params}'
-    print(f"[DEBUG] OFD Request: {full_url}")
+    print(f"[DEBUG] OFD Request: {full_url[:100]}...")
     
     try:
         req = urllib.request.Request(
             full_url,
-            headers={'AuthToken': auth_token},
             method='GET'
         )
         
-        print(f"[DEBUG] Request headers: {req.headers}")
-        print(f"[DEBUG] Auth token (first 10 chars): {auth_token[:10] if auth_token else 'None'}")
+        print(f"[DEBUG] Auth token length: {len(auth_token) if auth_token else 0}")
         
         with urllib.request.urlopen(req, timeout=30) as response:
             response_body = response.read().decode('utf-8')
