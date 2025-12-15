@@ -54,20 +54,29 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     
     try:
         cur.execute('''
-            DELETE FROM user_integrations
+            SELECT id FROM user_integrations
             WHERE id = %s AND owner_id = %s
-            RETURNING id
         ''', (integration_id, owner_id))
         
-        deleted = cur.fetchone()
+        exists = cur.fetchone()
         
-        if not deleted:
+        if not exists:
             return {
                 'statusCode': 404,
                 'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
                 'body': json.dumps({'error': 'Integration not found or access denied'}),
                 'isBase64Encoded': False
             }
+        
+        cur.execute('''
+            DELETE FROM webhook_payments
+            WHERE integration_id = %s
+        ''', (integration_id,))
+        
+        cur.execute('''
+            DELETE FROM user_integrations
+            WHERE id = %s
+        ''', (integration_id,))
         
         conn.commit()
         

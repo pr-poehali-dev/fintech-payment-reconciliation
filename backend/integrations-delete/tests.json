@@ -1,16 +1,16 @@
 {
   "tests": [
     {
-      "name": "Delete integration successfully",
+      "name": "Integration not found",
       "method": "DELETE",
       "path": "/",
       "body": {
-        "integration_id": 1,
+        "integration_id": 99999,
         "owner_id": 1
       },
-      "expectedStatus": 200,
+      "expectedStatus": 404,
       "expectedBody": {
-        "success": true
+        "error": "string"
       },
       "bodyMatcher": "partial"
     },
