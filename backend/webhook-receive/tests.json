@@ -3,7 +3,7 @@
     {
       "name": "Receive Tbank webhook",
       "method": "POST",
-      "path": "/",
+      "path": "/?token=test_token_12345",
       "body": {
         "TerminalKey": "1234567890",
         "OrderId": "ORDER-123",
@@ -15,7 +15,7 @@
         "Pan": "430000******0777",
         "Token": "test_signature"
       },
-      "expectedStatus": 400,
+      "expectedStatus": 404,
       "bodyMatcher": "partial"
     },
     {
@@ -24,7 +24,7 @@
       "body": {},
       "expectedStatus": 400,
       "expectedBody": {
-        "error": "string"
+        "error": "Token required"
       },
       "bodyMatcher": "partial"
     }

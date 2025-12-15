@@ -57,10 +57,10 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             'isBase64Encoded': False
         }
     
-    url = event.get('url', '')
-    webhook_token = url.strip('/') if url else None
+    params = event.get('queryStringParameters', {}) or {}
+    webhook_token = params.get('token', '')
     
-    if not webhook_token or webhook_token == '':
+    if not webhook_token:
         return {
             'statusCode': 400,
             'headers': {'Content-Type': 'application/json'},

@@ -152,7 +152,7 @@ const IntegrationsPage = () => {
   };
 
   const copyWebhookUrl = (token: string) => {
-    const url = `https://functions.poehali.dev/${functionUrls['webhook-receive'].split('/').pop()}/${token}`;
+    const url = `${functionUrls['webhook-receive']}?token=${token}`;
     navigator.clipboard.writeText(url);
     toast({
       title: 'Скопировано',
@@ -268,7 +268,7 @@ const IntegrationsPage = () => {
                           </Button>
                         </div>
                         <code className="text-xs bg-muted p-2 rounded block overflow-x-auto">
-                          {`${functionUrls['webhook-receive']}/${integration.webhook_token}`}
+                          {`${functionUrls['webhook-receive']}?token=${integration.webhook_token}`}
                         </code>
                       </div>
                       {integration.forward_url && (
