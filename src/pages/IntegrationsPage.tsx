@@ -5,6 +5,16 @@ import { Badge } from '@/components/ui/badge';
 import Icon from '@/components/ui/icon';
 import { useToast } from '@/hooks/use-toast';
 import AddIntegrationDialog from '@/components/integrations/AddIntegrationDialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import functionUrls from '../../backend/func2url.json';
 
 interface Provider {
@@ -45,7 +55,9 @@ const IntegrationsPage = () => {
   const [allProviders, setAllProviders] = useState<Provider[]>([]);
   const [selectedProvider, setSelectedProvider] = useState<Provider | null>(null);
   const [editingIntegration, setEditingIntegration] = useState<UserIntegration | null>(null);
+  const [deletingIntegration, setDeletingIntegration] = useState<UserIntegration | null>(null);
   const [showAddDialog, setShowAddDialog] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
   
@@ -101,14 +113,19 @@ const IntegrationsPage = () => {
     setShowAddDialog(true);
   };
 
-  const handleDelete = async (integrationId: number) => {
-    if (!confirm('Удалить эту интеграцию? Вебхуки перестанут поступать.')) return;
+  const handleDeleteClick = (integration: UserIntegration) => {
+    setDeletingIntegration(integration);
+    setShowDeleteDialog(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!deletingIntegration) return;
 
     try {
       const response = await fetch(functionUrls['integrations-delete'], {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ integration_id: integrationId, owner_id: ownerId })
+        body: JSON.stringify({ integration_id: deletingIntegration.id, owner_id: ownerId })
       });
 
       const data = await response.json();
@@ -116,6 +133,8 @@ const IntegrationsPage = () => {
       if (response.ok && data.success) {
         toast({ title: 'Интеграция удалена' });
         fetchIntegrations();
+        setShowDeleteDialog(false);
+        setDeletingIntegration(null);
       } else {
         toast({
           title: 'Ошибка',
@@ -220,7 +239,7 @@ const IntegrationsPage = () => {
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => handleDelete(integration.id)}
+                            onClick={() => handleDeleteClick(integration)}
                           >
                             <Icon name="Trash2" size={16} />
                           </Button>
@@ -279,6 +298,23 @@ const IntegrationsPage = () => {
         ownerId={ownerId}
         onSuccess={fetchIntegrations}
       />
+
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Удалить эту интеграцию?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Вебхуки перестанут поступать. Интеграция <strong>{deletingIntegration?.integration_name}</strong> будет удалена навсегда.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Отменить</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteConfirm} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Удалить
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
