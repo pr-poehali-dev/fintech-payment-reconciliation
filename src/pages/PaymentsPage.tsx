@@ -1,20 +1,13 @@
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
 import Icon from '@/components/ui/icon';
 import { useToast } from '@/hooks/use-toast';
 import PaymentDetailsDialog from '@/components/payments/PaymentDetailsDialog';
+import PaymentsStatistics from '@/components/payments/PaymentsStatistics';
+import PaymentsFilters from '@/components/payments/PaymentsFilters';
+import PaymentsTable from '@/components/payments/PaymentsTable';
 import functionUrls from '../../backend/func2url.json';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
 
 interface Payment {
   id: number;
@@ -194,15 +187,6 @@ const PaymentsPage = () => {
 
   const groupedPayments = groupPaymentsByOrder(payments);
 
-  const statusOptions = [
-    { value: 'all', label: 'Все статусы', count: groupedPayments.length },
-    { value: 'CONFIRMED', label: 'Подтверждён', count: groupedPayments.filter(p => p.latest_status === 'CONFIRMED').length },
-    { value: 'AUTHORIZED', label: 'Авторизован', count: groupedPayments.filter(p => p.latest_status === 'AUTHORIZED').length },
-    { value: 'REJECTED', label: 'Отклонён', count: groupedPayments.filter(p => p.latest_status === 'REJECTED').length },
-    { value: 'REFUNDED', label: 'Возврат', count: groupedPayments.filter(p => p.latest_status === 'REFUNDED').length },
-    { value: 'CANCELED', label: 'Отменён', count: groupedPayments.filter(p => p.latest_status === 'CANCELED').length },
-  ];
-
   const filteredGroupedPayments = groupedPayments.filter(group => {
     const matchesSearch = !searchQuery || (() => {
       const query = searchQuery.toLowerCase();
@@ -249,297 +233,49 @@ const PaymentsPage = () => {
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Всего заказов
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold">{groupedPayments.length}</div>
-            <p className="text-xs text-muted-foreground mt-1">
-              {total} вебхуков получено
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Подтверждено
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-green-600">
-              {groupedPayments.filter(p => p.latest_status === 'CONFIRMED').length}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Сумма подтверждённых
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold text-primary">
-              {totalAmount.toLocaleString('ru-RU')} ₽
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      <PaymentsStatistics
+        groupedPayments={groupedPayments}
+        payments={payments}
+        totalAmount={totalAmount}
+      />
 
       <Card>
         <CardHeader>
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle>Список платежей</CardTitle>
-                <CardDescription>Кликните на строку для просмотра деталей</CardDescription>
-              </div>
-              <div className="w-64">
-                <Input
-                  placeholder="Поиск по ID, сумме, email..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full"
-                />
-              </div>
-            </div>
-
-            <div className="flex gap-3">
-              <div className="flex-1">
-                <label className="text-sm font-medium mb-2 block">Статус</label>
-                <div className="flex gap-2 flex-wrap">
-                  {statusOptions.map((option) => (
-                    <Button
-                      key={option.value}
-                      variant={statusFilter === option.value ? 'default' : 'outline'}
-                      size="sm"
-                      onClick={() => setStatusFilter(option.value)}
-                      className="gap-2"
-                    >
-                      {option.label}
-                      <Badge variant="secondary" className="ml-1">
-                        {option.count}
-                      </Badge>
-                    </Button>
-                  ))}
-                </div>
-              </div>
-
-              {uniqueIntegrations.length > 1 && (
-                <div className="w-64">
-                  <label className="text-sm font-medium mb-2 block">Интеграция</label>
-                  <select
-                    value={integrationFilter}
-                    onChange={(e) => setIntegrationFilter(e.target.value)}
-                    className="w-full h-9 px-3 rounded-md border border-input bg-background text-sm"
-                  >
-                    <option value="all">Все интеграции</option>
-                    {uniqueIntegrations.map((integration) => (
-                      <option key={integration} value={integration}>
-                        {integration}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-            </div>
-
-            {(statusFilter !== 'all' || integrationFilter !== 'all' || searchQuery) && (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Icon name="Filter" size={16} />
-                <span>
-                  Показано {filteredGroupedPayments.length} из {groupedPayments.length} заказов
-                </span>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    setStatusFilter('all');
-                    setIntegrationFilter('all');
-                    setSearchQuery('');
-                  }}
-                  className="ml-auto"
-                >
-                  Сбросить фильтры
-                </Button>
-              </div>
-            )}
-          </div>
+          <CardTitle>Список платежей</CardTitle>
+          <CardDescription>
+            Нажмите на строку чтобы раскрыть историю вебхуков
+          </CardDescription>
         </CardHeader>
-        <CardContent>
-          {filteredGroupedPayments.length === 0 ? (
-            <div className="text-center py-12">
-              <Icon name="Inbox" size={48} className="mx-auto mb-4 text-muted-foreground opacity-50" />
-              <p className="text-muted-foreground">
-                {payments.length === 0 
-                  ? 'Платежи ещё не поступали. Настройте интеграции для получения данных.'
-                  : 'По вашему запросу ничего не найдено'}
-              </p>
-            </div>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Дата</TableHead>
-                  <TableHead>ID заказа / платежа</TableHead>
-                  <TableHead>Сумма</TableHead>
-                  <TableHead>Статусы</TableHead>
-                  <TableHead>Карта</TableHead>
-                  <TableHead>Интеграция</TableHead>
-                  <TableHead></TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredGroupedPayments.map((group) => {
-                  const rowKey = group.order_id || group.payment_id;
-                  const isExpanded = expandedRows.has(rowKey);
-                  
-                  return (
-                    <>
-                      <TableRow 
-                        key={rowKey} 
-                        className="cursor-pointer hover:bg-muted/50"
-                        onClick={(e) => toggleRowExpand(rowKey, e)}
-                      >
-                        <TableCell className="font-mono text-sm">
-                          {formatDate(group.first_created_at)}
-                        </TableCell>
-                        <TableCell>
-                          <div className="font-mono text-sm">
-                            <div>{group.order_id}</div>
-                            <div className="text-xs text-muted-foreground">{group.payment_id}</div>
-                          </div>
-                        </TableCell>
-                        <TableCell className="font-semibold">
-                          {group.amount.toLocaleString('ru-RU')} ₽
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex flex-wrap gap-1">
-                            {group.statuses
-                              .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
-                              .map((s) => (
-                                <Badge 
-                                  key={s.id} 
-                                  className={`${getStatusColor(s.status)} text-white text-xs`}
-                                  title={formatDate(s.created_at)}
-                                >
-                                  {s.status}
-                                </Badge>
-                              ))}
-                          </div>
-                        </TableCell>
-                        <TableCell className="font-mono text-sm">
-                          {group.pan || '—'}
-                        </TableCell>
-                        <TableCell>
-                          <div className="text-sm">
-                            <div className="font-medium">{group.integration_name}</div>
-                            <div className="text-xs text-muted-foreground">{group.provider_name}</div>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <Icon 
-                            name={isExpanded ? "ChevronDown" : "ChevronRight"} 
-                            size={16} 
-                            className="text-muted-foreground" 
-                          />
-                        </TableCell>
-                      </TableRow>
-                      
-                      {isExpanded && (
-                        <TableRow key={`${rowKey}-details`}>
-                          <TableCell colSpan={7} className="bg-muted/30 p-0">
-                            <div className="p-4 space-y-3">
-                              <div className="text-sm font-semibold text-muted-foreground mb-3">
-                                История вебхуков ({group.payments.length})
-                              </div>
-                              {group.payments
-                                .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
-                                .map((payment, idx) => (
-                                  <div 
-                                    key={payment.id}
-                                    className="bg-background rounded-lg p-4 border border-border hover:border-primary/50 transition-colors cursor-pointer"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleRowClick(payment);
-                                    }}
-                                  >
-                                    <div className="flex items-start justify-between mb-3">
-                                      <div className="flex items-center gap-3">
-                                        <div className="flex items-center justify-center w-8 h-8 rounded-full bg-muted text-sm font-semibold">
-                                          {idx + 1}
-                                        </div>
-                                        <div>
-                                          <Badge className={`${getStatusColor(payment.status)} text-white mb-1`}>
-                                            {payment.status}
-                                          </Badge>
-                                          <div className="text-xs text-muted-foreground font-mono">
-                                            {formatDate(payment.created_at)}
-                                          </div>
-                                        </div>
-                                      </div>
-                                      <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          handleRowClick(payment);
-                                        }}
-                                      >
-                                        <Icon name="Eye" size={14} className="mr-1" />
-                                        Детали
-                                      </Button>
-                                    </div>
-                                    
-                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-                                      <div>
-                                        <div className="text-xs text-muted-foreground mb-1">Webhook ID</div>
-                                        <div className="font-mono text-xs">#{payment.id}</div>
-                                      </div>
-                                      {payment.error_code && payment.error_code !== '0' && (
-                                        <div>
-                                          <div className="text-xs text-muted-foreground mb-1">Код ошибки</div>
-                                          <div className="font-mono text-xs text-red-600">{payment.error_code}</div>
-                                        </div>
-                                      )}
-                                      {payment.customer_email && (
-                                        <div>
-                                          <div className="text-xs text-muted-foreground mb-1">Email</div>
-                                          <div className="text-xs truncate">{payment.customer_email}</div>
-                                        </div>
-                                      )}
-                                      {payment.customer_phone && (
-                                        <div>
-                                          <div className="text-xs text-muted-foreground mb-1">Телефон</div>
-                                          <div className="font-mono text-xs">{payment.customer_phone}</div>
-                                        </div>
-                                      )}
-                                    </div>
-                                  </div>
-                                ))}
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      )}
-                    </>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          )}
+        <CardContent className="space-y-4">
+          <PaymentsFilters
+            searchQuery={searchQuery}
+            setSearchQuery={setSearchQuery}
+            statusFilter={statusFilter}
+            setStatusFilter={setStatusFilter}
+            integrationFilter={integrationFilter}
+            setIntegrationFilter={setIntegrationFilter}
+            groupedPayments={groupedPayments}
+            uniqueIntegrations={uniqueIntegrations}
+          />
+
+          <PaymentsTable
+            filteredGroupedPayments={filteredGroupedPayments}
+            expandedRows={expandedRows}
+            toggleRowExpand={toggleRowExpand}
+            getStatusColor={getStatusColor}
+            formatDate={formatDate}
+            handleRowClick={handleRowClick}
+          />
         </CardContent>
       </Card>
 
-      <PaymentDetailsDialog
-        open={showDetails}
-        onOpenChange={setShowDetails}
-        payment={selectedPayment}
-      />
+      {selectedPayment && (
+        <PaymentDetailsDialog
+          payment={selectedPayment}
+          open={showDetails}
+          onOpenChange={setShowDetails}
+        />
+      )}
     </div>
   );
 };
