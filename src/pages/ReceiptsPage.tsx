@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import Icon from '@/components/ui/icon';
 import { useToast } from '@/hooks/use-toast';
+import ReceiptDetailsDialog from '@/components/receipts/ReceiptDetailsDialog';
 import functionUrls from '../../backend/func2url.json';
 
 interface Receipt {
@@ -31,6 +32,8 @@ const ReceiptsPage = () => {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [selectedReceipt, setSelectedReceipt] = useState<Receipt | null>(null);
+  const [showDetails, setShowDetails] = useState(false);
   const ownerId = 1;
 
   const loadReceipts = async () => {
@@ -254,6 +257,10 @@ const ReceiptsPage = () => {
                       <TableRow 
                         key={`${receipt.source}-${receipt.id}`}
                         className="cursor-pointer hover:bg-muted/50"
+                        onClick={() => {
+                          setSelectedReceipt(receipt);
+                          setShowDetails(true);
+                        }}
                       >
                         <TableCell>{getSourceBadge(receipt.source)}</TableCell>
                         <TableCell className="font-medium">
@@ -286,6 +293,12 @@ const ReceiptsPage = () => {
           </div>
         </CardContent>
       </Card>
+
+      <ReceiptDetailsDialog
+        receipt={selectedReceipt}
+        open={showDetails}
+        onOpenChange={setShowDetails}
+      />
     </div>
   );
 };
