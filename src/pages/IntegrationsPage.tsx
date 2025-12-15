@@ -47,6 +47,7 @@ interface UserIntegration {
   provider_id: number;
   config: any;
   webhook_settings: any;
+  forward_url?: string;
 }
 
 const IntegrationsPage = () => {

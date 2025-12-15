@@ -2,6 +2,7 @@ import json
 import os
 import hashlib
 import psycopg2
+import urllib.request
 from typing import Dict, Any
 
 def verify_tbank_token(data: Dict[str, Any], terminal_password: str) -> bool:
@@ -86,7 +87,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 ui.owner_id, 
                 ui.config,
                 ui.webhook_settings,
-                p.slug
+                p.slug,
+                ui.forward_url
             FROM user_integrations ui
             JOIN integration_providers p ON p.id = ui.provider_id
             WHERE ui.webhook_token = %s AND ui.status = 'active'
@@ -101,7 +103,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 'isBase64Encoded': False
             }
         
-        integration_id, owner_id, config, webhook_settings, provider_slug = integration_row
+        integration_id, owner_id, config, webhook_settings, provider_slug, forward_url = integration_row
         
         config = json.loads(config) if isinstance(config, str) else config
         webhook_settings = json.loads(webhook_settings) if isinstance(webhook_settings, str) else webhook_settings
@@ -168,6 +170,19 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         ''', (integration_id,))
         
         conn.commit()
+        
+        if forward_url:
+            try:
+                req = urllib.request.Request(
+                    forward_url,
+                    data=json.dumps(webhook_data).encode('utf-8'),
+                    headers={'Content-Type': 'application/json'},
+                    method='POST'
+                )
+                with urllib.request.urlopen(req, timeout=5) as response:
+                    pass
+            except Exception:
+                pass
         
         return {
             'statusCode': 200,

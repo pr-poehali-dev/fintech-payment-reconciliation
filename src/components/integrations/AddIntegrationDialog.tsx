@@ -22,6 +22,7 @@ interface UserIntegration {
   provider_id: number;
   config: any;
   webhook_settings: any;
+  forward_url?: string;
 }
 
 interface AddIntegrationDialogProps {
@@ -50,6 +51,7 @@ const AddIntegrationDialog = ({ open, onOpenChange, provider, editingIntegration
     notify_on_rejected: true,
     notify_on_refunded: true
   });
+  const [forwardUrl, setForwardUrl] = useState(editingIntegration?.forward_url || '');
   const { toast } = useToast();
 
   useEffect(() => {
@@ -65,6 +67,7 @@ const AddIntegrationDialog = ({ open, onOpenChange, provider, editingIntegration
           notify_on_rejected: true,
           notify_on_refunded: true
         });
+        setForwardUrl(editingIntegration.forward_url || '');
       } else {
         setStep(0);
         setSelectedProvider(provider);
@@ -76,6 +79,7 @@ const AddIntegrationDialog = ({ open, onOpenChange, provider, editingIntegration
           notify_on_rejected: true,
           notify_on_refunded: true
         });
+        setForwardUrl('');
       }
       setWebhookUrl('');
     }
@@ -95,7 +99,8 @@ const AddIntegrationDialog = ({ open, onOpenChange, provider, editingIntegration
             owner_id: ownerId,
             integration_name: integrationName,
             config,
-            webhook_settings: webhookSettings
+            webhook_settings: webhookSettings,
+            forward_url: forwardUrl
           })
         });
 
@@ -120,7 +125,8 @@ const AddIntegrationDialog = ({ open, onOpenChange, provider, editingIntegration
             provider_slug: selectedProvider.slug,
             integration_name: integrationName || selectedProvider.name,
             config,
-            webhook_settings: webhookSettings
+            webhook_settings: webhookSettings,
+            forward_url: forwardUrl
           })
         });
 
@@ -289,6 +295,19 @@ const AddIntegrationDialog = ({ open, onOpenChange, provider, editingIntegration
                 </div>
               </>
             )}
+
+            <div>
+              <Label htmlFor="forward_url">URL для переадресации (опционально)</Label>
+              <Input
+                id="forward_url"
+                placeholder="https://your-domain.com/webhook"
+                value={forwardUrl}
+                onChange={(e) => setForwardUrl(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Вебхуки будут дублироваться на указанный адрес после сохранения в БД
+              </p>
+            </div>
 
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => onOpenChange(false)}>

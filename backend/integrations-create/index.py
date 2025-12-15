@@ -38,6 +38,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     provider_slug = body.get('provider_slug')
     integration_name = body.get('integration_name', '')
     config = body.get('config', {})
+    forward_url = body.get('forward_url', '')
     webhook_settings = body.get('webhook_settings', {
         'notify_on_authorized': True,
         'notify_on_confirmed': True,
@@ -78,8 +79,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         
         cur.execute('''
             INSERT INTO user_integrations 
-            (owner_id, provider_id, integration_name, webhook_token, config, webhook_settings, status)
-            VALUES (%s, %s, %s, %s, %s, %s, 'active')
+            (owner_id, provider_id, integration_name, webhook_token, config, webhook_settings, forward_url, status)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, 'active')
             RETURNING id, webhook_token
         ''', (
             owner_id, 
@@ -87,7 +88,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             integration_name, 
             webhook_token,
             json.dumps(config),
-            json.dumps(webhook_settings)
+            json.dumps(webhook_settings),
+            forward_url if forward_url else None
         ))
         
         integration_id, token = cur.fetchone()

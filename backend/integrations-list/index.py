@@ -100,7 +100,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 c.slug as category_slug,
                 ui.provider_id,
                 ui.config,
-                ui.webhook_settings
+                ui.webhook_settings,
+                ui.forward_url
             FROM user_integrations ui
             JOIN integration_providers p ON p.id = ui.provider_id
             JOIN integration_categories c ON c.id = p.category_id
@@ -123,7 +124,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 'category_slug': row[9],
                 'provider_id': row[10],
                 'config': row[11],
-                'webhook_settings': row[12]
+                'webhook_settings': row[12],
+                'forward_url': row[13]
             })
         
         return {
