@@ -207,10 +207,16 @@ const IntegrationsPage = () => {
           description: `Загружено ${data.inserted} из ${data.total_receipts} чеков за последние 30 дней`
         });
       } else {
+        console.error('OFD Error Details:', data);
+        
+        const debugInfo = data.debug ? 
+          `\n\nURL: ${data.debug.full_url}\nAPI: ${data.debug.api_url}\nПериод: ${data.debug.date_from} - ${data.debug.date_to}` : '';
+        
         toast({
           title: 'Ошибка загрузки',
-          description: data.error || 'Не удалось загрузить чеки',
-          variant: 'destructive'
+          description: (data.error || 'Не удалось загрузить чеки') + debugInfo,
+          variant: 'destructive',
+          duration: 10000
         });
       }
     } catch (error) {
