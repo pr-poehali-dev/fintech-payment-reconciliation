@@ -88,22 +88,22 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         }
     
     if not date_from:
-        date_from = (datetime.now() - timedelta(days=1)).strftime('%d.%m.%Y')
+        date_from = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%dT00:00:00')
     else:
         try:
             dt = datetime.fromisoformat(date_from.replace('Z', '+00:00'))
-            date_from = dt.strftime('%d.%m.%Y')
+            date_from = dt.strftime('%Y-%m-%dT%H:%M:%S')
         except:
-            date_from = (datetime.now() - timedelta(days=1)).strftime('%d.%m.%Y')
+            date_from = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%dT00:00:00')
     
     if not date_to:
-        date_to = datetime.now().strftime('%d.%m.%Y')
+        date_to = datetime.now().strftime('%Y-%m-%dT23:59:59')
     else:
         try:
             dt = datetime.fromisoformat(date_to.replace('Z', '+00:00'))
-            date_to = dt.strftime('%d.%m.%Y')
+            date_to = dt.strftime('%Y-%m-%dT%H:%M:%S')
         except:
-            date_to = datetime.now().strftime('%d.%m.%Y')
+            date_to = datetime.now().strftime('%Y-%m-%dT23:59:59')
     
     ofd_url = f'{api_url}/api/integration/v2/inn/{inn}/kkt/{kkt}/receipts'
     
