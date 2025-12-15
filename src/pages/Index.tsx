@@ -60,10 +60,51 @@ const Index = () => {
   const [mounted, setMounted] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [unreadCount] = useState(3);
+  const [stats, setStats] = useState({
+    totalPayments: 0,
+    totalReceipts: 0,
+    receiptsSum: 0,
+    activeIntegrations: 0
+  });
+
+  const ownerId = 1;
 
   useEffect(() => {
     setMounted(true);
+    loadDashboardStats();
   }, []);
+
+  const loadDashboardStats = async () => {
+    try {
+      const [paymentsRes, receiptsRes, integrationsRes] = await Promise.all([
+        fetch(`https://functions.poehali.dev/1a67a47e-88ff-48e0-82fd-82b4dedd80d3?owner_id=${ownerId}&limit=1000&offset=0`),
+        fetch(`https://functions.poehali.dev/f27cd7c6-c93b-49c7-9caa-1c076b0f4e22?owner_id=${ownerId}&limit=1000&offset=0`),
+        fetch(`https://functions.poehali.dev/43050d81-0a0a-4bc5-baee-2a7f3ad7fe50?owner_id=${ownerId}`)
+      ]);
+
+      const [paymentsData, receiptsData, integrationsData] = await Promise.all([
+        paymentsRes.json(),
+        receiptsRes.json(),
+        integrationsRes.json()
+      ]);
+
+      const payments = paymentsData.payments || [];
+      const receipts = receiptsData.receipts || [];
+      const integrations = integrationsData.user_integrations || [];
+
+      const receiptsSum = receipts.reduce((sum: number, r: any) => sum + (r.total_sum || 0), 0);
+      const activeIntegrations = integrations.filter((i: any) => i.status === 'active').length;
+
+      setStats({
+        totalPayments: payments.length,
+        totalReceipts: receipts.length,
+        receiptsSum,
+        activeIntegrations
+      });
+    } catch (error) {
+      console.error('Failed to load dashboard stats:', error);
+    }
+  };
 
   const modules = [
     { id: 'dashboard', name: 'Дашборд', icon: 'LayoutDashboard' },
@@ -172,10 +213,11 @@ const Index = () => {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-3xl font-display font-bold text-foreground">8.2М ₽</div>
-                  <p className="text-xs text-green-500 mt-1 flex items-center gap-1">
-                    <Icon name="ArrowUp" size={14} />
-                    +12.5% за месяц
+                  <div className="text-3xl font-display font-bold text-foreground">
+                    {stats.receiptsSum.toLocaleString('ru-RU', { style: 'currency', currency: 'RUB', minimumFractionDigits: 0 })}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Из чеков ОФД
                   </p>
                 </CardContent>
               </Card>
@@ -188,10 +230,9 @@ const Index = () => {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-3xl font-display font-bold text-foreground">127</div>
-                  <p className="text-xs text-secondary mt-1 flex items-center gap-1">
-                    <Icon name="Clock" size={14} />
-                    23 в обработке
+                  <div className="text-3xl font-display font-bold text-foreground">{stats.totalPayments}</div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Всего платежей
                   </p>
                 </CardContent>
               </Card>
@@ -199,15 +240,14 @@ const Index = () => {
               <Card className="animate-scale-in border-border bg-card hover:shadow-xl transition-shadow duration-300" style={{ animationDelay: '0.2s' }}>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                    <Icon name="GitCompare" size={16} />
-                    Автосверка
+                    <Icon name="Receipt" size={16} />
+                    Чеков
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-3xl font-display font-bold text-foreground">98.4%</div>
-                  <p className="text-xs text-green-500 mt-1 flex items-center gap-1">
-                    <Icon name="CheckCircle" size={14} />
-                    1,247 сверено
+                  <div className="text-3xl font-display font-bold text-foreground">{stats.totalReceipts}</div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Всего чеков
                   </p>
                 </CardContent>
               </Card>
@@ -215,15 +255,14 @@ const Index = () => {
               <Card className="animate-scale-in border-border bg-card hover:shadow-xl transition-shadow duration-300" style={{ animationDelay: '0.3s' }}>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                    <Icon name="AlertCircle" size={16} />
-                    Расхождения
+                    <Icon name="Plug" size={16} />
+                    Интеграции
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-3xl font-display font-bold text-accent">12</div>
-                  <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
-                    <Icon name="Eye" size={14} />
-                    Требуют внимания
+                  <div className="text-3xl font-display font-bold text-primary">{stats.activeIntegrations}</div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Активных
                   </p>
                 </CardContent>
               </Card>

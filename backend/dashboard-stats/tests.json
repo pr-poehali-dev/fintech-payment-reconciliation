@@ -1,0 +1,18 @@
+{
+  "tests": [
+    {
+      "name": "Get dashboard stats",
+      "method": "GET",
+      "path": "/?owner_id=1",
+      "expectedStatus": 200,
+      "expectedBody": {
+        "success": true,
+        "stats": {
+          "payments_today": "number",
+          "revenue_month": "number"
+        }
+      },
+      "bodyMatcher": "partial"
+    }
+  ]
+}
