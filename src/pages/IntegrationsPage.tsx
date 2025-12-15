@@ -54,6 +54,7 @@ const IntegrationsPage = () => {
   const [categories, setCategories] = useState<Category[]>([]);
   const [userIntegrations, setUserIntegrations] = useState<UserIntegration[]>([]);
   const [allProviders, setAllProviders] = useState<Provider[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
   const [selectedProvider, setSelectedProvider] = useState<Provider | null>(null);
   const [editingIntegration, setEditingIntegration] = useState<UserIntegration | null>(null);
   const [deletingIntegration, setDeletingIntegration] = useState<UserIntegration | null>(null);
@@ -101,14 +102,17 @@ const IntegrationsPage = () => {
     fetchIntegrations();
   }, []);
 
-  const handleAddNew = () => {
+  const handleAddNew = (category: Category) => {
+    setSelectedCategory(category);
     setSelectedProvider(null);
     setEditingIntegration(null);
     setShowAddDialog(true);
   };
 
   const handleEdit = (integration: UserIntegration) => {
+    const category = categories.find(c => c.slug === integration.category_slug);
     const provider = allProviders.find(p => p.id === integration.provider_id);
+    setSelectedCategory(category || null);
     setSelectedProvider(provider || null);
     setEditingIntegration(integration);
     setShowAddDialog(true);
@@ -210,7 +214,7 @@ const IntegrationsPage = () => {
                 <Icon name={category.icon as any} size={20} />
                 <h3 className="text-xl font-semibold">{category.name}</h3>
               </div>
-              <Button onClick={handleAddNew} size="sm">
+              <Button onClick={() => handleAddNew(category)} size="sm">
                 <Icon name="Plus" size={16} className="mr-2" />
                 Добавить
               </Button>
@@ -286,7 +290,7 @@ const IntegrationsPage = () => {
                 <CardContent className="py-8 text-center text-muted-foreground">
                   <Icon name="Inbox" size={32} className="mx-auto mb-2 opacity-50" />
                   <p>Пока нет интеграций в этой категории</p>
-                  <Button onClick={handleAddNew} variant="link" className="mt-2">
+                  <Button onClick={() => handleAddNew(category)} variant="link" className="mt-2">
                     Добавить первую интеграцию
                   </Button>
                 </CardContent>
@@ -301,7 +305,7 @@ const IntegrationsPage = () => {
         onOpenChange={setShowAddDialog}
         provider={selectedProvider}
         editingIntegration={editingIntegration}
-        allProviders={allProviders}
+        allProviders={selectedCategory ? selectedCategory.providers : allProviders}
         ownerId={ownerId}
         onSuccess={fetchIntegrations}
       />
