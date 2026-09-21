@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -21,6 +22,7 @@ interface CompanyLookupData {
 const CreateCompany = () => {
   const { user, refreshCompanies, setCurrentCompanyId, logout } = useAuth();
   const { toast } = useToast();
+  const navigate = useNavigate();
   const [inn, setInn] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
@@ -75,6 +77,7 @@ const CreateCompany = () => {
         await refreshCompanies();
         setCurrentCompanyId(data.company_id);
         toast({ title: 'Компания создана', description: data.name });
+        navigate('/app', { replace: true });
       } else {
         toast({
           title: 'Ошибка',
