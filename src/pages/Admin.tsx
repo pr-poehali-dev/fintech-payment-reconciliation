@@ -2,6 +2,7 @@ import { useState } from 'react';
 import AdminSidebar from '@/components/admin/AdminSidebar';
 import AdminPlaceholder from '@/components/admin/AdminPlaceholder';
 import AdminCompaniesSection from '@/components/admin/AdminCompaniesSection';
+import AdminRolesSection from '@/components/admin/AdminRolesSection';
 
 const Admin = () => {
   const [activeSection, setActiveSection] = useState('companies');
@@ -12,9 +13,7 @@ const Admin = () => {
 
       <main className="ml-64 p-8">
         {activeSection === 'companies' && <AdminCompaniesSection />}
-        {activeSection === 'roles' && (
-          <AdminPlaceholder icon="ShieldCheck" title="Роли" description="Каталог ролей платформы: модули и права доступа" />
-        )}
+        {activeSection === 'roles' && <AdminRolesSection />}
         {activeSection === 'tariffs' && (
           <AdminPlaceholder icon="Tag" title="Тарифы" description="Управление тарифами и их лимитами" />
         )}

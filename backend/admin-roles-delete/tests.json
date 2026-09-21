@@ -1,0 +1,43 @@
+{
+  "tests": [
+    {
+      "name": "Missing fields",
+      "method": "DELETE",
+      "path": "/",
+      "body": {},
+      "expectedStatus": 400,
+      "expectedBody": {
+        "error": "string"
+      },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Non-admin forbidden",
+      "method": "DELETE",
+      "path": "/",
+      "body": {
+        "requester_user_id": 4,
+        "role_id": 2
+      },
+      "expectedStatus": 403,
+      "expectedBody": {
+        "error": "string"
+      },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Cannot delete system role",
+      "method": "DELETE",
+      "path": "/",
+      "body": {
+        "requester_user_id": 1,
+        "role_id": 2
+      },
+      "expectedStatus": 400,
+      "expectedBody": {
+        "error": "string"
+      },
+      "bodyMatcher": "partial"
+    }
+  ]
+}

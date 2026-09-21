@@ -1,0 +1,30 @@
+{
+  "tests": [
+    {
+      "name": "Missing fields",
+      "method": "PUT",
+      "path": "/",
+      "body": {},
+      "expectedStatus": 400,
+      "expectedBody": {
+        "error": "string"
+      },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Non-admin forbidden",
+      "method": "PUT",
+      "path": "/",
+      "body": {
+        "requester_user_id": 4,
+        "role_id": 2,
+        "name": "Test"
+      },
+      "expectedStatus": 403,
+      "expectedBody": {
+        "error": "string"
+      },
+      "bodyMatcher": "partial"
+    }
+  ]
+}
