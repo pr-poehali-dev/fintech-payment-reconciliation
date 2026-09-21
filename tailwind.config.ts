@@ -70,7 +70,7 @@ export default {
 			},
 			fontFamily: {
 				sans: ['Inter', 'sans-serif'],
-				display: ['Montserrat', 'sans-serif']
+				display: ['Unbounded', 'sans-serif']
 			},
 			keyframes: {
 				'accordion-down': {
