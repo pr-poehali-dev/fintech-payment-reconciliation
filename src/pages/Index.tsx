@@ -180,6 +180,11 @@ const Index = () => {
               )}
             </Button>
           </div>
+
+          <Button variant="outline" size="sm" className="gap-2 text-destructive hover:text-destructive" onClick={logout}>
+            <Icon name="LogOut" size={16} />
+            Выход
+          </Button>
         </div>
       </header>
 
