@@ -58,7 +58,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     cur = conn.cursor()
 
     try:
-        cur.execute('SELECT id, phone, full_name, email, is_platform_admin FROM app_users WHERE phone = %s', (phone,))
+        cur.execute('SELECT id, phone, full_name, email FROM app_users WHERE phone = %s', (phone,))
         row = cur.fetchone()
 
         if row:
@@ -66,7 +66,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             cur.execute('UPDATE app_users SET last_login_at = now() WHERE id = %s', (user_id,))
         else:
             cur.execute(
-                'INSERT INTO app_users (phone, full_name, status) VALUES (%s, %s, %s) RETURNING id, phone, full_name, email, is_platform_admin',
+                'INSERT INTO app_users (phone, full_name, status) VALUES (%s, %s, %s) RETURNING id, phone, full_name, email',
                 (phone, full_name, 'active')
             )
             row = cur.fetchone()
@@ -75,7 +75,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         conn.commit()
 
         cur.execute('''
-            SELECT c.id, c.name, c.status, r.slug, r.name, r.color
+            SELECT c.id, c.name, c.status, r.slug, r.name, r.color, c.is_platform_admin
             FROM company_users cu
             JOIN companies c ON c.id = cu.company_id
             JOIN roles r ON r.id = cu.role_id
@@ -84,6 +84,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         ''', (user_id,))
 
         companies = []
+        is_platform_admin = False
         for c_row in cur.fetchall():
             companies.append({
                 'id': c_row[0],
@@ -93,6 +94,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 'role_name': c_row[4],
                 'role_color': c_row[5]
             })
+            if c_row[6]:
+                is_platform_admin = True
 
         return {
             'statusCode': 200,
@@ -103,7 +106,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 'phone': row[1],
                 'full_name': row[2],
                 'email': row[3],
-                'is_platform_admin': row[4],
+                'is_platform_admin': is_platform_admin,
                 'companies': companies
             }),
             'isBase64Encoded': False

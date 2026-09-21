@@ -28,6 +28,7 @@ interface AuthContextValue {
   companies: Company[];
   currentCompany: Company | null;
   isLoading: boolean;
+  isPlatformAdmin: boolean;
   setCurrentCompanyId: (id: number) => void;
   loginWithPhone: (phone: string, fullName?: string) => Promise<AuthUser>;
   refreshCompanies: () => Promise<void>;
@@ -141,6 +142,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const currentCompany = companies.find(c => c.id === currentCompanyId) || null;
+  const isPlatformAdmin = Boolean(user?.is_platform_admin);
 
   return (
     <AuthContext.Provider
@@ -149,6 +151,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         companies,
         currentCompany,
         isLoading,
+        isPlatformAdmin,
         setCurrentCompanyId,
         loginWithPhone,
         refreshCompanies,

@@ -1,3 +1,4 @@
+import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import Icon from '@/components/ui/icon';
 import { useAuth } from '@/contexts/AuthContext';
@@ -9,7 +10,8 @@ interface AppHeaderProps {
 }
 
 const AppHeader = ({ title, unreadCount, onShowNotifications }: AppHeaderProps) => {
-  const { logout } = useAuth();
+  const { logout, isPlatformAdmin } = useAuth();
+  const navigate = useNavigate();
 
   return (
     <header className="fixed top-0 left-64 right-0 h-16 bg-background/95 backdrop-blur-sm border-b border-border z-40 px-8 flex items-center justify-between">
@@ -18,6 +20,18 @@ const AppHeader = ({ title, unreadCount, onShowNotifications }: AppHeaderProps) 
       </div>
 
       <div className="flex items-center gap-3">
+        {isPlatformAdmin && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2 border-primary/40 text-primary hover:bg-primary/10 hover:text-primary"
+            onClick={() => navigate('/admin')}
+          >
+            <Icon name="ShieldCheck" size={16} />
+            Админка
+          </Button>
+        )}
+
         <Button variant="outline" size="sm" className="gap-2">
           <Icon name="Download" size={16} />
           Экспорт

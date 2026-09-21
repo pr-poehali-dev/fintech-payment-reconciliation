@@ -1,0 +1,34 @@
+{
+  "tests": [
+    {
+      "name": "Missing requester_user_id",
+      "method": "GET",
+      "path": "/",
+      "expectedStatus": 400,
+      "expectedBody": {
+        "error": "string"
+      },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Non-admin user forbidden",
+      "method": "GET",
+      "path": "/?requester_user_id=4",
+      "expectedStatus": 403,
+      "expectedBody": {
+        "error": "string"
+      },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Platform admin gets companies list",
+      "method": "GET",
+      "path": "/?requester_user_id=1",
+      "expectedStatus": 200,
+      "expectedBody": {
+        "success": true
+      },
+      "bodyMatcher": "partial"
+    }
+  ]
+}
