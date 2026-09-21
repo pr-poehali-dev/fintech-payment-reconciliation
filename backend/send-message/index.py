@@ -6,7 +6,7 @@ from typing import Dict, Any
 
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     '''
-    Отправка сообщений в мессенджеры через API
+    Отправка сообщений в мессенджеры через API (WhatsApp/Telegram/Max)
     Принимает: provider (ek_max/ek_wa/ek_tg), recipient (номер телефона), message (текст)
     Возвращает: результат отправки с ID сообщения
     '''

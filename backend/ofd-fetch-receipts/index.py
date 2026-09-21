@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     '''
-    Загрузка чеков из OFD.RU за указанный период
+    Загрузка фискальных чеков из OFD.RU за указанный период
     Args: integration_id, date_from (ISO), date_to (ISO)
     Returns: список чеков и статистика загрузки
     '''
