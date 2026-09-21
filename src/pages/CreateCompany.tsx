@@ -150,9 +150,11 @@ const CreateCompany = () => {
                   )}
                 </Button>
               </div>
-              <p className={`text-xs ${inn.length === 11 ? 'text-destructive' : 'text-muted-foreground'}`}>
-                {inn.length === 11 ? 'ИНН должен содержать 10 (юрлицо) или 12 (ИП) цифр' : getInnHint(inn)}
-              </p>
+              {(inn.length === 11 || getInnHint(inn)) && (
+                <p className={`text-xs ${inn.length === 11 ? 'text-destructive' : 'text-muted-foreground'}`}>
+                  {inn.length === 11 ? 'ИНН должен содержать 10 (юрлицо) или 12 (ИП) цифр' : getInnHint(inn)}
+                </p>
+              )}
             </div>
 
             {searchError && (

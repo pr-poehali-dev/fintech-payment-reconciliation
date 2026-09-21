@@ -41,6 +41,7 @@ export const isValidInn = (inn: string): boolean => {
 
 export const getInnHint = (inn: string): string => {
   if (inn.length === 0) return '10 цифр для юрлица, 12 для ИП';
-  if (inn.length <= 10) return `Юрлицо: ${inn.length}/10`;
+  if (inn.length === 10 || inn.length === 12) return '';
+  if (inn.length < 10) return `Юрлицо: ${inn.length}/10`;
   return `ИП: ${inn.length}/12`;
 };
