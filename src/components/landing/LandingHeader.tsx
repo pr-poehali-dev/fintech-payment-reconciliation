@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import Icon from '@/components/ui/icon';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '@/contexts/AuthContext';
 
 const NAV_LINKS = [
   { href: '#features', label: 'Возможности' },
@@ -11,6 +12,7 @@ const NAV_LINKS = [
 
 const LandingHeader = ({ onCtaClick }: { onCtaClick: () => void }) => {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
 
   return (
@@ -35,12 +37,21 @@ const LandingHeader = ({ onCtaClick }: { onCtaClick: () => void }) => {
         </nav>
 
         <div className="hidden md:flex items-center gap-3">
-          <Button variant="ghost" onClick={() => navigate('/login')}>
-            Войти
-          </Button>
-          <Button onClick={onCtaClick} className="gap-2">
-            Попробовать 7 дней бесплатно
-          </Button>
+          {user ? (
+            <Button onClick={() => navigate('/app')} className="gap-2">
+              <Icon name="LayoutDashboard" size={16} />
+              В кабинет
+            </Button>
+          ) : (
+            <>
+              <Button variant="ghost" onClick={() => navigate('/login')}>
+                Войти
+              </Button>
+              <Button onClick={onCtaClick} className="gap-2">
+                Попробовать 7 дней бесплатно
+              </Button>
+            </>
+          )}
         </div>
 
         <button
@@ -65,12 +76,21 @@ const LandingHeader = ({ onCtaClick }: { onCtaClick: () => void }) => {
             </a>
           ))}
           <div className="flex flex-col gap-2 pt-2">
-            <Button variant="outline" onClick={() => navigate('/login')}>
-              Войти
-            </Button>
-            <Button onClick={onCtaClick}>
-              Попробовать 7 дней бесплатно
-            </Button>
+            {user ? (
+              <Button onClick={() => navigate('/app')} className="gap-2">
+                <Icon name="LayoutDashboard" size={16} />
+                В кабинет
+              </Button>
+            ) : (
+              <>
+                <Button variant="outline" onClick={() => navigate('/login')}>
+                  Войти
+                </Button>
+                <Button onClick={onCtaClick}>
+                  Попробовать 7 дней бесплатно
+                </Button>
+              </>
+            )}
           </div>
         </div>
       )}
