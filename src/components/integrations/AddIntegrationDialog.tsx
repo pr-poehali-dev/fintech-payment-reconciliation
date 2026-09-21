@@ -31,11 +31,11 @@ interface AddIntegrationDialogProps {
   provider: Provider | null;
   editingIntegration: UserIntegration | null;
   allProviders: Provider[];
-  ownerId: number;
+  companyId: number;
   onSuccess: () => void;
 }
 
-const AddIntegrationDialog = ({ open, onOpenChange, provider, editingIntegration, allProviders, ownerId, onSuccess }: AddIntegrationDialogProps) => {
+const AddIntegrationDialog = ({ open, onOpenChange, provider, editingIntegration, allProviders, companyId, onSuccess }: AddIntegrationDialogProps) => {
   const [step, setStep] = useState(editingIntegration ? 1 : 0);
   const [selectedProvider, setSelectedProvider] = useState<Provider | null>(provider || (editingIntegration ? allProviders.find(p => p.id === editingIntegration.provider_id) || null : null));
   const [isLoading, setIsLoading] = useState(false);
@@ -98,7 +98,7 @@ const AddIntegrationDialog = ({ open, onOpenChange, provider, editingIntegration
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             integration_id: editingIntegration.id,
-            owner_id: ownerId,
+            company_id: companyId,
             integration_name: integrationName,
             config,
             webhook_settings: webhookSettings,
@@ -123,7 +123,7 @@ const AddIntegrationDialog = ({ open, onOpenChange, provider, editingIntegration
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            owner_id: ownerId,
+            company_id: companyId,
             provider_slug: selectedProvider.slug,
             integration_name: integrationName || selectedProvider.name,
             config,

@@ -7,6 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import Icon from '@/components/ui/icon';
 import { useToast } from '@/hooks/use-toast';
 import ReceiptDetailsDialog from '@/components/receipts/ReceiptDetailsDialog';
+import { useAuth } from '@/contexts/AuthContext';
 import functionUrls from '../../backend/func2url.json';
 
 interface Receipt {
@@ -34,13 +35,15 @@ const ReceiptsPage = () => {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [selectedReceipt, setSelectedReceipt] = useState<Receipt | null>(null);
   const [showDetails, setShowDetails] = useState(false);
-  const ownerId = 1;
+  const { currentCompany } = useAuth();
+  const companyId = currentCompany?.id;
 
   const loadReceipts = async () => {
+    if (!companyId) return;
     setLoading(true);
     try {
       const params = new URLSearchParams({
-        owner_id: ownerId.toString(),
+        company_id: companyId.toString(),
         limit: '100',
         offset: '0'
       });
@@ -70,7 +73,7 @@ const ReceiptsPage = () => {
 
   useEffect(() => {
     loadReceipts();
-  }, []);
+  }, [companyId]);
 
   const formatDateTime = (isoString: string) => {
     if (!isoString) return '—';

@@ -7,6 +7,7 @@ import PaymentDetailsDialog from '@/components/payments/PaymentDetailsDialog';
 import PaymentsStatistics from '@/components/payments/PaymentsStatistics';
 import PaymentsFilters from '@/components/payments/PaymentsFilters';
 import PaymentsTable from '@/components/payments/PaymentsTable';
+import { useAuth } from '@/contexts/AuthContext';
 import functionUrls from '../../backend/func2url.json';
 
 interface Payment {
@@ -60,13 +61,14 @@ const PaymentsPage = () => {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [integrationFilter, setIntegrationFilter] = useState<string>('all');
   const { toast } = useToast();
-
-  const ownerId = 1;
+  const { currentCompany } = useAuth();
+  const companyId = currentCompany?.id;
 
   const fetchPayments = async () => {
+    if (!companyId) return;
     setIsLoading(true);
     try {
-      const response = await fetch(`${functionUrls['payments-list']}?owner_id=${ownerId}&limit=100`);
+      const response = await fetch(`${functionUrls['payments-list']}?company_id=${companyId}&limit=100`);
       const data = await response.json();
 
       if (response.ok) {
@@ -92,7 +94,7 @@ const PaymentsPage = () => {
 
   useEffect(() => {
     fetchPayments();
-  }, []);
+  }, [companyId]);
 
   const handleRowClick = (payment: Payment) => {
     setSelectedPayment(payment);

@@ -38,13 +38,13 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         body = {}
     
     integration_id = body.get('integration_id')
-    owner_id = body.get('owner_id')
+    company_id = body.get('company_id') or body.get('owner_id')
     
-    if not integration_id or not owner_id:
+    if not integration_id or not company_id:
         return {
             'statusCode': 400,
             'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
-            'body': json.dumps({'error': 'integration_id and owner_id required'}),
+            'body': json.dumps({'error': 'integration_id and company_id required'}),
             'isBase64Encoded': False
         }
     
@@ -55,8 +55,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     try:
         cur.execute('''
             SELECT id FROM user_integrations
-            WHERE id = %s AND owner_id = %s
-        ''', (integration_id, owner_id))
+            WHERE id = %s AND company_id = %s
+        ''', (integration_id, company_id))
         
         exists = cur.fetchone()
         

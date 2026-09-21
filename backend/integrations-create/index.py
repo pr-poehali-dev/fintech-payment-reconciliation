@@ -34,7 +34,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         }
     
     body = json.loads(event.get('body', '{}'))
-    owner_id = body.get('owner_id')
+    company_id = body.get('company_id') or body.get('owner_id')
     provider_slug = body.get('provider_slug')
     integration_name = body.get('integration_name', '')
     config = body.get('config', {})
@@ -46,11 +46,11 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         'notify_on_refunded': True
     })
     
-    if not owner_id or not provider_slug:
+    if not company_id or not provider_slug:
         return {
             'statusCode': 400,
             'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
-            'body': json.dumps({'error': 'owner_id and provider_slug required'}),
+            'body': json.dumps({'error': 'company_id and provider_slug required'}),
             'isBase64Encoded': False
         }
     
@@ -79,11 +79,12 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         
         cur.execute('''
             INSERT INTO user_integrations 
-            (owner_id, provider_id, integration_name, webhook_token, config, webhook_settings, forward_url, status)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, 'active')
+            (owner_id, company_id, provider_id, integration_name, webhook_token, config, webhook_settings, forward_url, status)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'active')
             RETURNING id, webhook_token
         ''', (
-            owner_id, 
+            company_id,
+            company_id,
             provider_id, 
             integration_name, 
             webhook_token,

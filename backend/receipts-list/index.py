@@ -35,16 +35,16 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         }
     
     params = event.get('queryStringParameters', {}) or {}
-    owner_id = params.get('owner_id')
+    company_id = params.get('company_id') or params.get('owner_id')
     limit = int(params.get('limit', 100))
     offset = int(params.get('offset', 0))
     source_filter = params.get('source')
     
-    if not owner_id:
+    if not company_id:
         return {
             'statusCode': 400,
             'headers': {'Content-Type': 'application/json'},
-            'body': json.dumps({'error': 'owner_id required'}),
+            'body': json.dumps({'error': 'company_id required'}),
             'isBase64Encoded': False
         }
     
@@ -73,7 +73,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 ofd.raw_data
             FROM t_p83864310_fintech_payment_reco.ofd_receipts ofd
             JOIN t_p83864310_fintech_payment_reco.user_integrations ui ON ui.id = ofd.integration_id
-            WHERE ofd.owner_id = %s
+            WHERE ofd.company_id = %s
         ''')
     
     if query_parts:
@@ -85,7 +85,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             LIMIT %s OFFSET %s
         '''
         
-        cur.execute(full_query, (owner_id, limit, offset))
+        cur.execute(full_query, (company_id, limit, offset))
     else:
         cur.execute('SELECT NULL LIMIT 0')
     
@@ -105,8 +105,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         receipts.append(receipt)
     
     cur.execute('''
-        SELECT COUNT(*) FROM t_p83864310_fintech_payment_reco.ofd_receipts WHERE owner_id = %s
-    ''', (owner_id,))
+        SELECT COUNT(*) FROM t_p83864310_fintech_payment_reco.ofd_receipts WHERE company_id = %s
+    ''', (company_id,))
     
     total_count = cur.fetchone()[0]
     

@@ -38,17 +38,17 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         body = {}
     
     integration_id = body.get('integration_id')
-    owner_id = body.get('owner_id')
+    company_id = body.get('company_id') or body.get('owner_id')
     integration_name = body.get('integration_name')
     config = body.get('config', {})
     webhook_settings = body.get('webhook_settings', {})
     forward_url = body.get('forward_url')
     
-    if not integration_id or not owner_id:
+    if not integration_id or not company_id:
         return {
             'statusCode': 400,
             'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
-            'body': json.dumps({'error': 'integration_id and owner_id required'}),
+            'body': json.dumps({'error': 'integration_id and company_id required'}),
             'isBase64Encoded': False
         }
     
@@ -65,7 +65,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 webhook_settings = COALESCE(%s::jsonb, webhook_settings),
                 forward_url = %s,
                 updated_at = CURRENT_TIMESTAMP
-            WHERE id = %s AND owner_id = %s
+            WHERE id = %s AND company_id = %s
             RETURNING id
         ''', (
             integration_name,
@@ -73,7 +73,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             json.dumps(webhook_settings) if webhook_settings else None,
             forward_url,
             integration_id,
-            owner_id
+            company_id
         ))
         
         updated = cur.fetchone()

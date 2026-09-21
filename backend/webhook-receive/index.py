@@ -114,6 +114,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             SELECT 
                 ui.id, 
                 ui.owner_id, 
+                ui.company_id,
                 ui.config,
                 ui.webhook_settings,
                 p.slug,
@@ -132,7 +133,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 'isBase64Encoded': False
             }
         
-        integration_id, owner_id, config, webhook_settings, provider_slug, forward_url = integration_row
+        integration_id, owner_id, company_id, config, webhook_settings, provider_slug, forward_url = integration_row
         
         config = json.loads(config) if isinstance(config, str) else config
         webhook_settings = json.loads(webhook_settings) if isinstance(webhook_settings, str) else webhook_settings
@@ -174,16 +175,17 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             webhook_payment_id = None
             cur.execute('''
                 INSERT INTO t_p83864310_fintech_payment_reco.webhook_payments (
-                    integration_id, owner_id, payment_id, terminal_key,
+                    integration_id, owner_id, company_id, payment_id, terminal_key,
                     amount, order_id, status, payment_status, error_code,
                     customer_email, customer_phone, pan, card_type, exp_date,
                     raw_data
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (integration_id, payment_id, status) DO NOTHING
                 RETURNING id
             ''', (
                 integration_id,
                 owner_id,
+                company_id,
                 webhook_data.get('PaymentId'),
                 webhook_data.get('TerminalKey'),
                 float(webhook_data.get('Amount', 0)) / 100,

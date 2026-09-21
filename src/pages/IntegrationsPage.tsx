@@ -15,6 +15,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { useAuth } from '@/contexts/AuthContext';
 import functionUrls from '../../backend/func2url.json';
 
 interface Provider {
@@ -63,13 +64,14 @@ const IntegrationsPage = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [loadingReceipts, setLoadingReceipts] = useState<number | null>(null);
   const { toast } = useToast();
-  
-  const ownerId = 1;
+  const { currentCompany } = useAuth();
+  const companyId = currentCompany?.id;
 
   const fetchIntegrations = async () => {
+    if (!companyId) return;
     setIsLoading(true);
     try {
-      const response = await fetch(`${functionUrls['integrations-list']}?owner_id=${ownerId}`);
+      const response = await fetch(`${functionUrls['integrations-list']}?company_id=${companyId}`);
       const data = await response.json();
 
       if (response.ok) {
@@ -101,7 +103,7 @@ const IntegrationsPage = () => {
 
   useEffect(() => {
     fetchIntegrations();
-  }, []);
+  }, [companyId]);
 
   const handleAddNew = (category: Category) => {
     setSelectedCategory(category);
@@ -131,7 +133,7 @@ const IntegrationsPage = () => {
       const response = await fetch(functionUrls['integrations-delete'], {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ integration_id: deletingIntegration.id, owner_id: ownerId })
+        body: JSON.stringify({ integration_id: deletingIntegration.id, company_id: companyId })
       });
 
       const data = await response.json();
@@ -397,7 +399,7 @@ const IntegrationsPage = () => {
         provider={selectedProvider}
         editingIntegration={editingIntegration}
         allProviders={selectedCategory ? selectedCategory.providers : allProviders}
-        ownerId={ownerId}
+        companyId={companyId || 0}
         onSuccess={fetchIntegrations}
       />
 

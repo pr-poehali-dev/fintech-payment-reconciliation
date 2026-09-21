@@ -32,13 +32,13 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         }
     
     params = event.get('queryStringParameters', {}) or {}
-    owner_id = params.get('owner_id')
+    company_id = params.get('company_id') or params.get('owner_id')
     
-    if not owner_id:
+    if not company_id:
         return {
             'statusCode': 400,
             'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
-            'body': json.dumps({'error': 'owner_id required'}),
+            'body': json.dumps({'error': 'company_id required'}),
             'isBase64Encoded': False
         }
     
@@ -105,9 +105,9 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             FROM user_integrations ui
             JOIN integration_providers p ON p.id = ui.provider_id
             JOIN integration_categories c ON c.id = p.category_id
-            WHERE ui.owner_id = %s
+            WHERE ui.company_id = %s
             ORDER BY ui.created_at DESC
-        ''', (owner_id,))
+        ''', (company_id,))
         
         user_integrations = []
         for row in cur.fetchall():

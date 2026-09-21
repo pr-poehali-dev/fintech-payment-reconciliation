@@ -32,16 +32,16 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         }
     
     params = event.get('queryStringParameters', {}) or {}
-    owner_id = params.get('owner_id')
+    company_id = params.get('company_id') or params.get('owner_id')
     integration_id = params.get('integration_id')
     limit = int(params.get('limit', 100))
     offset = int(params.get('offset', 0))
     
-    if not owner_id:
+    if not company_id:
         return {
             'statusCode': 400,
             'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
-            'body': json.dumps({'error': 'owner_id required'}),
+            'body': json.dumps({'error': 'company_id required'}),
             'isBase64Encoded': False
         }
     
@@ -50,8 +50,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     cur = conn.cursor()
     
     try:
-        where_clause = 'WHERE wp.owner_id = %s'
-        query_params = [owner_id]
+        where_clause = 'WHERE wp.company_id = %s'
+        query_params = [company_id]
         
         if integration_id:
             where_clause += ' AND wp.integration_id = %s'

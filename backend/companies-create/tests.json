@@ -1,0 +1,31 @@
+{
+  "tests": [
+    {
+      "name": "Create company without user_id",
+      "method": "POST",
+      "path": "/",
+      "body": {
+        "name": "ООО Ромашка"
+      },
+      "expectedStatus": 400,
+      "expectedBody": {
+        "error": "string"
+      },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Create company with non-existent user",
+      "method": "POST",
+      "path": "/",
+      "body": {
+        "user_id": 999999,
+        "name": "ООО Ромашка"
+      },
+      "expectedStatus": 404,
+      "expectedBody": {
+        "error": "string"
+      },
+      "bodyMatcher": "partial"
+    }
+  ]
+}

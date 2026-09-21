@@ -32,15 +32,15 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         }
     
     params = event.get('queryStringParameters', {}) or {}
-    owner_id = params.get('owner_id')
+    company_id = params.get('company_id') or params.get('owner_id')
     integration_id = params.get('integration_id')
     limit = int(params.get('limit', '100'))
     
-    if not owner_id:
+    if not company_id:
         return {
             'statusCode': 400,
             'headers': {'Content-Type': 'application/json'},
-            'body': json.dumps({'error': 'owner_id required'}),
+            'body': json.dumps({'error': 'company_id required'}),
             'isBase64Encoded': False
         }
     
@@ -65,10 +65,10 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             FROM t_p83864310_fintech_payment_reco.webhook_forward_logs wfl
             LEFT JOIN t_p83864310_fintech_payment_reco.webhook_payments wp ON wp.id = wfl.webhook_payment_id
             LEFT JOIN t_p83864310_fintech_payment_reco.user_integrations ui ON ui.id = wp.integration_id
-            WHERE ui.owner_id = %s
+            WHERE ui.company_id = %s
         '''
         
-        params_list = [owner_id]
+        params_list = [company_id]
         
         if integration_id:
             query += ' AND ui.id = %s'

@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import Icon from '@/components/ui/icon';
 import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
 import functionUrls from '../../backend/func2url.json';
 
 type MessengerType = 'whatsapp' | 'telegram' | 'max' | null;
@@ -20,6 +21,7 @@ const Login = () => {
   const [attempts, setAttempts] = useState(0);
   const [blockTime, setBlockTime] = useState(0);
   const { toast } = useToast();
+  const { loginWithPhone } = useAuth();
 
   const MAX_ATTEMPTS = 3;
   const BLOCK_DURATION = 300;
@@ -83,11 +85,23 @@ const Login = () => {
     }
   };
 
-  const handleVerifyCode = () => {
+  const handleVerifyCode = async () => {
     if (code.length === 6) {
       if (code === sentCode) {
         setAttempts(0);
-        window.location.href = '/';
+        setIsLoading(true);
+        try {
+          await loginWithPhone(phone);
+          window.location.href = '/';
+        } catch (error: any) {
+          toast({
+            title: 'Ошибка входа',
+            description: error.message || 'Не удалось войти',
+            variant: 'destructive'
+          });
+        } finally {
+          setIsLoading(false);
+        }
       } else {
         const newAttempts = attempts + 1;
         setAttempts(newAttempts);
@@ -295,10 +309,15 @@ const Login = () => {
 
                 <Button 
                   onClick={handleVerifyCode}
-                  disabled={code.length !== 6}
+                  disabled={code.length !== 6 || isLoading}
                   className="w-full h-14 text-lg font-semibold bg-primary hover:bg-primary/90 text-primary-foreground transition-all"
                 >
-                  Подтвердить
+                  {isLoading ? (
+                    <>
+                      <Icon name="Loader2" size={20} className="mr-2 animate-spin" />
+                      Вход...
+                    </>
+                  ) : 'Подтвердить'}
                 </Button>
 
                 <Button 

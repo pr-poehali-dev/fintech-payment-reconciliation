@@ -55,7 +55,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     cur = conn.cursor()
     
     cur.execute('''
-        SELECT config, owner_id, provider_id
+        SELECT config, owner_id, company_id, provider_id
         FROM t_p83864310_fintech_payment_reco.user_integrations
         WHERE id = %s AND status = 'active'
     ''', (integration_id,))
@@ -70,7 +70,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             'isBase64Encoded': False
         }
     
-    config, owner_id, provider_id = integration_row
+    config, owner_id, company_id, provider_id = integration_row
     config = json.loads(config) if isinstance(config, str) else config
     
     inn = config.get('inn')
@@ -232,15 +232,16 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         try:
             cur.execute('''
                 INSERT INTO t_p83864310_fintech_payment_reco.ofd_receipts (
-                    integration_id, owner_id, receipt_id, operation_type,
+                    integration_id, owner_id, company_id, receipt_id, operation_type,
                     total_sum, cash_sum, ecash_sum, doc_number, doc_datetime,
                     fn_number, raw_data
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (integration_id, receipt_id) DO NOTHING
                 RETURNING id
             ''', (
                 integration_id,
                 owner_id,
+                company_id,
                 receipt.get('Id'),
                 receipt.get('OperationType'),
                 float(receipt.get('TotalSumm', 0)) / 100,

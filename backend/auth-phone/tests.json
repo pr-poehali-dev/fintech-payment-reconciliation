@@ -1,0 +1,32 @@
+{
+  "tests": [
+    {
+      "name": "Login with valid phone",
+      "method": "POST",
+      "path": "/",
+      "body": {
+        "phone": "+79991234567",
+        "full_name": "Тест Тестов"
+      },
+      "expectedStatus": 200,
+      "expectedBody": {
+        "success": true,
+        "user_id": "number"
+      },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Invalid phone",
+      "method": "POST",
+      "path": "/",
+      "body": {
+        "phone": "123"
+      },
+      "expectedStatus": 400,
+      "expectedBody": {
+        "error": "string"
+      },
+      "bodyMatcher": "partial"
+    }
+  ]
+}

@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     '''
     Получение статистики для дашборда: платежи, чеки, выручка
-    Args: owner_id
+    Args: company_id
     Returns: статистика за разные периоды
     '''
     
@@ -35,7 +35,15 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         }
     
     params = event.get('queryStringParameters', {}) or {}
-    owner_id = params.get('owner_id', '1')
+    company_id = params.get('company_id') or params.get('owner_id')
+
+    if not company_id:
+        return {
+            'statusCode': 400,
+            'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+            'body': json.dumps({'error': 'company_id required'}),
+            'isBase64Encoded': False
+        }
     
     try:
         dsn = os.environ['DATABASE_URL']
@@ -61,37 +69,37 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     week_str = week_ago.strftime('%Y-%m-%d %H:%M:%S')
     
     # Платежи за сегодня
-    cur.execute(f'''
+    cur.execute('''
         SELECT COUNT(*), 
                COUNT(DISTINCT CASE WHEN status IN ('AUTHORIZED', 'CONFIRMED') THEN payment_id END),
                COUNT(DISTINCT CASE WHEN status NOT IN ('AUTHORIZED', 'CONFIRMED', 'CANCELED', 'REJECTED') THEN payment_id END)
-        FROM t_p83864310_fintech_payment_reco.webhooks 
-        WHERE owner_id = {owner_id} AND created_at >= '{today_str}'
-    ''')
+        FROM t_p83864310_fintech_payment_reco.webhook_payments 
+        WHERE company_id = %s AND created_at >= %s
+    ''', (company_id, today_str))
     
     webhooks_today, payments_success_today, payments_pending_today = cur.fetchone()
     
     # Платежи за месяц
-    cur.execute(f'''
-        SELECT COUNT(DISTINCT payment_id), SUM(amount) / 100.0
-        FROM t_p83864310_fintech_payment_reco.webhooks 
-        WHERE owner_id = {owner_id} 
-          AND created_at >= '{month_str}'
+    cur.execute('''
+        SELECT COUNT(DISTINCT payment_id), SUM(amount)
+        FROM t_p83864310_fintech_payment_reco.webhook_payments 
+        WHERE company_id = %s 
+          AND created_at >= %s
           AND status IN ('AUTHORIZED', 'CONFIRMED')
-    ''')
+    ''', (company_id, month_str))
     
     payments_month, revenue_month = cur.fetchone()
     revenue_month = float(revenue_month) if revenue_month else 0.0
     
     # Платежи за прошлый месяц для сравнения
-    cur.execute(f'''
-        SELECT SUM(amount) / 100.0
-        FROM t_p83864310_fintech_payment_reco.webhooks 
-        WHERE owner_id = {owner_id} 
-          AND created_at >= '{last_month_str}'
-          AND created_at < '{month_str}'
+    cur.execute('''
+        SELECT SUM(amount)
+        FROM t_p83864310_fintech_payment_reco.webhook_payments 
+        WHERE company_id = %s 
+          AND created_at >= %s
+          AND created_at < %s
           AND status IN ('AUTHORIZED', 'CONFIRMED')
-    ''')
+    ''', (company_id, last_month_str, month_str))
     
     revenue_last_month_row = cur.fetchone()
     revenue_last_month = float(revenue_last_month_row[0]) if revenue_last_month_row[0] else 0.0
@@ -102,28 +110,28 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         revenue_growth = ((revenue_month - revenue_last_month) / revenue_last_month) * 100
     
     # Чеки за месяц
-    cur.execute(f'''
+    cur.execute('''
         SELECT COUNT(*), SUM(total_sum)
         FROM t_p83864310_fintech_payment_reco.ofd_receipts 
-        WHERE owner_id = {owner_id} AND created_at >= '{month_str}'
-    ''')
+        WHERE company_id = %s AND created_at >= %s
+    ''', (company_id, month_str))
     
     receipts_month_row = cur.fetchone()
     receipts_month = receipts_month_row[0] if receipts_month_row[0] else 0
     receipts_sum = float(receipts_month_row[1]) if receipts_month_row[1] else 0.0
     
     # Статистика по последним 7 дням (для графика)
-    cur.execute(f'''
+    cur.execute('''
         SELECT 
             DATE(created_at) as day,
             COUNT(DISTINCT payment_id) as count
-        FROM t_p83864310_fintech_payment_reco.webhooks
-        WHERE owner_id = {owner_id}
-          AND created_at >= '{week_str}'
+        FROM t_p83864310_fintech_payment_reco.webhook_payments
+        WHERE company_id = %s
+          AND created_at >= %s
           AND status IN ('AUTHORIZED', 'CONFIRMED')
         GROUP BY DATE(created_at)
         ORDER BY day
-    ''')
+    ''', (company_id, week_str))
     
     daily_payments = []
     for row in cur.fetchall():
@@ -133,18 +141,18 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         })
     
     # Последние транзакции
-    cur.execute(f'''
+    cur.execute('''
         SELECT 
             w.payment_id,
-            w.amount / 100.0,
+            w.amount,
             w.status,
             w.created_at,
             w.customer_email
-        FROM t_p83864310_fintech_payment_reco.webhooks w
-        WHERE w.owner_id = {owner_id}
+        FROM t_p83864310_fintech_payment_reco.webhook_payments w
+        WHERE w.company_id = %s
         ORDER BY w.created_at DESC
         LIMIT 10
-    ''')
+    ''', (company_id,))
     
     recent_transactions = []
     for row in cur.fetchall():
@@ -157,11 +165,11 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         })
     
     # Интеграции
-    cur.execute(f'''
+    cur.execute('''
         SELECT COUNT(*)
         FROM t_p83864310_fintech_payment_reco.user_integrations
-        WHERE owner_id = {owner_id} AND status = 'active'
-    ''')
+        WHERE company_id = %s AND status = 'active'
+    ''', (company_id,))
     
     active_integrations = cur.fetchone()[0]
     

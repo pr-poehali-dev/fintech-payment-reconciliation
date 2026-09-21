@@ -1,0 +1,99 @@
+import json
+import os
+import psycopg2
+from typing import Dict, Any
+
+
+def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
+    '''
+    Получение списка пользователей компании с их ролями
+    Args: company_id
+    Returns: список пользователей компании
+    '''
+
+    method = event.get('httpMethod', 'GET')
+
+    if method == 'OPTIONS':
+        return {
+            'statusCode': 200,
+            'headers': {
+                'Access-Control-Allow-Origin': '*',
+                'Access-Control-Allow-Methods': 'GET, OPTIONS',
+                'Access-Control-Allow-Headers': 'Content-Type',
+                'Access-Control-Max-Age': '86400'
+            },
+            'body': '',
+            'isBase64Encoded': False
+        }
+
+    if method != 'GET':
+        return {
+            'statusCode': 405,
+            'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+            'body': json.dumps({'error': 'Method not allowed'}),
+            'isBase64Encoded': False
+        }
+
+    params = event.get('queryStringParameters', {}) or {}
+    company_id = params.get('company_id')
+
+    if not company_id:
+        return {
+            'statusCode': 400,
+            'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+            'body': json.dumps({'error': 'company_id required'}),
+            'isBase64Encoded': False
+        }
+
+    dsn = os.environ['DATABASE_URL']
+    conn = psycopg2.connect(dsn)
+    cur = conn.cursor()
+
+    try:
+        cur.execute('''
+            SELECT
+                u.id, u.full_name, u.email, u.phone,
+                r.slug, r.name, r.color,
+                cu.status, cu.invited_at, cu.joined_at
+            FROM company_users cu
+            JOIN app_users u ON u.id = cu.user_id
+            JOIN roles r ON r.id = cu.role_id
+            WHERE cu.company_id = %s
+            ORDER BY cu.created_at
+        ''', (company_id,))
+
+        users = []
+        for row in cur.fetchall():
+            users.append({
+                'id': row[0],
+                'full_name': row[1],
+                'email': row[2],
+                'phone': row[3],
+                'role_slug': row[4],
+                'role_name': row[5],
+                'role_color': row[6],
+                'status': row[7],
+                'invited_at': row[8].isoformat() if row[8] else None,
+                'joined_at': row[9].isoformat() if row[9] else None
+            })
+
+        return {
+            'statusCode': 200,
+            'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+            'body': json.dumps({
+                'success': True,
+                'users': users
+            }),
+            'isBase64Encoded': False
+        }
+
+    except Exception as e:
+        return {
+            'statusCode': 500,
+            'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+            'body': json.dumps({'error': str(e)}),
+            'isBase64Encoded': False
+        }
+    finally:
+        cur.close()
+        conn.close()

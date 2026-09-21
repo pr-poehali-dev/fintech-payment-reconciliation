@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import Icon from '@/components/ui/icon';
+import { useAuth } from '@/contexts/AuthContext';
 import functionUrls from '../../backend/func2url.json';
 
 interface WebhookLog {
@@ -21,19 +22,21 @@ interface WebhookLog {
 
 export default function WebhookLogsPage() {
   const { integrationId } = useParams();
+  const { currentCompany } = useAuth();
+  const companyId = currentCompany?.id;
   const [logs, setLogs] = useState<WebhookLog[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!companyId) return;
     loadLogs();
     const interval = setInterval(loadLogs, 5000);
     return () => clearInterval(interval);
-  }, [integrationId]);
+  }, [integrationId, companyId]);
 
   const loadLogs = async () => {
     try {
-      const ownerId = localStorage.getItem('user_id');
-      const url = `${functionUrls['webhook-logs']}?owner_id=${ownerId}&integration_id=${integrationId}&limit=100`;
+      const url = `${functionUrls['webhook-logs']}?company_id=${companyId}&integration_id=${integrationId}&limit=100`;
       const res = await fetch(url);
       const data = await res.json();
       setLogs(data.logs || []);

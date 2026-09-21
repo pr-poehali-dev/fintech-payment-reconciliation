@@ -1,0 +1,32 @@
+{
+  "tests": [
+    {
+      "name": "Missing fields",
+      "method": "PUT",
+      "path": "/",
+      "body": {
+        "company_id": 1
+      },
+      "expectedStatus": 400,
+      "expectedBody": {
+        "error": "string"
+      },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Access not found",
+      "method": "PUT",
+      "path": "/",
+      "body": {
+        "company_id": 1,
+        "user_id": 999999,
+        "status": "active"
+      },
+      "expectedStatus": 404,
+      "expectedBody": {
+        "error": "string"
+      },
+      "bodyMatcher": "partial"
+    }
+  ]
+}

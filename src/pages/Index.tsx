@@ -3,11 +3,22 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import Icon from '@/components/ui/icon';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import NotificationCenter from '@/components/NotificationCenter';
 import AccessManagement from './AccessManagement';
 import IntegrationsPage from './IntegrationsPage';
 import PaymentsPage from './PaymentsPage';
 import ReceiptsPage from './ReceiptsPage';
+import { useAuth } from '@/contexts/AuthContext';
+import { useNavigate } from 'react-router-dom';
+import functionUrls from '../../backend/func2url.json';
 import {
   LineChart,
   Line,
@@ -56,6 +67,8 @@ const recentTransactions = [
 ];
 
 const Index = () => {
+  const { user, currentCompany, companies, setCurrentCompanyId, logout } = useAuth();
+  const navigate = useNavigate();
   const [activeModule, setActiveModule] = useState('dashboard');
   const [mounted, setMounted] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
@@ -69,19 +82,24 @@ const Index = () => {
     activeIntegrations: 0
   });
 
-  const ownerId = 1;
+  const companyId = currentCompany?.id;
 
   useEffect(() => {
     setMounted(true);
-    loadDashboardStats();
   }, []);
+
+  useEffect(() => {
+    if (companyId) {
+      loadDashboardStats();
+    }
+  }, [companyId]);
 
   const loadDashboardStats = async () => {
     try {
       const [paymentsRes, receiptsRes, integrationsRes] = await Promise.all([
-        fetch(`https://functions.poehali.dev/1a67a47e-88ff-48e0-82fd-82b4dedd80d3?owner_id=${ownerId}&limit=1000&offset=0`),
-        fetch(`https://functions.poehali.dev/f27cd7c6-c93b-49c7-9caa-1c076b0f4e22?owner_id=${ownerId}&limit=1000&offset=0`),
-        fetch(`https://functions.poehali.dev/43050d81-0a0a-4bc5-baee-2a7f3ad7fe50?owner_id=${ownerId}`)
+        fetch(`${functionUrls['payments-list']}?company_id=${companyId}&limit=1000&offset=0`),
+        fetch(`${functionUrls['receipts-list']}?company_id=${companyId}&limit=1000&offset=0`),
+        fetch(`${functionUrls['integrations-list']}?company_id=${companyId}`)
       ]);
 
       const [paymentsData, receiptsData, integrationsData] = await Promise.all([
@@ -166,13 +184,52 @@ const Index = () => {
       </header>
 
       <aside className="fixed left-0 top-0 h-full w-64 bg-sidebar border-r border-sidebar-border p-4 animate-slide-in-right">
-        <div className="mb-8">
+        <div className="mb-6">
           <h1 className="text-2xl font-display font-bold text-primary flex items-center gap-2">
             <Icon name="Zap" size={28} />
             Екомкасса ПРО
           </h1>
-          <p className="text-sm text-sidebar-foreground/60 mt-1">Автоматизация платежей</p>
+          <p className="text-sm text-sidebar-foreground/60 mt-1">Платформа сверки 54-ФЗ</p>
         </div>
+
+        {companies.length > 0 && (
+          <div className="mb-6">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button className="w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-lg bg-sidebar-accent border border-sidebar-border hover:bg-sidebar-accent/70 transition-colors">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Icon name="Building2" size={16} className="text-sidebar-foreground/60 shrink-0" />
+                    <span className="text-sm font-medium text-sidebar-foreground truncate">
+                      {currentCompany?.name || 'Выберите компанию'}
+                    </span>
+                  </div>
+                  <Icon name="ChevronsUpDown" size={14} className="text-sidebar-foreground/40 shrink-0" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-56">
+                <DropdownMenuLabel>Ваши компании</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {companies.map((company) => (
+                  <DropdownMenuItem
+                    key={company.id}
+                    onClick={() => setCurrentCompanyId(company.id)}
+                    className="flex items-center justify-between gap-2"
+                  >
+                    <span className="truncate">{company.name}</span>
+                    {company.id === currentCompany?.id && (
+                      <Icon name="Check" size={14} className="text-primary shrink-0" />
+                    )}
+                  </DropdownMenuItem>
+                ))}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => navigate('/create-company')}>
+                  <Icon name="Plus" size={14} className="mr-2" />
+                  Добавить компанию
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        )}
 
         <nav className="space-y-2">
           {modules.map((module) => (
@@ -192,19 +249,37 @@ const Index = () => {
         </nav>
 
         <div className="absolute bottom-4 left-4 right-4">
-          <Card className="bg-sidebar-accent border-sidebar-border">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
-                  <Icon name="User" size={20} className="text-primary" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-sidebar-foreground">Иван Петров</p>
-                  <p className="text-xs text-sidebar-foreground/60">ivan@company.ru</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="w-full text-left">
+                <Card className="bg-sidebar-accent border-sidebar-border hover:bg-sidebar-accent/70 transition-colors cursor-pointer">
+                  <CardContent className="p-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center shrink-0">
+                        <Icon name="User" size={20} className="text-primary" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-sidebar-foreground truncate">
+                          {user?.full_name || user?.phone || 'Пользователь'}
+                        </p>
+                        <p className="text-xs text-sidebar-foreground/60 truncate">
+                          {currentCompany?.role_name || 'Без роли'}
+                        </p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-56">
+              <DropdownMenuLabel>{user?.phone}</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={logout} className="text-destructive focus:text-destructive">
+                <Icon name="LogOut" size={14} className="mr-2" />
+                Выйти
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </aside>
 
