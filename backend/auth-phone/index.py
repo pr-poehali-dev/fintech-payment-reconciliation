@@ -42,7 +42,10 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     full_name = body.get('full_name')
 
     phone = re.sub(r'\D', '', phone_raw)
-    if len(phone) < 10:
+    if len(phone) == 11 and phone.startswith('8'):
+        phone = '7' + phone[1:]
+
+    if len(phone) != 11 or not phone.startswith('7'):
         return {
             'statusCode': 400,
             'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},

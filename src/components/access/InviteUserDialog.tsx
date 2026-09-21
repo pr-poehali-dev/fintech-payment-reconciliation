@@ -2,6 +2,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import Icon from '@/components/ui/icon';
+import { formatPhoneNumber, isValidPhone, isValidEmail } from '@/lib/formatters';
 import {
   Dialog,
   DialogContent,
@@ -80,7 +81,7 @@ const InviteUserDialog = ({
               type="tel"
               placeholder="+7 (___) ___-__-__"
               value={newUser.phone}
-              onChange={(e) => setNewUser({ ...newUser, phone: e.target.value })}
+              onChange={(e) => setNewUser({ ...newUser, phone: formatPhoneNumber(e.target.value, newUser.phone) })}
             />
           </div>
 
@@ -101,6 +102,9 @@ const InviteUserDialog = ({
               value={newUser.email}
               onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
             />
+            {newUser.email && !isValidEmail(newUser.email) && (
+              <p className="text-xs text-destructive">Некорректный формат email</p>
+            )}
           </div>
 
           <div className="space-y-2">
@@ -163,7 +167,7 @@ const InviteUserDialog = ({
 
           <Button 
             onClick={onInvite}
-            disabled={!newUser.phone || !newUser.fullName || !newUser.role || isLoading}
+            disabled={!isValidPhone(newUser.phone) || !newUser.fullName || !newUser.role || !isValidEmail(newUser.email) || isLoading}
             className="w-full"
           >
             {isLoading ? (

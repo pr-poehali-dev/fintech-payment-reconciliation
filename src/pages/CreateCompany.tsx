@@ -7,6 +7,7 @@ import Icon from '@/components/ui/icon';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import functionUrls from '../../backend/func2url.json';
+import { sanitizeInn, isValidInn, getInnHint } from '@/lib/formatters';
 
 interface CompanyLookupData {
   inn: string;
@@ -27,7 +28,7 @@ const CreateCompany = () => {
   const [searchError, setSearchError] = useState<string | null>(null);
 
   const handleSearch = async () => {
-    if (!inn || inn.length < 10) return;
+    if (!isValidInn(inn)) return;
 
     setIsSearching(true);
     setSearchError(null);
@@ -93,8 +94,7 @@ const CreateCompany = () => {
   };
 
   const handleInnChange = (value: string) => {
-    const digits = value.replace(/\D/g, '');
-    setInn(digits);
+    setInn(sanitizeInn(value));
     setFoundCompany(null);
     setSearchError(null);
   };
@@ -123,6 +123,7 @@ const CreateCompany = () => {
               <Label>ИНН компании</Label>
               <div className="flex gap-2">
                 <Input
+                  inputMode="numeric"
                   placeholder="7712345678"
                   value={inn}
                   onChange={(e) => handleInnChange(e.target.value)}
@@ -131,7 +132,7 @@ const CreateCompany = () => {
                 />
                 <Button
                   onClick={handleSearch}
-                  disabled={inn.length < 10 || isSearching}
+                  disabled={!isValidInn(inn) || isSearching}
                   variant="secondary"
                   className="h-12 px-4 shrink-0"
                 >
@@ -142,7 +143,9 @@ const CreateCompany = () => {
                   )}
                 </Button>
               </div>
-              <p className="text-xs text-muted-foreground">10 цифр для юрлица, 12 для ИП</p>
+              <p className={`text-xs ${inn.length === 11 ? 'text-destructive' : 'text-muted-foreground'}`}>
+                {inn.length === 11 ? 'ИНН должен содержать 10 (юрлицо) или 12 (ИП) цифр' : getInnHint(inn)}
+              </p>
             </div>
 
             {searchError && (

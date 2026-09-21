@@ -8,6 +8,7 @@ import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import functionUrls from '../../backend/func2url.json';
+import { formatPhoneNumber, isValidPhone } from '@/lib/formatters';
 
 type MessengerType = 'whatsapp' | 'telegram' | 'max' | null;
 
@@ -33,7 +34,7 @@ const Login = () => {
   ];
 
   const handleSendCode = async () => {
-    if (phone.length >= 12 && selectedMessenger) {
+    if (isValidPhone(phone) && selectedMessenger) {
       setIsLoading(true);
       
       const providerMap: Record<string, string> = {
@@ -142,36 +143,10 @@ const Login = () => {
     }
   };
 
-  const formatPhone = (value: string) => {
-    const digits = value.replace(/\D/g, '');
-    if (digits.startsWith('7')) {
-      let formatted = '+7';
-      if (digits.length > 1) {
-        formatted += ' (' + digits.slice(1, 4);
-      }
-      if (digits.length >= 5) {
-        formatted += ') ' + digits.slice(4, 7);
-      }
-      if (digits.length >= 8) {
-        formatted += '-' + digits.slice(7, 9);
-      }
-      if (digits.length >= 10) {
-        formatted += '-' + digits.slice(9, 11);
-      }
-      return formatted;
-    }
-    return value;
-  };
-
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    if (value.length < phone.length) {
-      setPhone(value);
-    } else {
-      const formatted = formatPhone(value);
-      if (formatted.replace(/\D/g, '').length <= 11) {
-        setPhone(formatted);
-      }
+    const formatted = formatPhoneNumber(e.target.value, phone);
+    if (formatted.replace(/\D/g, '').length <= 11) {
+      setPhone(formatted);
     }
   };
 
@@ -257,7 +232,7 @@ const Login = () => {
 
                 <Button 
                   onClick={handleSendCode}
-                  disabled={phone.replace(/\D/g, '').length < 11 || !selectedMessenger || isLoading}
+                  disabled={!isValidPhone(phone) || !selectedMessenger || isLoading}
                   className="w-full h-14 text-lg font-semibold bg-primary hover:bg-primary/90 text-primary-foreground transition-all"
                 >
                   {isLoading ? (

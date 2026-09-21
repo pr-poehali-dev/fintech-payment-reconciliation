@@ -44,12 +44,22 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     invited_by = body.get('invited_by')
 
     phone = re.sub(r'\D', '', phone_raw)
+    if len(phone) == 11 and phone.startswith('8'):
+        phone = '7' + phone[1:]
 
-    if not company_id or len(phone) < 10 or not role_slug:
+    if not company_id or not role_slug:
         return {
             'statusCode': 400,
             'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
             'body': json.dumps({'error': 'company_id, phone and role_slug required'}),
+            'isBase64Encoded': False
+        }
+
+    if len(phone) != 11 or not phone.startswith('7'):
+        return {
+            'statusCode': 400,
+            'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+            'body': json.dumps({'error': 'Некорректный номер телефона'}),
             'isBase64Encoded': False
         }
 
