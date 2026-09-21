@@ -195,7 +195,7 @@ const PaymentsTable = ({
                                         {payment.error_code && (
                                           <div>
                                             <span className="text-muted-foreground">Код ошибки:</span>{' '}
-                                            <span className="text-red-500 font-semibold">{payment.error_code}</span>
+                                            <span className="text-destructive font-semibold">{payment.error_code}</span>
                                           </div>
                                         )}
                                         {payment.customer_email && (

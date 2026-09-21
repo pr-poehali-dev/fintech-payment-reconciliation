@@ -81,10 +81,10 @@ const NotificationCenter = ({ onClose }: NotificationCenterProps) => {
 
   const getIcon = (type: string) => {
     switch (type) {
-      case 'success': return { name: 'CheckCircle2', color: 'text-green-500' };
-      case 'warning': return { name: 'AlertTriangle', color: 'text-yellow-500' };
-      case 'error': return { name: 'XCircle', color: 'text-red-500' };
-      case 'info': return { name: 'Info', color: 'text-blue-500' };
+      case 'success': return { name: 'CheckCircle2', color: 'text-success' };
+      case 'warning': return { name: 'AlertTriangle', color: 'text-warning' };
+      case 'error': return { name: 'XCircle', color: 'text-destructive' };
+      case 'info': return { name: 'Info', color: 'text-info' };
       default: return { name: 'Bell', color: 'text-muted-foreground' };
     }
   };
@@ -189,10 +189,10 @@ const NotificationCenter = ({ onClose }: NotificationCenterProps) => {
                       <CardContent className="p-4">
                         <div className="flex gap-3">
                           <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
-                            notification.type === 'success' ? 'bg-green-500/20' :
-                            notification.type === 'warning' ? 'bg-yellow-500/20' :
-                            notification.type === 'error' ? 'bg-red-500/20' :
-                            'bg-blue-500/20'
+                            notification.type === 'success' ? 'bg-success/20' :
+                            notification.type === 'warning' ? 'bg-warning/20' :
+                            notification.type === 'error' ? 'bg-destructive/20' :
+                            'bg-info/20'
                           }`}>
                             <Icon name={icon.name as any} size={20} className={icon.color} />
                           </div>
@@ -250,7 +250,7 @@ const NotificationCenter = ({ onClose }: NotificationCenterProps) => {
               <CardContent className="space-y-3 pb-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <Icon name="Send" size={16} className="text-blue-500" />
+                    <Icon name="Send" size={16} className="text-info" />
                     <span className="text-sm">Telegram</span>
                   </div>
                   <Switch 
@@ -263,7 +263,7 @@ const NotificationCenter = ({ onClose }: NotificationCenterProps) => {
                 <Separator />
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <Icon name="MessageCircle" size={16} className="text-green-500" />
+                    <Icon name="MessageCircle" size={16} className="text-success" />
                     <span className="text-sm">WhatsApp</span>
                   </div>
                   <Switch 
@@ -276,7 +276,7 @@ const NotificationCenter = ({ onClose }: NotificationCenterProps) => {
                 <Separator />
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <Icon name="Mail" size={16} className="text-orange-500" />
+                    <Icon name="Mail" size={16} className="text-warning" />
                     <span className="text-sm">Email</span>
                   </div>
                   <Switch 

@@ -130,7 +130,7 @@ const UsersTable = ({ users, roles, modules, onToggleStatus, onDeleteUser }: Use
                         size="icon"
                         onClick={() => onDeleteUser(user.id)}
                       >
-                        <Icon name="Trash2" size={16} className="text-red-500" />
+                        <Icon name="Trash2" size={16} className="text-destructive" />
                       </Button>
                     </>
                   )}

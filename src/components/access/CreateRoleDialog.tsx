@@ -88,7 +88,7 @@ const CreateRoleDialog = ({ open, onOpenChange, newRole, setNewRole, modules }: 
           <Button 
             onClick={() => {
               onOpenChange(false);
-              setNewRole({ name: '', color: 'bg-blue-500', modules: [], permissions: [] });
+              setNewRole({ name: '', color: 'bg-info', modules: [], permissions: [] });
             }}
             className="w-full"
           >

@@ -156,7 +156,7 @@ const Index = () => {
             >
               <Icon name="Bell" size={20} />
               {unreadCount > 0 && (
-                <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center animate-scale-in">
+                <span className="absolute -top-1 -right-1 w-5 h-5 bg-destructive text-destructive-foreground text-xs rounded-full flex items-center justify-center animate-scale-in">
                   {unreadCount}
                 </span>
               )}
@@ -169,7 +169,7 @@ const Index = () => {
         <div className="mb-8">
           <h1 className="text-2xl font-display font-bold text-primary flex items-center gap-2">
             <Icon name="Zap" size={28} />
-            FinSync
+            Екомкасса ПРО
           </h1>
           <p className="text-sm text-sidebar-foreground/60 mt-1">Автоматизация платежей</p>
         </div>
@@ -228,7 +228,7 @@ const Index = () => {
                   <div className="text-3xl font-display font-bold text-foreground">
                     {stats.paymentsRevenue.toLocaleString('ru-RU', { style: 'currency', currency: 'RUB', minimumFractionDigits: 0 })}
                   </div>
-                  <p className="text-xs text-green-500 mt-1 flex items-center gap-1">
+                  <p className="text-xs text-success mt-1 flex items-center gap-1">
                     <Icon name="CheckCircle" size={14} />
                     {stats.successfulPayments} успешных
                   </p>
@@ -401,9 +401,9 @@ const Index = () => {
                           <div key={tx.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors">
                             <div className="flex items-center gap-3">
                               <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                                tx.status === 'success' ? 'bg-green-500/20' :
-                                tx.status === 'warning' ? 'bg-yellow-500/20' :
-                                'bg-blue-500/20'
+                                tx.status === 'success' ? 'bg-success/20' :
+                                tx.status === 'warning' ? 'bg-warning/20' :
+                                'bg-info/20'
                               }`}>
                                 <Icon
                                   name={
@@ -413,9 +413,9 @@ const Index = () => {
                                   }
                                   size={20}
                                   className={
-                                    tx.status === 'success' ? 'text-green-500' :
-                                    tx.status === 'warning' ? 'text-yellow-500' :
-                                    'text-blue-500'
+                                    tx.status === 'success' ? 'text-success' :
+                                    tx.status === 'warning' ? 'text-warning' :
+                                    'text-info'
                                   }
                                 />
                               </div>
@@ -424,7 +424,7 @@ const Index = () => {
                                 <p className="text-xs text-muted-foreground">{tx.time}</p>
                               </div>
                             </div>
-                            <div className={`text-right ${tx.amount > 0 ? 'text-green-500' : 'text-red-500'}`}>
+                            <div className={`text-right ${tx.amount > 0 ? 'text-success' : 'text-destructive'}`}>
                               <p className="text-lg font-bold">
                                 {tx.amount > 0 ? '+' : ''}{tx.amount.toLocaleString()} ₽
                               </p>

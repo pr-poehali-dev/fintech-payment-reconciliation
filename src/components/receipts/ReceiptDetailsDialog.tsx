@@ -60,21 +60,21 @@ const ReceiptDetailsDialog = ({ receipt, open, onOpenChange }: ReceiptDetailsDia
 
   const getOperationTypeBadge = (type: string) => {
     const typeMap: Record<string, string> = {
-      'Income': 'bg-green-100 text-green-800 border-green-200',
-      'Expense': 'bg-orange-100 text-orange-800 border-orange-200',
-      'RefundIncome': 'bg-red-100 text-red-800 border-red-200',
-      'RefundExpense': 'bg-purple-100 text-purple-800 border-purple-200'
+      'Income': 'bg-success/10 text-success border-success/30',
+      'Expense': 'bg-warning/10 text-warning border-warning/30',
+      'RefundIncome': 'bg-destructive/10 text-destructive border-destructive/30',
+      'RefundExpense': 'bg-accent/10 text-accent border-accent/30'
     };
-    const className = typeMap[type] || 'bg-gray-100 text-gray-800 border-gray-200';
+    const className = typeMap[type] || 'bg-muted text-muted-foreground border-border';
     return <Badge variant="outline" className={className}>{getOperationTypeLabel(type)}</Badge>;
   };
 
   const getReceiptTypeBadge = (rawData: any) => {
     const isCorrection = rawData?.IsCorrection || false;
     if (isCorrection) {
-      return <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">Чек коррекции</Badge>;
+      return <Badge variant="outline" className="bg-destructive/10 text-destructive border-destructive/30">Чек коррекции</Badge>;
     }
-    return <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">Чек</Badge>;
+    return <Badge variant="outline" className="bg-info/10 text-info border-info/30">Чек</Badge>;
   };
 
   const getCalculationMethodLabel = (rawData: any) => {
@@ -111,7 +111,7 @@ const ReceiptDetailsDialog = ({ receipt, open, onOpenChange }: ReceiptDetailsDia
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <div className="text-sm text-muted-foreground mb-1">Источник</div>
-                <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                <Badge variant="outline" className="bg-info/10 text-info border-info/30">
                   {receipt.source === 'ofd' ? 'ОФД' : 'Касса'}
                 </Badge>
               </div>
@@ -176,14 +176,14 @@ const ReceiptDetailsDialog = ({ receipt, open, onOpenChange }: ReceiptDetailsDia
 
               <div className="bg-muted/50 rounded-lg p-4">
                 <div className="text-sm text-muted-foreground mb-1">Наличные</div>
-                <div className="text-2xl font-bold text-green-600">
+                <div className="text-2xl font-bold text-success">
                   {formatAmount(receipt.cash_sum)}
                 </div>
               </div>
 
               <div className="bg-muted/50 rounded-lg p-4">
                 <div className="text-sm text-muted-foreground mb-1">Электронные</div>
-                <div className="text-2xl font-bold text-blue-600">
+                <div className="text-2xl font-bold text-info">
                   {formatAmount(receipt.ecash_sum)}
                 </div>
               </div>

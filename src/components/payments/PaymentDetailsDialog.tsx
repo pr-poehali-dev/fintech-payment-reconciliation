@@ -36,15 +36,15 @@ const PaymentDetailsDialog = ({ open, onOpenChange, payment }: PaymentDetailsDia
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'CONFIRMED':
-        return 'bg-green-500';
+        return 'bg-success';
       case 'AUTHORIZED':
-        return 'bg-blue-500';
+        return 'bg-info';
       case 'REJECTED':
-        return 'bg-red-500';
+        return 'bg-destructive';
       case 'REFUNDED':
-        return 'bg-orange-500';
+        return 'bg-warning';
       default:
-        return 'bg-gray-500';
+        return 'bg-muted-foreground';
     }
   };
 
@@ -119,7 +119,7 @@ const PaymentDetailsDialog = ({ open, onOpenChange, payment }: PaymentDetailsDia
               {payment.error_code && (
                 <div>
                   <p className="text-sm text-muted-foreground">Код ошибки</p>
-                  <p className="text-sm text-red-500">{payment.error_code}</p>
+                  <p className="text-sm text-destructive">{payment.error_code}</p>
                 </div>
               )}
             </div>

@@ -110,7 +110,7 @@ const WebhookTestPage = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 p-4">
+    <div className="min-h-screen bg-background p-4">
       <div className="max-w-4xl mx-auto py-8">
         <Button
           variant="ghost"
@@ -164,7 +164,7 @@ const WebhookTestPage = () => {
             </Button>
 
             {response && (
-              <Card className={response.status === 200 ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50'}>
+              <Card className={response.status === 200 ? 'border-success/30 bg-success/10' : 'border-destructive/30 bg-destructive/10'}>
                 <CardHeader>
                   <CardTitle className="text-lg">
                     Ответ: {response.status} {response.status === 200 ? '✅' : '❌'}

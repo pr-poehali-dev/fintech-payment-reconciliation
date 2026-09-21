@@ -398,10 +398,10 @@ const AddIntegrationDialog = ({ open, onOpenChange, provider, editingIntegration
 
         {step === 2 && (
           <div className="space-y-4">
-            <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg">
+            <div className="bg-success/10 p-4 rounded-lg">
               <div className="flex items-center gap-2 mb-2">
-                <Icon name="CheckCircle" className="text-green-600" size={20} />
-                <span className="font-semibold text-green-800 dark:text-green-200">
+                <Icon name="CheckCircle" className="text-success" size={20} />
+                <span className="font-semibold text-success">
                   Интеграция создана!
                 </span>
               </div>
@@ -417,14 +417,14 @@ const AddIntegrationDialog = ({ open, onOpenChange, provider, editingIntegration
               </div>
             </div>
 
-            <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg space-y-3">
+            <div className="bg-info/10 p-4 rounded-lg space-y-3">
               <div className="flex items-start gap-2">
-                <Icon name="Info" className="text-blue-600 mt-0.5" size={18} />
+                <Icon name="Info" className="text-info mt-0.5" size={18} />
                 <div className="text-sm">
-                  <p className="font-semibold text-blue-900 dark:text-blue-100 mb-2">
+                  <p className="font-semibold text-foreground mb-2">
                     Инструкция по настройке:
                   </p>
-                  <ol className="list-decimal list-inside space-y-1 text-blue-800 dark:text-blue-200">
+                  <ol className="list-decimal list-inside space-y-1 text-muted-foreground">
                     <li>Откройте личный кабинет Т-Банк Эквайринг</li>
                     <li>Перейдите в раздел: Настройки → Уведомления</li>
                     <li>Вставьте скопированный URL в поле "URL для уведомлений"</li>

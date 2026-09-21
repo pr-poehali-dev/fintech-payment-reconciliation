@@ -115,17 +115,17 @@ const PaymentsPage = () => {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'CONFIRMED':
-        return 'bg-green-500';
+        return 'bg-success';
       case 'AUTHORIZED':
-        return 'bg-blue-500';
+        return 'bg-info';
       case 'REJECTED':
-        return 'bg-red-500';
+        return 'bg-destructive';
       case 'REFUNDED':
-        return 'bg-orange-500';
+        return 'bg-warning';
       case 'CANCELED':
-        return 'bg-gray-500';
+        return 'bg-muted-foreground';
       default:
-        return 'bg-gray-400';
+        return 'bg-muted-foreground';
     }
   };
 

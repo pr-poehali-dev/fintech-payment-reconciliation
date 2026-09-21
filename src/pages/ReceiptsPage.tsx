@@ -95,9 +95,9 @@ const ReceiptsPage = () => {
   const getSourceBadge = (source: string) => {
     switch (source) {
       case 'ofd':
-        return <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">ОФД</Badge>;
+        return <Badge variant="outline" className="bg-info/10 text-info border-info/30">ОФД</Badge>;
       case 'cash_register':
-        return <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">Касса</Badge>;
+        return <Badge variant="outline" className="bg-success/10 text-success border-success/30">Касса</Badge>;
       default:
         return <Badge variant="outline">{source}</Badge>;
     }
@@ -105,22 +105,22 @@ const ReceiptsPage = () => {
 
   const getOperationTypeBadge = (type: string) => {
     const typeMap: Record<string, { label: string; className: string }> = {
-      'Income': { label: 'Приход', className: 'bg-green-100 text-green-800 border-green-200' },
-      'Expense': { label: 'Расход', className: 'bg-orange-100 text-orange-800 border-orange-200' },
-      'RefundIncome': { label: 'Возврат прихода', className: 'bg-red-100 text-red-800 border-red-200' },
-      'RefundExpense': { label: 'Возврат расхода', className: 'bg-purple-100 text-purple-800 border-purple-200' }
+      'Income': { label: 'Приход', className: 'bg-success/10 text-success border-success/30' },
+      'Expense': { label: 'Расход', className: 'bg-warning/10 text-warning border-warning/30' },
+      'RefundIncome': { label: 'Возврат прихода', className: 'bg-destructive/10 text-destructive border-destructive/30' },
+      'RefundExpense': { label: 'Возврат расхода', className: 'bg-accent/10 text-accent border-accent/30' }
     };
 
-    const config = typeMap[type] || { label: type, className: 'bg-gray-100 text-gray-800 border-gray-200' };
+    const config = typeMap[type] || { label: type, className: 'bg-muted text-muted-foreground border-border' };
     return <Badge variant="outline" className={config.className}>{config.label}</Badge>;
   };
 
   const getReceiptTypeBadge = (rawData: any) => {
     const isCorrection = rawData?.IsCorrection || false;
     if (isCorrection) {
-      return <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200">Чек коррекции</Badge>;
+      return <Badge variant="outline" className="bg-destructive/10 text-destructive border-destructive/30">Чек коррекции</Badge>;
     }
-    return <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">Чек</Badge>;
+    return <Badge variant="outline" className="bg-info/10 text-info border-info/30">Чек</Badge>;
   };
 
   const getCalculationMethodBadge = (rawData: any) => {
@@ -189,7 +189,7 @@ const ReceiptsPage = () => {
             <CardTitle className="text-sm font-medium text-muted-foreground">Приход</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-display font-bold text-green-600">{totalIncome}</div>
+            <div className="text-3xl font-display font-bold text-success">{totalIncome}</div>
           </CardContent>
         </Card>
 
@@ -198,7 +198,7 @@ const ReceiptsPage = () => {
             <CardTitle className="text-sm font-medium text-muted-foreground">Сумма прихода</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-display font-bold text-purple-600">
+            <div className="text-3xl font-display font-bold text-primary">
               {formatAmount(totalSum)}
             </div>
           </CardContent>

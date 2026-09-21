@@ -40,28 +40,28 @@ const initialRoles: Role[] = [
   {
     id: 'owner',
     name: 'Owner',
-    color: 'bg-purple-500',
+    color: 'bg-primary',
     modules: modules.map(m => m.id),
     permissions: ['full_access', 'manage_users', 'manage_roles', 'delete_data']
   },
   {
     id: 'admin',
     name: 'Администратор',
-    color: 'bg-blue-500',
+    color: 'bg-info',
     modules: ['dashboard', 'payments', 'receipts', 'reconciliation', 'integrations', 'access'],
     permissions: ['view_all', 'edit_all', 'manage_users']
   },
   {
     id: 'accountant',
     name: 'Бухгалтер',
-    color: 'bg-green-500',
+    color: 'bg-success',
     modules: ['dashboard', 'payments', 'receipts', 'reconciliation'],
     permissions: ['view_all', 'edit_payments', 'export_data']
   },
   {
     id: 'operator',
     name: 'Оператор',
-    color: 'bg-orange-500',
+    color: 'bg-warning',
     modules: ['dashboard', 'payments', 'receipts'],
     permissions: ['view_own', 'edit_own']
   }
@@ -129,7 +129,7 @@ const AccessManagement = () => {
 
   const [newRole, setNewRole] = useState({
     name: '',
-    color: 'bg-blue-500',
+    color: 'bg-info',
     modules: [] as string[],
     permissions: [] as string[]
   });
@@ -145,7 +145,7 @@ const AccessManagement = () => {
       };
       
       const token = Math.random().toString(36).substring(2, 15);
-      const link = `https://finsync.app/invite/${token}`;
+      const link = `https://ecomkassa.pro/invite/${token}`;
       
       try {
         const response = await fetch(functionUrls['send-message'], {
@@ -156,7 +156,7 @@ const AccessManagement = () => {
           body: JSON.stringify({
             provider: providerMap[newUser.messenger],
             recipient: newUser.phone.replace(/\D/g, ''),
-            message: `Привет, ${newUser.fullName}! Вас пригласили в FinSync.\n\nВаша ссылка для регистрации: ${link}\n\nРоль: ${roles.find(r => r.id === newUser.role)?.name}`
+            message: `Привет, ${newUser.fullName}! Вас пригласили в Екомкасса ПРО.\n\nВаша ссылка для регистрации: ${link}\n\nРоль: ${roles.find(r => r.id === newUser.role)?.name}`
           })
         });
         

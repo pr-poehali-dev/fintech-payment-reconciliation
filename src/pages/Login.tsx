@@ -25,9 +25,9 @@ const Login = () => {
   const BLOCK_DURATION = 300;
 
   const messengers = [
-    { id: 'whatsapp' as MessengerType, icon: 'MessageCircle', label: 'WhatsApp', color: 'hover:bg-green-500/10' },
-    { id: 'telegram' as MessengerType, icon: 'Send', label: 'Telegram', color: 'hover:bg-blue-500/10' },
-    { id: 'max' as MessengerType, icon: 'Mail', label: 'Max', color: 'hover:bg-purple-500/10' }
+    { id: 'whatsapp' as MessengerType, icon: 'MessageCircle', label: 'WhatsApp', color: 'hover:bg-success/10' },
+    { id: 'telegram' as MessengerType, icon: 'Send', label: 'Telegram', color: 'hover:bg-info/10' },
+    { id: 'max' as MessengerType, icon: 'Mail', label: 'Max', color: 'hover:bg-accent/10' }
   ];
 
   const handleSendCode = async () => {
@@ -52,7 +52,7 @@ const Login = () => {
           body: JSON.stringify({
             provider: providerMap[selectedMessenger],
             recipient: phone.replace(/\D/g, ''),
-            message: `Ваш код для входа в FinSync: ${generatedCode}`
+            message: `Ваш код для входа в Екомкасса ПРО: ${generatedCode}`
           })
         });
         
@@ -162,12 +162,12 @@ const Login = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-background flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         <div className="mb-8 text-center animate-fade-in">
           <div className="flex items-center justify-center gap-2 mb-2">
             <Icon name="Zap" size={32} className="text-primary" />
-            <h1 className="text-3xl font-display font-bold text-foreground">FinSync</h1>
+            <h1 className="text-3xl font-display font-bold text-foreground">Екомкасса ПРО</h1>
           </div>
           <p className="text-sm text-muted-foreground">Автоматизация платежей</p>
         </div>
@@ -193,8 +193,8 @@ const Login = () => {
                 <div className="space-y-4">
                   <div className="relative">
                     <div className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center gap-2 pointer-events-none">
-                      <div className="w-6 h-6 rounded-full overflow-hidden flex items-center justify-center bg-red-500">
-                        <span className="text-white text-xs font-bold">🇷🇺</span>
+                      <div className="w-6 h-6 rounded-full overflow-hidden flex items-center justify-center bg-muted">
+                        <span className="text-xs font-bold">🇷🇺</span>
                       </div>
                     </div>
                     <Input
@@ -244,7 +244,7 @@ const Login = () => {
                 <Button 
                   onClick={handleSendCode}
                   disabled={phone.replace(/\D/g, '').length < 11 || !selectedMessenger || isLoading}
-                  className="w-full h-14 text-lg font-semibold bg-gradient-to-r from-primary to-blue-600 hover:from-primary/90 hover:to-blue-600/90 transition-all"
+                  className="w-full h-14 text-lg font-semibold bg-primary hover:bg-primary/90 text-primary-foreground transition-all"
                 >
                   {isLoading ? (
                     <>
@@ -296,7 +296,7 @@ const Login = () => {
                 <Button 
                   onClick={handleVerifyCode}
                   disabled={code.length !== 6}
-                  className="w-full h-14 text-lg font-semibold bg-gradient-to-r from-primary to-blue-600 hover:from-primary/90 hover:to-blue-600/90 transition-all"
+                  className="w-full h-14 text-lg font-semibold bg-primary hover:bg-primary/90 text-primary-foreground transition-all"
                 >
                   Подтвердить
                 </Button>
@@ -319,8 +319,8 @@ const Login = () => {
               <>
                 <div className="space-y-6">
                   <div className="flex justify-center">
-                    <div className="w-20 h-20 rounded-full bg-red-500/20 flex items-center justify-center">
-                      <Icon name="Ban" size={48} className="text-red-500" />
+                    <div className="w-20 h-20 rounded-full bg-destructive/20 flex items-center justify-center">
+                      <Icon name="Ban" size={48} className="text-destructive" />
                     </div>
                   </div>
                   
@@ -333,7 +333,7 @@ const Login = () => {
                       <br />
                       Попробуйте снова через:
                     </p>
-                    <div className="text-4xl font-display font-bold text-red-500 mt-4">
+                    <div className="text-4xl font-display font-bold text-destructive mt-4">
                       {Math.floor(blockTime / 60)}:{String(blockTime % 60).padStart(2, '0')}
                     </div>
                   </div>
