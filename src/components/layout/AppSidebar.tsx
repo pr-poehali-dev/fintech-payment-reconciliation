@@ -114,7 +114,7 @@ const AppSidebar = ({ activeModule, onModuleChange }: AppSidebarProps) => {
       <div className="mb-6">
         <h1 className="text-2xl font-display font-bold text-primary flex items-center gap-2">
           <Icon name="Zap" size={28} />
-          Екомкасса ПРО
+          Сверка
         </h1>
         <p className="text-sm text-sidebar-foreground/60 mt-1">Платформа сверки 54-ФЗ</p>
       </div>

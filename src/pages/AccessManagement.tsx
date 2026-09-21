@@ -144,7 +144,7 @@ const AccessManagement = () => {
         body: JSON.stringify({
           provider: providerMap[newUser.messenger],
           recipient: newUser.phone.replace(/\D/g, ''),
-          message: `Привет, ${newUser.fullName}! Вас пригласили в Екомкасса ПРО (${currentCompany?.name}).\n\nВойдите по вашему номеру телефона: ${link}\n\nРоль: ${roles.find(r => r.slug === newUser.role)?.name}`
+          message: `Привет, ${newUser.fullName}! Вас пригласили в Сверка (${currentCompany?.name}).\n\nВойдите по вашему номеру телефона: ${link}\n\nРоль: ${roles.find(r => r.slug === newUser.role)?.name}`
         })
       });
 

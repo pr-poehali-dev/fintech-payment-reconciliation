@@ -105,7 +105,7 @@ const CreateCompany = () => {
         <div className="mb-8 text-center animate-fade-in">
           <a href="/" className="flex items-center justify-center gap-2 mb-2">
             <Icon name="Zap" size={32} className="text-primary" />
-            <h1 className="text-3xl font-display font-bold text-foreground">Екомкасса ПРО</h1>
+            <h1 className="text-3xl font-display font-bold text-foreground">Сверка</h1>
           </a>
           <p className="text-sm text-muted-foreground">Добавьте свою первую компанию</p>
         </div>

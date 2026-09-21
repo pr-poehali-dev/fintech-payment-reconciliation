@@ -18,7 +18,7 @@ const LandingHeader = ({ onCtaClick }: { onCtaClick: () => void }) => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
         <a href="/" className="flex items-center gap-2 shrink-0">
           <Icon name="Zap" size={24} className="text-primary" />
-          <span className="text-lg font-display font-bold text-foreground">Екомкасса ПРО</span>
+          <span className="text-lg font-display font-bold text-foreground">Сверка</span>
         </a>
 
         <nav className="hidden md:flex items-center">
