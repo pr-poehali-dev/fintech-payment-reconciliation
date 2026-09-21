@@ -92,7 +92,7 @@ const Login = () => {
         setIsLoading(true);
         try {
           await loginWithPhone(phone);
-          window.location.href = '/';
+          window.location.href = '/app';
         } catch (error: any) {
           toast({
             title: 'Ошибка входа',
@@ -179,10 +179,10 @@ const Login = () => {
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         <div className="mb-8 text-center animate-fade-in">
-          <div className="flex items-center justify-center gap-2 mb-2">
+          <a href="/" className="flex items-center justify-center gap-2 mb-2">
             <Icon name="Zap" size={32} className="text-primary" />
             <h1 className="text-3xl font-display font-bold text-foreground">Екомкасса ПРО</h1>
-          </div>
+          </a>
           <p className="text-sm text-muted-foreground">Автоматизация платежей</p>
         </div>
 

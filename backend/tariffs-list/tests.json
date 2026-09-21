@@ -1,0 +1,14 @@
+{
+  "tests": [
+    {
+      "name": "Get active tariffs",
+      "method": "GET",
+      "path": "/",
+      "expectedStatus": 200,
+      "expectedBody": {
+        "success": true
+      },
+      "bodyMatcher": "partial"
+    }
+  ]
+}
