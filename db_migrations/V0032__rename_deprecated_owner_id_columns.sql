@@ -1,0 +1,3 @@
+ALTER TABLE t_p83864310_fintech_payment_reco.user_integrations RENAME COLUMN owner_id TO legacy_owner_id_unused;
+ALTER TABLE t_p83864310_fintech_payment_reco.webhook_payments RENAME COLUMN owner_id TO legacy_owner_id_unused;
+ALTER TABLE t_p83864310_fintech_payment_reco.ofd_receipts RENAME COLUMN owner_id TO legacy_owner_id_unused;

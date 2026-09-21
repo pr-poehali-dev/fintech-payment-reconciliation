@@ -6,7 +6,7 @@ from typing import Dict, Any
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     '''
     Получение логов переадресации вебхуков
-    GET /webhook-logs?owner_id=123&integration_id=456&limit=50
+    GET /webhook-logs?company_id=123&integration_id=456&limit=50
     '''
     method: str = event.get('httpMethod', 'GET')
     
@@ -32,7 +32,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         }
     
     params = event.get('queryStringParameters', {}) or {}
-    company_id = params.get('company_id') or params.get('owner_id')
+    company_id = params.get('company_id')
     integration_id = params.get('integration_id')
     limit = int(params.get('limit', '100'))
     

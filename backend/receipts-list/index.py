@@ -7,7 +7,7 @@ from decimal import Decimal
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     '''
     Получение списка чеков из всех источников (касса + ОФД)
-    Args: owner_id, limit (опционально), offset (опционально)
+    Args: company_id, limit (опционально), offset (опционально)
     Returns: список чеков с меткой источника
     '''
     
@@ -35,7 +35,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         }
     
     params = event.get('queryStringParameters', {}) or {}
-    company_id = params.get('company_id') or params.get('owner_id')
+    company_id = params.get('company_id')
     limit = int(params.get('limit', 100))
     offset = int(params.get('offset', 0))
     source_filter = params.get('source')

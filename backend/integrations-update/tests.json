@@ -6,7 +6,7 @@
       "path": "/",
       "body": {
         "integration_id": 1,
-        "owner_id": 1,
+        "company_id": 1,
         "integration_name": "Updated name",
         "config": {
           "terminal_id": "123",

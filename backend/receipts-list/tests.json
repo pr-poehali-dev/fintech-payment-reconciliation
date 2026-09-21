@@ -1,18 +1,18 @@
 {
   "tests": [
     {
-      "name": "Missing owner_id",
+      "name": "Missing company_id",
       "method": "GET",
       "path": "/",
       "expectedStatus": 400,
       "expectedBody": {
-        "error": "owner_id required"
+        "error": "company_id required"
       }
     },
     {
-      "name": "Get receipts with owner_id",
+      "name": "Get receipts with company_id",
       "method": "GET",
-      "path": "/?owner_id=1&limit=10&offset=0",
+      "path": "/?company_id=1&limit=10&offset=0",
       "expectedStatus": 200,
       "expectedBody": {
         "success": true

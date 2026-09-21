@@ -5,7 +5,7 @@ from typing import Dict, Any
 
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     '''
-    Получение списка всех интеграций owner с группировкой по категориям
+    Получение списка всех интеграций компании с группировкой по категориям
     '''
     
     method = event.get('httpMethod', 'GET')
@@ -32,7 +32,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         }
     
     params = event.get('queryStringParameters', {}) or {}
-    company_id = params.get('company_id') or params.get('owner_id')
+    company_id = params.get('company_id')
     
     if not company_id:
         return {

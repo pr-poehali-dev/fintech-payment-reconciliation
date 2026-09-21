@@ -38,7 +38,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         body = {}
     
     integration_id = body.get('integration_id')
-    company_id = body.get('company_id') or body.get('owner_id')
+    company_id = body.get('company_id')
     
     if not integration_id or not company_id:
         return {

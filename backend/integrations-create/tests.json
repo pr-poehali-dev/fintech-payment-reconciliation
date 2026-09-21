@@ -4,7 +4,7 @@
       "name": "Create Tbank integration",
       "method": "POST",
       "body": {
-        "owner_id": 1,
+        "company_id": 1,
         "provider_slug": "tbank",
         "integration_name": "Терминал №1",
         "config": {
@@ -19,7 +19,7 @@
       "bodyMatcher": "partial"
     },
     {
-      "name": "Missing owner_id",
+      "name": "Missing company_id",
       "method": "POST",
       "body": {
         "provider_slug": "tbank"

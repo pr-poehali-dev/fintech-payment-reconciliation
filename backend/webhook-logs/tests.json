@@ -3,7 +3,7 @@
     {
       "name": "Get webhook logs",
       "method": "GET",
-      "path": "/?owner_id=1&limit=10",
+      "path": "/?company_id=1&limit=10",
       "expectedStatus": 200,
       "expectedBody": {
         "logs": "array"
@@ -11,12 +11,12 @@
       "bodyMatcher": "partial"
     },
     {
-      "name": "Missing owner_id",
+      "name": "Missing company_id",
       "method": "GET",
       "path": "/",
       "expectedStatus": 400,
       "expectedBody": {
-        "error": "owner_id required"
+        "error": "company_id required"
       }
     }
   ]

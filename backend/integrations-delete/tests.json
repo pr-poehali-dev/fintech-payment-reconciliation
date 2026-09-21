@@ -6,7 +6,7 @@
       "path": "/",
       "body": {
         "integration_id": 99999,
-        "owner_id": 1
+        "company_id": 1
       },
       "expectedStatus": 404,
       "expectedBody": {

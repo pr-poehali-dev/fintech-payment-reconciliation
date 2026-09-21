@@ -3,7 +3,7 @@
     {
       "name": "Get dashboard stats",
       "method": "GET",
-      "path": "/?owner_id=1",
+      "path": "/?company_id=1",
       "expectedStatus": 200,
       "expectedBody": {
         "success": true,

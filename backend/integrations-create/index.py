@@ -6,7 +6,7 @@ from typing import Dict, Any
 
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     '''
-    Создание новой интеграции для owner
+    Создание новой интеграции для компании
     Генерирует уникальный webhook_token и возвращает URL для настройки
     '''
     
@@ -34,7 +34,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         }
     
     body = json.loads(event.get('body', '{}'))
-    company_id = body.get('company_id') or body.get('owner_id')
+    company_id = body.get('company_id')
     provider_slug = body.get('provider_slug')
     integration_name = body.get('integration_name', '')
     config = body.get('config', {})
@@ -79,11 +79,10 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         
         cur.execute('''
             INSERT INTO user_integrations 
-            (owner_id, company_id, provider_id, integration_name, webhook_token, config, webhook_settings, forward_url, status)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'active')
+            (company_id, provider_id, integration_name, webhook_token, config, webhook_settings, forward_url, status)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, 'active')
             RETURNING id, webhook_token
         ''', (
-            company_id,
             company_id,
             provider_id, 
             integration_name, 

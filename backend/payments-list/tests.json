@@ -3,12 +3,12 @@
     {
       "name": "Get payments list",
       "method": "GET",
-      "path": "/?owner_id=1",
+      "path": "/?company_id=1",
       "expectedStatus": 200,
       "bodyMatcher": "partial"
     },
     {
-      "name": "Missing owner_id",
+      "name": "Missing company_id",
       "method": "GET",
       "path": "/",
       "expectedStatus": 400,

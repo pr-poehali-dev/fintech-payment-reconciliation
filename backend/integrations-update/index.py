@@ -38,7 +38,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         body = {}
     
     integration_id = body.get('integration_id')
-    company_id = body.get('company_id') or body.get('owner_id')
+    company_id = body.get('company_id')
     integration_name = body.get('integration_name')
     config = body.get('config', {})
     webhook_settings = body.get('webhook_settings', {})
