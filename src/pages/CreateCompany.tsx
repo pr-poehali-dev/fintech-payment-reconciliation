@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -98,6 +98,13 @@ const CreateCompany = () => {
     setFoundCompany(null);
     setSearchError(null);
   };
+
+  useEffect(() => {
+    if (isValidInn(inn)) {
+      handleSearch();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inn]);
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
