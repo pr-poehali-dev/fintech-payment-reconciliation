@@ -19,9 +19,24 @@
       "path": "/",
       "body": {
         "user_id": 999999,
-        "name": "ООО Ромашка"
+        "name": "ООО Ромашка",
+        "inn": "7707083893"
       },
       "expectedStatus": 404,
+      "expectedBody": {
+        "error": "string"
+      },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Create company without INN",
+      "method": "POST",
+      "path": "/",
+      "body": {
+        "user_id": 999999,
+        "name": "ООО Ромашка"
+      },
+      "expectedStatus": 400,
       "expectedBody": {
         "error": "string"
       },

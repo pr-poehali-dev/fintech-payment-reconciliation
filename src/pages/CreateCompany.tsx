@@ -8,25 +8,63 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import functionUrls from '../../backend/func2url.json';
 
+interface CompanyLookupData {
+  inn: string;
+  kpp: string | null;
+  ogrn: string;
+  full_name: string;
+  short_name: string;
+  address: string;
+}
+
 const CreateCompany = () => {
   const { user, refreshCompanies, setCurrentCompanyId, logout } = useAuth();
   const { toast } = useToast();
-  const [name, setName] = useState('');
   const [inn, setInn] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
+  const [isSearching, setIsSearching] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
+  const [foundCompany, setFoundCompany] = useState<CompanyLookupData | null>(null);
+  const [searchError, setSearchError] = useState<string | null>(null);
+
+  const handleSearch = async () => {
+    if (!inn || inn.length < 10) return;
+
+    setIsSearching(true);
+    setSearchError(null);
+    setFoundCompany(null);
+
+    try {
+      const response = await fetch(`${functionUrls['company-lookup-by-inn']}?inn=${inn}`);
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        setFoundCompany(data.company_data);
+      } else {
+        setSearchError(data.error || 'Не удалось найти компанию по этому ИНН');
+      }
+    } catch (error) {
+      setSearchError('Проверьте интернет-соединение и попробуйте снова');
+    } finally {
+      setIsSearching(false);
+    }
+  };
 
   const handleCreate = async () => {
-    if (!user || !name.trim()) return;
+    if (!user || !foundCompany) return;
 
-    setIsLoading(true);
+    setIsCreating(true);
     try {
       const response = await fetch(functionUrls['companies-create'], {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           user_id: user.user_id,
-          name: name.trim(),
-          inn: inn.trim() || null
+          name: foundCompany.short_name,
+          inn: foundCompany.inn,
+          kpp: foundCompany.kpp,
+          ogrn: foundCompany.ogrn,
+          full_name: foundCompany.full_name,
+          legal_address: foundCompany.address
         })
       });
 
@@ -35,7 +73,7 @@ const CreateCompany = () => {
       if (response.ok && data.success) {
         await refreshCompanies();
         setCurrentCompanyId(data.company_id);
-        toast({ title: 'Компания создана', description: name });
+        toast({ title: 'Компания создана', description: data.name });
       } else {
         toast({
           title: 'Ошибка',
@@ -50,18 +88,25 @@ const CreateCompany = () => {
         variant: 'destructive'
       });
     } finally {
-      setIsLoading(false);
+      setIsCreating(false);
     }
+  };
+
+  const handleInnChange = (value: string) => {
+    const digits = value.replace(/\D/g, '');
+    setInn(digits);
+    setFoundCompany(null);
+    setSearchError(null);
   };
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         <div className="mb-8 text-center animate-fade-in">
-          <div className="flex items-center justify-center gap-2 mb-2">
+          <a href="/" className="flex items-center justify-center gap-2 mb-2">
             <Icon name="Zap" size={32} className="text-primary" />
             <h1 className="text-3xl font-display font-bold text-foreground">Екомкасса ПРО</h1>
-          </div>
+          </a>
           <p className="text-sm text-muted-foreground">Добавьте свою первую компанию</p>
         </div>
 
@@ -69,40 +114,60 @@ const CreateCompany = () => {
           <CardHeader className="text-center pb-4">
             <CardTitle className="text-2xl font-display">Создание компании</CardTitle>
             <CardDescription className="text-base">
-              По этой компании будем выполнять сверку платежей и чеков
+              Введите ИНН — мы найдём компанию автоматически
             </CardDescription>
           </CardHeader>
 
           <CardContent className="space-y-6">
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label>Название компании</Label>
-                <Input
-                  placeholder="ООО «Ромашка»"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className="h-12"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label>ИНН (опционально)</Label>
+            <div className="space-y-2">
+              <Label>ИНН компании</Label>
+              <div className="flex gap-2">
                 <Input
                   placeholder="7712345678"
                   value={inn}
-                  onChange={(e) => setInn(e.target.value.replace(/\D/g, ''))}
+                  onChange={(e) => handleInnChange(e.target.value)}
                   maxLength={12}
                   className="h-12"
                 />
+                <Button
+                  onClick={handleSearch}
+                  disabled={inn.length < 10 || isSearching}
+                  variant="secondary"
+                  className="h-12 px-4 shrink-0"
+                >
+                  {isSearching ? (
+                    <Icon name="Loader2" size={18} className="animate-spin" />
+                  ) : (
+                    <Icon name="Search" size={18} />
+                  )}
+                </Button>
               </div>
+              <p className="text-xs text-muted-foreground">10 цифр для юрлица, 12 для ИП</p>
             </div>
+
+            {searchError && (
+              <div className="flex items-start gap-2 p-3 rounded-lg bg-destructive/10 border border-destructive/20">
+                <Icon name="AlertCircle" size={18} className="text-destructive shrink-0 mt-0.5" />
+                <p className="text-sm text-destructive">{searchError}</p>
+              </div>
+            )}
+
+            {foundCompany && (
+              <div className="flex items-start gap-3 p-4 rounded-lg bg-primary/10 border border-primary/20 animate-fade-in">
+                <Icon name="CheckCircle2" size={20} className="text-primary shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">Найдена компания</p>
+                  <p className="font-semibold text-foreground">{foundCompany.short_name}</p>
+                </div>
+              </div>
+            )}
 
             <Button
               onClick={handleCreate}
-              disabled={!name.trim() || isLoading}
+              disabled={!foundCompany || isCreating}
               className="w-full h-12 text-base font-semibold"
             >
-              {isLoading ? (
+              {isCreating ? (
                 <>
                   <Icon name="Loader2" size={18} className="mr-2 animate-spin" />
                   Создание...

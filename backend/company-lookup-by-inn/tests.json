@@ -1,0 +1,44 @@
+{
+  "tests": [
+    {
+      "name": "Missing INN param",
+      "method": "GET",
+      "path": "/",
+      "expectedStatus": 400,
+      "expectedBody": {
+        "error": "string"
+      },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Invalid INN format",
+      "method": "GET",
+      "path": "/?inn=123",
+      "expectedStatus": 400,
+      "expectedBody": {
+        "error": "string"
+      },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Lookup real company by INN",
+      "method": "GET",
+      "path": "/?inn=7707083893",
+      "expectedStatus": 200,
+      "expectedBody": {
+        "success": true
+      },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Lookup non-existent INN",
+      "method": "GET",
+      "path": "/?inn=1234567890",
+      "expectedStatus": 404,
+      "expectedBody": {
+        "error": "string"
+      },
+      "bodyMatcher": "partial"
+    }
+  ]
+}
