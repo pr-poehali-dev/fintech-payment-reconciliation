@@ -1,0 +1,102 @@
+export interface Provider {
+  id: number;
+  name: string;
+  slug: string;
+  logo_url: string;
+  description: string;
+}
+
+export interface Category {
+  id: number;
+  name: string;
+  slug: string;
+  icon: string;
+  description?: string;
+  providers: Provider[];
+}
+
+export type ConfigValue = string | number | boolean;
+export type ConfigState = Record<string, ConfigValue>;
+
+export interface UserIntegration {
+  id: number;
+  integration_name: string;
+  provider_id: number;
+  config: ConfigState;
+  webhook_settings: Record<string, boolean>;
+  forward_url?: string;
+}
+
+export type FieldType = 'text' | 'password' | 'number' | 'checkbox';
+
+export interface FieldConfig {
+  key: string;
+  label: string;
+  type: FieldType;
+  placeholder?: string;
+  hint?: string;
+  default?: ConfigValue;
+  required?: boolean;
+}
+
+export const DEFAULT_WEBHOOK_SETTINGS: Record<string, boolean> = {
+  notify_on_authorized: true,
+  notify_on_confirmed: true,
+  notify_on_rejected: true,
+  notify_on_refunded: true,
+  notify_on_canceled: true
+};
+
+export const TBANK_NOTIFY_OPTIONS = [
+  { key: 'notify_on_authorized', label: 'Авторизован (AUTHORIZED)' },
+  { key: 'notify_on_confirmed', label: 'Подтверждён (CONFIRMED)' },
+  { key: 'notify_on_rejected', label: 'Отклонён (REJECTED)' },
+  { key: 'notify_on_refunded', label: 'Возврат (REFUNDED)' },
+  { key: 'notify_on_canceled', label: 'Отменён (CANCELED)' }
+];
+
+const BANK_ACCOUNT_FIELDS: FieldConfig[] = [
+  { key: 'account_number', label: 'Номер расчётного счёта', type: 'text', placeholder: '40702810000000000000' },
+  { key: 'inn', label: 'ИНН организации', type: 'text', placeholder: '1234567890' },
+  { key: 'api_token', label: 'Токен API банка', type: 'password', hint: 'Получите в личном кабинете банка в разделе API/интеграции' }
+];
+
+export const PROVIDER_FIELDS: Record<string, FieldConfig[]> = {
+  tbank: [
+    { key: 'terminal_id', label: 'Terminal ID', type: 'text', placeholder: '1234567890', hint: 'Найдите в ЛК Т-Банк → Настройки → Терминалы' },
+    { key: 'terminal_password', label: 'Terminal Password', type: 'password', placeholder: '•••••••••' }
+  ],
+  ofdru: [
+    { key: 'api_url', label: 'API сервер', type: 'text', placeholder: 'https://ofd.ru', default: 'https://ofd.ru', hint: 'Используйте https://demo.ofd.ru для тестирования' },
+    { key: 'inn', label: 'ИНН организации', type: 'text', placeholder: '1234567890', hint: 'ИНН юридического лица (10 или 12 цифр)' },
+    { key: 'kkt', label: 'Регистрационный номер ККТ', type: 'text', placeholder: '0000111122223333', hint: 'Номер контрольно-кассовой техники' },
+    { key: 'auth_token', label: 'Токен API', type: 'password', hint: 'Получите в ЛК OFD.RU → Настройки → Управление передачей данных → Ключи доступа API OFD' }
+  ],
+  bitrix24: [
+    { key: 'webhook_url', label: 'Входящий вебхук Битрикс24', type: 'text', placeholder: 'https://yourcompany.bitrix24.ru/rest/1/xxxxxxxxxx/', hint: 'Битрикс24 → Разработчикам → Другое → Входящий вебхук. Права: crm' },
+    { key: 'sync_schedule', label: 'Обмен по расписанию', type: 'checkbox', default: true, required: false, hint: 'Клиенты и статусы синхронизируются сами, без кнопки' },
+    { key: 'sync_interval_minutes', label: 'Как часто, минут', type: 'number', placeholder: '60', default: 60, required: false, hint: 'Реже — меньше нагрузки на Битрикс' }
+  ],
+  amocrm: [
+    { key: 'subdomain', label: 'Поддомен AmoCRM', type: 'text', placeholder: 'yourcompany', hint: 'Из адреса вида yourcompany.amocrm.ru' },
+    { key: 'api_key', label: 'Долгосрочный токен доступа', type: 'password', hint: 'AmoCRM → Настройки → Интеграции → Создать интеграцию' }
+  ],
+  tbank_account: BANK_ACCOUNT_FIELDS,
+  tochka_account: BANK_ACCOUNT_FIELDS,
+  modulbank_account: BANK_ACCOUNT_FIELDS
+};
+
+// Провайдеры, для которых наш сервис принимает входящие вебхуки.
+// Только для них имеет смысл показывать URL для вебхука и переадресацию.
+const PROVIDERS_WITH_INCOMING_WEBHOOK = ['tbank'];
+
+export const buildDefaultConfig = (slug: string): ConfigState => {
+  const fields = PROVIDER_FIELDS[slug] || [];
+  const config: ConfigState = {};
+  fields.forEach((field) => {
+    config[field.key] = field.default ?? (field.type === 'checkbox' ? false : '');
+  });
+  return config;
+};
+
+export const acceptsIncomingWebhook = (slug?: string) => !!slug && PROVIDERS_WITH_INCOMING_WEBHOOK.includes(slug);
