@@ -125,6 +125,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
         # Шаг 2: событие передаётся в обработчик именно своего провайдера.
         webhook_payment_id = None
+        external_deal_id = None
         handler_error = None
 
         if provider_slug == 'tbank':
@@ -141,9 +142,16 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     'isBase64Encoded': False
                 }
         elif provider_slug == 'bitrix24':
-            _, handler_error = bitrix24_handler.process(cur, integration_id, company_id, config, webhook_data)
+            _, external_deal_id, handler_error = bitrix24_handler.process(cur, integration_id, company_id, config, webhook_data)
         elif provider_slug == 'amocrm':
-            _, handler_error = amocrm_handler.process(cur, integration_id, company_id, config, webhook_data)
+            _, external_deal_id, handler_error = amocrm_handler.process(cur, integration_id, company_id, config, webhook_data)
+
+        if external_deal_id:
+            cur.execute('''
+                UPDATE t_p83864310_fintech_payment_reco.webhook_events
+                SET external_deal_id = %s
+                WHERE id = %s
+            ''', (external_deal_id, event_id))
 
         mark_processed(cur, event_id, 'failed' if handler_error else 'processed', handler_error)
 

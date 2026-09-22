@@ -50,23 +50,26 @@ def fetch_deal_details(webhook_url: str, deal_id: str) -> Optional[Dict[str, Any
 
 
 def process(cur, integration_id: int, company_id: int, config: Dict[str, Any],
-            webhook_data: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
+            webhook_data: Dict[str, Any]) -> Tuple[bool, Optional[str], Optional[str]]:
     '''
     Обрабатывает событие Битрикс24: достаёт ID сделки из вебхука, ходит в crm.deal.get
-    за полными данными, сохраняет/обновляет сделку в crm_deals.
+    за полными данными, сохраняет/обновляет сделку в crm_deals (webhook_count растёт
+    при каждом повторном хуке по той же сделке - так лента событий может группировать
+    повторы вместо создания дублей).
+    Returns: (success, deal_id, error)
     '''
     webhook_url = config.get('webhook_url', '')
     if not webhook_url:
-        return False, 'webhook_url not configured'
+        return False, None, 'webhook_url not configured'
 
     deal_id = _extract_deal_id(webhook_data)
 
     if not deal_id:
-        return False, 'Deal ID not found in webhook payload'
+        return False, None, 'Deal ID not found in webhook payload'
 
     deal = fetch_deal_details(webhook_url, deal_id)
     if not deal:
-        return False, f'Failed to fetch deal {deal_id} from Bitrix24 API'
+        return False, str(deal_id), f'Failed to fetch deal {deal_id} from Bitrix24 API'
 
     stage_id = deal.get('STAGE_ID', '')
     stage_name = STAGE_MAP.get(stage_id, stage_id)
@@ -74,14 +77,15 @@ def process(cur, integration_id: int, company_id: int, config: Dict[str, Any],
     cur.execute('''
         INSERT INTO t_p83864310_fintech_payment_reco.crm_deals (
             integration_id, company_id, provider_slug, external_deal_id,
-            title, stage, amount, currency, raw_data, updated_at
-        ) VALUES (%s, %s, 'bitrix24', %s, %s, %s, %s, %s, %s, NOW())
+            title, stage, amount, currency, raw_data, webhook_count, updated_at
+        ) VALUES (%s, %s, 'bitrix24', %s, %s, %s, %s, %s, %s, 1, NOW())
         ON CONFLICT (integration_id, external_deal_id) DO UPDATE SET
             title = EXCLUDED.title,
             stage = EXCLUDED.stage,
             amount = EXCLUDED.amount,
             currency = EXCLUDED.currency,
             raw_data = EXCLUDED.raw_data,
+            webhook_count = t_p83864310_fintech_payment_reco.crm_deals.webhook_count + 1,
             updated_at = NOW()
     ''', (
         integration_id,
@@ -94,4 +98,4 @@ def process(cur, integration_id: int, company_id: int, config: Dict[str, Any],
         json.dumps(deal)
     ))
 
-    return True, None
+    return True, str(deal_id), None

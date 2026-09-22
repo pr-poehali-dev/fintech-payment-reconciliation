@@ -19,10 +19,11 @@ PROVIDER_TYPE_LABELS = {
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     '''
     Единая лента событий компании: платежи эквайринга (webhook_payments),
-    события CRM из inbox-таблицы webhook_events и операции по расчётному
-    счёту (второй слой обработки, приходит не вебхуком, а дозагрузкой).
-    Для каждого события отдаётся человекочитаемый номер (ID платежа/сделки/
-    операции) и краткое summary для отображения в таблице без раскрытия деталей.
+    сделки CRM (crm_deals - одна строка на сделку, повторные хуки схлопываются
+    через webhook_count), ошибки обработки хуков CRM (сгруппированы по сделке)
+    и операции по расчётному счёту (второй слой обработки, приходит не вебхуком,
+    а дозагрузкой). Для каждого события отдаётся человекочитаемый номер
+    (ID платежа/сделки/операции) и краткое summary для отображения в таблице.
     Args: company_id (обязателен), integration_id, provider_slug, limit, offset (опционально)
     Returns: events[] с полями created_at, integration_name, provider_type, event_number, summary, raw
     '''
@@ -117,50 +118,94 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 'raw': raw_data
             })
 
-        # 2. События CRM (Битрикс24, AmoCRM) - сырые входящие вебхуки из inbox.
-        crm_where = 'WHERE we.company_id = %s AND we.provider_slug IN (\'bitrix24\', \'amocrm\')'
+        # 2a. Успешно обработанные сделки CRM (Битрикс24, AmoCRM) - одна строка на
+        # сделку из crm_deals вместо отдельной строки на каждый входящий хук.
+        # webhook_count показывает, сколько раз по этой сделке прилетал хук.
+        crm_where = 'WHERE cd.company_id = %s'
         crm_params = [company_id]
         if integration_id:
-            crm_where += ' AND we.integration_id = %s'
+            crm_where += ' AND cd.integration_id = %s'
             crm_params.append(integration_id)
         if provider_slug:
-            crm_where += ' AND we.provider_slug = %s'
+            crm_where += ' AND cd.provider_slug = %s'
             crm_params.append(provider_slug)
 
         cur.execute(f'''
             SELECT
-                we.id, we.created_at, we.provider_slug, we.event_type, we.status,
-                we.error_message, we.raw_payload, ui.integration_name, p.name
-            FROM t_p83864310_fintech_payment_reco.webhook_events we
-            JOIN t_p83864310_fintech_payment_reco.user_integrations ui ON ui.id = we.integration_id
+                cd.id, cd.updated_at, cd.provider_slug, cd.external_deal_id,
+                cd.title, cd.stage, cd.amount, cd.currency, cd.webhook_count,
+                cd.raw_data, ui.integration_name, p.name
+            FROM t_p83864310_fintech_payment_reco.crm_deals cd
+            JOIN t_p83864310_fintech_payment_reco.user_integrations ui ON ui.id = cd.integration_id
             JOIN t_p83864310_fintech_payment_reco.integration_providers p ON p.id = ui.provider_id
             {crm_where}
-            ORDER BY we.created_at DESC
+            ORDER BY cd.updated_at DESC
             LIMIT %s OFFSET %s
         ''', crm_params + [limit, offset])
 
         for row in cur.fetchall():
-            (event_id, created_at, p_slug, event_type, status, error_message,
-             raw_payload, integration_name, provider_name) = row
+            (deal_pk, updated_at, p_slug, external_deal_id, title, stage, amount,
+             currency, webhook_count, raw_data, integration_name, provider_name) = row
 
-            event_number = None
-            if p_slug == 'bitrix24':
-                fields = raw_payload.get('data', {}).get('FIELDS', {}) if isinstance(raw_payload.get('data'), dict) else {}
-                event_number = fields.get('ID') if isinstance(fields, dict) else None
-                summary = f'Сделка #{event_number}' if event_number else 'Событие Битрикс24'
+            noun = 'Сделка' if p_slug == 'bitrix24' else 'Лид'
+            amount_str = f' · {float(amount):.2f} {currency or "₽"}' if amount is not None else ''
+            summary = f'{noun} #{external_deal_id} · {title or stage or ""}{amount_str}'.strip()
+            if webhook_count and webhook_count > 1:
+                summary += f' ({webhook_count} обновл.)'
+
+            events.append({
+                'id': f'cd_{deal_pk}',
+                'source': 'crm',
+                'created_at': updated_at.isoformat() if updated_at else None,
+                'provider_slug': p_slug,
+                'provider_type': PROVIDER_TYPE_LABELS.get(p_slug, provider_name),
+                'integration_name': integration_name,
+                'event_type': 'deal_updated' if p_slug == 'bitrix24' else 'lead_updated',
+                'status': 'processed',
+                'error_message': None,
+                'event_number': str(external_deal_id),
+                'summary': summary,
+                'raw': raw_data
+            })
+
+        # 2b. Хуки CRM, которые не удалось обработать (не нашли ID сделки, сбой API
+        # и т.д.) - группируем по сделке через external_deal_id, показываем только
+        # последнюю ошибку по каждой сделке плюс счётчик повторов. Хуки без
+        # распознанного ID сделки (external_deal_id IS NULL) не группируются - у
+        # каждого своя строка, т.к. неизвестно, к одной ли они сделке относятся.
+        crm_fail_where = "WHERE we.company_id = %s AND we.provider_slug IN ('bitrix24', 'amocrm') AND we.status IN ('failed', 'rejected')"
+        crm_fail_params = [company_id]
+        if integration_id:
+            crm_fail_where += ' AND we.integration_id = %s'
+            crm_fail_params.append(integration_id)
+        if provider_slug:
+            crm_fail_where += ' AND we.provider_slug = %s'
+            crm_fail_params.append(provider_slug)
+
+        cur.execute(f'''
+            SELECT DISTINCT ON (COALESCE(we.external_deal_id, 'id_' || we.id))
+                we.id, we.created_at, we.provider_slug, we.event_type, we.status,
+                we.error_message, we.external_deal_id, ui.integration_name, p.name,
+                COUNT(*) OVER (PARTITION BY we.external_deal_id) AS fail_count
+            FROM t_p83864310_fintech_payment_reco.webhook_events we
+            JOIN t_p83864310_fintech_payment_reco.user_integrations ui ON ui.id = we.integration_id
+            JOIN t_p83864310_fintech_payment_reco.integration_providers p ON p.id = ui.provider_id
+            {crm_fail_where}
+            ORDER BY COALESCE(we.external_deal_id, 'id_' || we.id), we.created_at DESC
+            LIMIT %s OFFSET %s
+        ''', crm_fail_params + [limit, offset])
+
+        for row in cur.fetchall():
+            (event_id, created_at, p_slug, event_type, status, error_message,
+             external_deal_id, integration_name, provider_name, fail_count) = row
+
+            noun_gen = 'сделки' if p_slug == 'bitrix24' else 'лида'
+            if external_deal_id:
+                summary = f'Ошибка обработки {noun_gen} #{external_deal_id}'
+                if fail_count and fail_count > 1:
+                    summary += f' ({fail_count} попыток)'
             else:
-                leads = raw_payload.get('leads', {})
-                if isinstance(leads, dict):
-                    for key in ('update', 'add', 'status'):
-                        entries = leads.get(key)
-                        if isinstance(entries, dict) and entries:
-                            first = next(iter(entries.values()))
-                            event_number = first.get('id') if isinstance(first, dict) else None
-                        elif isinstance(entries, list) and entries:
-                            event_number = entries[0].get('id') if isinstance(entries[0], dict) else None
-                        if event_number:
-                            break
-                summary = f'Лид #{event_number}' if event_number else 'Событие AmoCRM'
+                summary = f'Не удалось распознать хук {provider_name}'
 
             events.append({
                 'id': f'we_{event_id}',
@@ -172,9 +217,9 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 'event_type': event_type,
                 'status': status,
                 'error_message': error_message,
-                'event_number': str(event_number) if event_number else None,
+                'event_number': str(external_deal_id) if external_deal_id else None,
                 'summary': summary,
-                'raw': raw_payload
+                'raw': None
             })
 
         # 3. Операции по расчётному счёту - второй слой обработки (дозагрузка,

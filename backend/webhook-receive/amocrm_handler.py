@@ -38,34 +38,37 @@ def extract_lead_id(webhook_data: Dict[str, Any]) -> Optional[str]:
 
 
 def process(cur, integration_id: int, company_id: int, config: Dict[str, Any],
-            webhook_data: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
+            webhook_data: Dict[str, Any]) -> Tuple[bool, Optional[str], Optional[str]]:
     '''
     Обрабатывает событие AmoCRM: достаёт ID сделки из вебхука, ходит в REST API
-    за полными данными, сохраняет/обновляет сделку в crm_deals.
+    за полными данными, сохраняет/обновляет сделку в crm_deals (webhook_count растёт
+    при каждом повторном хуке по той же сделке).
+    Returns: (success, lead_id, error)
     '''
     subdomain = config.get('subdomain', '')
     api_key = config.get('api_key', '')
     if not subdomain or not api_key:
-        return False, 'subdomain or api_key not configured'
+        return False, None, 'subdomain or api_key not configured'
 
     lead_id = extract_lead_id(webhook_data)
     if not lead_id:
-        return False, 'Lead ID not found in webhook payload'
+        return False, None, 'Lead ID not found in webhook payload'
 
     lead = fetch_lead_details(subdomain, api_key, lead_id)
     if not lead:
-        return False, f'Failed to fetch lead {lead_id} from AmoCRM API'
+        return False, str(lead_id), f'Failed to fetch lead {lead_id} from AmoCRM API'
 
     cur.execute('''
         INSERT INTO t_p83864310_fintech_payment_reco.crm_deals (
             integration_id, company_id, provider_slug, external_deal_id,
-            title, stage, amount, currency, raw_data, updated_at
-        ) VALUES (%s, %s, 'amocrm', %s, %s, %s, %s, 'RUB', %s, NOW())
+            title, stage, amount, currency, raw_data, webhook_count, updated_at
+        ) VALUES (%s, %s, 'amocrm', %s, %s, %s, %s, 'RUB', %s, 1, NOW())
         ON CONFLICT (integration_id, external_deal_id) DO UPDATE SET
             title = EXCLUDED.title,
             stage = EXCLUDED.stage,
             amount = EXCLUDED.amount,
             raw_data = EXCLUDED.raw_data,
+            webhook_count = t_p83864310_fintech_payment_reco.crm_deals.webhook_count + 1,
             updated_at = NOW()
     ''', (
         integration_id,
@@ -77,4 +80,4 @@ def process(cur, integration_id: int, company_id: int, config: Dict[str, Any],
         json.dumps(lead)
     ))
 
-    return True, None
+    return True, str(lead_id), None
