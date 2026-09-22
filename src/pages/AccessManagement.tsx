@@ -4,7 +4,6 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import functionUrls from '../../backend/func2url.json';
 import RoleCard from '@/components/access/RoleCard';
-import CreateRoleDialog from '@/components/access/CreateRoleDialog';
 import InviteUserDialog from '@/components/access/InviteUserDialog';
 import UsersTable from '@/components/access/UsersTable';
 import PendingInvitesTable from '@/components/access/PendingInvitesTable';
@@ -81,7 +80,6 @@ const AccessManagement = () => {
   const [roles, setRoles] = useState<Role[]>([]);
   const [isPageLoading, setIsPageLoading] = useState(true);
   const [showInviteDialog, setShowInviteDialog] = useState(false);
-  const [showRoleDialog, setShowRoleDialog] = useState(false);
   const [inviteLink, setInviteLink] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
@@ -92,13 +90,6 @@ const AccessManagement = () => {
     email: '',
     role: '',
     messenger: 'telegram' as 'telegram' | 'whatsapp' | 'max' | 'email'
-  });
-
-  const [newRole, setNewRole] = useState({
-    name: '',
-    color: 'bg-info',
-    modules: [] as string[],
-    permissions: [] as string[]
   });
 
   const loadData = async () => {
@@ -332,14 +323,6 @@ const AccessManagement = () => {
         </div>
         
         <div className="flex gap-3">
-          <CreateRoleDialog
-            open={showRoleDialog}
-            onOpenChange={setShowRoleDialog}
-            newRole={newRole}
-            setNewRole={setNewRole}
-            modules={modules}
-          />
-
           <InviteUserDialog
             open={showInviteDialog}
             onOpenChange={setShowInviteDialog}
