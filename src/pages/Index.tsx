@@ -8,7 +8,7 @@ import AccessManagement from './AccessManagement';
 import IntegrationsPage from './IntegrationsPage';
 import ReceiptsPage from './ReceiptsPage';
 import EventsPage from './EventsPage';
-import ReconciliationPlaceholder from './ReconciliationPlaceholder';
+import ReconciliationPage from './ReconciliationPage';
 import SettingsPlaceholder from './SettingsPlaceholder';
 import { useAuth } from '@/contexts/AuthContext';
 import { APP_MODULES } from '@/config/modules';
@@ -46,7 +46,7 @@ const Index = () => {
       <main className="ml-64 mt-16 p-8">
         {activeModule === 'dashboard' && <DashboardOverview stats={stats} mounted={mounted} />}
         {activeModule === 'receipts' && <ReceiptsPage />}
-        {activeModule === 'reconciliation' && <ReconciliationPlaceholder />}
+        {activeModule === 'reconciliation' && <ReconciliationPage />}
         {activeModule === 'events' && <EventsPage />}
         {activeModule === 'integrations' && <IntegrationsPage />}
         {activeModule === 'access' && <AccessManagement />}

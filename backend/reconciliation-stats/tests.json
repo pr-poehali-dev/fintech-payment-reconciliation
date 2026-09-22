@@ -1,0 +1,16 @@
+{
+  "tests": [
+    {
+      "name": "Missing company_id",
+      "method": "GET",
+      "path": "/",
+      "expectedStatus": 400
+    },
+    {
+      "name": "Get reconciliation stats",
+      "method": "GET",
+      "path": "/?company_id=2",
+      "expectedStatus": 200
+    }
+  ]
+}
