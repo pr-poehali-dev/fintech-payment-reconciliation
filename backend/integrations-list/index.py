@@ -53,6 +53,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 c.name as category_name,
                 c.slug as category_slug,
                 c.icon as category_icon,
+                c.description as category_description,
                 p.id as provider_id,
                 p.name as provider_name,
                 p.slug as provider_slug,
@@ -74,16 +75,17 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     'name': row[1],
                     'slug': row[2],
                     'icon': row[3],
+                    'description': row[4],
                     'providers': []
                 }
             
-            if row[4]:
+            if row[5]:
                 categories[cat_id]['providers'].append({
-                    'id': row[4],
-                    'name': row[5],
-                    'slug': row[6],
-                    'logo_url': row[7],
-                    'description': row[8]
+                    'id': row[5],
+                    'name': row[6],
+                    'slug': row[7],
+                    'logo_url': row[8],
+                    'description': row[9]
                 })
         
         cur.execute('''

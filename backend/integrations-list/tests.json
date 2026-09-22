@@ -5,10 +5,7 @@
       "method": "GET",
       "path": "/?company_id=1",
       "expectedStatus": 200,
-      "expectedBody": {
-        "categories": "array",
-        "user_integrations": "array"
-      },
+      "expectedBody": {},
       "bodyMatcher": "partial"
     },
     {

@@ -31,6 +31,7 @@ interface Category {
   name: string;
   slug: string;
   icon: string;
+  description?: string;
   providers: Provider[];
 }
 
@@ -55,8 +56,6 @@ const IntegrationsPage = () => {
   const [categories, setCategories] = useState<Category[]>([]);
   const [userIntegrations, setUserIntegrations] = useState<UserIntegration[]>([]);
   const [allProviders, setAllProviders] = useState<Provider[]>([]);
-  const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
-  const [selectedProvider, setSelectedProvider] = useState<Provider | null>(null);
   const [editingIntegration, setEditingIntegration] = useState<UserIntegration | null>(null);
   const [deletingIntegration, setDeletingIntegration] = useState<UserIntegration | null>(null);
   const [showAddDialog, setShowAddDialog] = useState(false);
@@ -105,18 +104,12 @@ const IntegrationsPage = () => {
     fetchIntegrations();
   }, [companyId]);
 
-  const handleAddNew = (category: Category) => {
-    setSelectedCategory(category);
-    setSelectedProvider(null);
+  const handleAddNew = () => {
     setEditingIntegration(null);
     setShowAddDialog(true);
   };
 
   const handleEdit = (integration: UserIntegration) => {
-    const category = categories.find(c => c.slug === integration.category_slug);
-    const provider = allProviders.find(p => p.id === integration.provider_id);
-    setSelectedCategory(category || null);
-    setSelectedProvider(provider || null);
     setEditingIntegration(integration);
     setShowAddDialog(true);
   };
@@ -252,24 +245,24 @@ const IntegrationsPage = () => {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-3xl font-display font-bold text-foreground mb-2">Интеграции</h2>
-          <p className="text-muted-foreground">Подключите банки, кассы и другие системы</p>
+          <p className="text-muted-foreground">
+            Подключено сервисов: {userIntegrations.length}
+          </p>
         </div>
+        <Button onClick={handleAddNew}>
+          <Icon name="Plus" size={16} className="mr-2" />
+          Добавить интеграцию
+        </Button>
       </div>
 
-      {categories.map((category) => {
+      {categories.filter(c => getCategoryIntegrations(c.slug).length > 0).map((category) => {
         const categoryIntegrations = getCategoryIntegrations(category.slug);
         
         return (
           <div key={category.id}>
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <Icon name={category.icon as any} size={20} />
-                <h3 className="text-xl font-semibold">{category.name}</h3>
-              </div>
-              <Button onClick={() => handleAddNew(category)} size="sm">
-                <Icon name="Plus" size={16} className="mr-2" />
-                Добавить
-              </Button>
+            <div className="flex items-center gap-2 mb-3">
+              <Icon name={category.icon as any} size={20} />
+              <h3 className="text-xl font-semibold">{category.name}</h3>
             </div>
 
             {categoryIntegrations.length > 0 ? (
@@ -378,27 +371,31 @@ const IntegrationsPage = () => {
                   </Card>
                 )})}
               </div>
-            ) : (
-              <Card className="mb-6">
-                <CardContent className="py-8 text-center text-muted-foreground">
-                  <Icon name="Inbox" size={32} className="mx-auto mb-2 opacity-50" />
-                  <p>Пока нет интеграций в этой категории</p>
-                  <Button onClick={() => handleAddNew(category)} variant="link" className="mt-2">
-                    Добавить первую интеграцию
-                  </Button>
-                </CardContent>
-              </Card>
-            )}
+            ) : null}
           </div>
         );
       })}
 
+      {userIntegrations.length === 0 && (
+        <Card>
+          <CardContent className="py-12 text-center text-muted-foreground">
+            <Icon name="Inbox" size={32} className="mx-auto mb-2 opacity-50" />
+            <p className="mb-2">Пока нет подключённых интеграций</p>
+            <Button onClick={handleAddNew} variant="link">
+              Добавить первую интеграцию
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
       <AddIntegrationDialog
         open={showAddDialog}
         onOpenChange={setShowAddDialog}
-        provider={selectedProvider}
+        categories={categories}
+        initialCategory={null}
         editingIntegration={editingIntegration}
-        allProviders={selectedCategory ? selectedCategory.providers : allProviders}
+        allProviders={allProviders}
+        connectedProviderIds={userIntegrations.map(ui => ui.provider_id)}
         companyId={companyId || 0}
         onSuccess={fetchIntegrations}
       />
