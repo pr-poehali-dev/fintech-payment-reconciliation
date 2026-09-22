@@ -6,9 +6,10 @@ from typing import Dict, Any
 
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     '''
-    Получение списка пользователей компании с их ролями
+    Получение списка пользователей компании с их ролями,
+    а также списка активных (не принятых и не истёкших) приглашений
     Args: company_id
-    Returns: список пользователей компании
+    Returns: список пользователей компании и список приглашений
     '''
 
     method = event.get('httpMethod', 'GET')
@@ -77,12 +78,39 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 'joined_at': row[9].isoformat() if row[9] else None
             })
 
+        cur.execute('''
+            SELECT
+                it.id, it.phone, it.email, it.full_name, it.channel,
+                r.slug, r.name, r.color,
+                it.created_at, it.expires_at
+            FROM invite_tokens it
+            JOIN roles r ON r.id = it.role_id
+            WHERE it.company_id = %s AND it.status = 'pending' AND it.expires_at > now()
+            ORDER BY it.created_at DESC
+        ''', (company_id,))
+
+        invites = []
+        for row in cur.fetchall():
+            invites.append({
+                'id': row[0],
+                'phone': row[1],
+                'email': row[2],
+                'full_name': row[3],
+                'channel': row[4],
+                'role_slug': row[5],
+                'role_name': row[6],
+                'role_color': row[7],
+                'created_at': row[8].isoformat() if row[8] else None,
+                'expires_at': row[9].isoformat() if row[9] else None
+            })
+
         return {
             'statusCode': 200,
             'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
             'body': json.dumps({
                 'success': True,
-                'users': users
+                'users': users,
+                'invites': invites
             }),
             'isBase64Encoded': False
         }

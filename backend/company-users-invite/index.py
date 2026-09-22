@@ -1,16 +1,19 @@
 import json
 import os
 import re
+import secrets
 import psycopg2
 from typing import Dict, Any
 
 
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     '''
-    Приглашение пользователя в компанию по номеру телефона с назначением роли
-    Если пользователя с таким телефоном ещё нет — он будет создан
-    Args: company_id, phone, full_name, role_slug, invited_by (user_id)
-    Returns: user_id, status приглашения
+    Создание одноразового приглашения в компанию с назначением роли.
+    Приглашение отправляется по телефону (WhatsApp/Telegram/Max) или email
+    и содержит ссылку для вступления, действующую 7 дней.
+    Проверяет лимит пользователей по тарифу компании.
+    Args: company_id, phone, full_name, email, role_slug, channel, invited_by (user_id)
+    Returns: token, expires_at для формирования ссылки-приглашения
     '''
 
     method = event.get('httpMethod', 'POST')
@@ -40,14 +43,16 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     company_id = body.get('company_id')
     phone_raw = body.get('phone', '')
     full_name = body.get('full_name')
+    email = (body.get('email') or '').strip() or None
     role_slug = body.get('role_slug')
+    channel = body.get('channel', 'telegram')
     invited_by = body.get('invited_by')
 
     phone = re.sub(r'\D', '', phone_raw)
     if len(phone) == 11 and phone.startswith('8'):
         phone = '7' + phone[1:]
 
-    if not company_id or not role_slug:
+    if not company_id or not role_slug or not phone:
         return {
             'statusCode': 400,
             'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
@@ -63,12 +68,20 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             'isBase64Encoded': False
         }
 
+    if channel == 'email' and not email:
+        return {
+            'statusCode': 400,
+            'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+            'body': json.dumps({'error': 'Для приглашения по email нужен адрес почты'}),
+            'isBase64Encoded': False
+        }
+
     dsn = os.environ['DATABASE_URL']
     conn = psycopg2.connect(dsn)
     cur = conn.cursor()
 
     try:
-        cur.execute("SELECT id FROM roles WHERE slug = %s AND scope = 'company'", (role_slug,))
+        cur.execute("SELECT id, name, color FROM roles WHERE slug = %s AND scope = 'company'", (role_slug,))
         role_row = cur.fetchone()
         if not role_row:
             return {
@@ -79,35 +92,64 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             }
         role_id = role_row[0]
 
+        cur.execute('''
+            SELECT t.max_users FROM subscriptions s
+            JOIN tariffs t ON t.id = s.tariff_id
+            WHERE s.company_id = %s
+        ''', (company_id,))
+        tariff_row = cur.fetchone()
+        max_users = tariff_row[0] if tariff_row else None
+
+        if max_users is not None:
+            cur.execute('''
+                SELECT
+                    (SELECT COUNT(*) FROM company_users WHERE company_id = %s AND status IN ('active', 'pending')) +
+                    (SELECT COUNT(*) FROM invite_tokens WHERE company_id = %s AND status = 'pending' AND expires_at > now())
+            ''', (company_id, company_id))
+            current_count = cur.fetchone()[0]
+
+            if current_count >= max_users:
+                return {
+                    'statusCode': 403,
+                    'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+                    'body': json.dumps({
+                        'error': 'Лимит пользователей по тарифу исчерпан',
+                        'error_code': 'limit_reached',
+                        'max_users': max_users
+                    }),
+                    'isBase64Encoded': False
+                }
+
         cur.execute('SELECT id FROM app_users WHERE phone = %s', (phone,))
         user_row = cur.fetchone()
 
         if user_row:
-            user_id = user_row[0]
-        else:
             cur.execute(
-                'INSERT INTO app_users (phone, full_name, status) VALUES (%s, %s, %s) RETURNING id',
-                (phone, full_name, 'active')
+                'SELECT id FROM company_users WHERE company_id = %s AND user_id = %s AND status != %s',
+                (company_id, user_row[0], 'removed')
             )
-            user_id = cur.fetchone()[0]
+            if cur.fetchone():
+                return {
+                    'statusCode': 400,
+                    'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+                    'body': json.dumps({'error': 'Пользователь уже добавлен в эту компанию'}),
+                    'isBase64Encoded': False
+                }
 
         cur.execute(
-            'SELECT id FROM company_users WHERE company_id = %s AND user_id = %s',
-            (company_id, user_id)
+            "UPDATE invite_tokens SET status = 'cancelled', updated_at = now() WHERE company_id = %s AND phone = %s AND status = 'pending'",
+            (company_id, phone)
         )
-        if cur.fetchone():
-            return {
-                'statusCode': 400,
-                'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
-                'body': json.dumps({'error': 'Пользователь уже добавлен в эту компанию'}),
-                'isBase64Encoded': False
-            }
 
-        cur.execute(
-            '''INSERT INTO company_users (company_id, user_id, role_id, status, invited_by, invited_at)
-               VALUES (%s, %s, %s, %s, %s, now())''',
-            (company_id, user_id, role_id, 'pending', invited_by)
-        )
+        token = secrets.token_urlsafe(32)
+
+        cur.execute('''
+            INSERT INTO invite_tokens (token, company_id, role_id, phone, email, full_name, channel, invited_by, status, expires_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'pending', now() + interval '7 days')
+            RETURNING id, expires_at
+        ''', (token, company_id, role_id, phone, email, full_name, channel, invited_by))
+
+        invite_id, expires_at = cur.fetchone()
 
         conn.commit()
 
@@ -116,8 +158,9 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
             'body': json.dumps({
                 'success': True,
-                'user_id': user_id,
-                'status': 'pending'
+                'invite_id': invite_id,
+                'token': token,
+                'expires_at': expires_at.isoformat()
             }),
             'isBase64Encoded': False
         }

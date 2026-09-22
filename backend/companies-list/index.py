@@ -55,7 +55,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 c.id, c.name, c.inn, c.status,
                 r.slug, r.name, r.color,
                 s.status, s.trial_ends_at, s.current_period_end,
-                t.name
+                t.name, t.max_users
             FROM company_users cu
             JOIN companies c ON c.id = cu.company_id
             JOIN roles r ON r.id = cu.role_id
@@ -78,7 +78,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 'subscription_status': row[7],
                 'trial_ends_at': row[8].isoformat() if row[8] else None,
                 'current_period_end': row[9].isoformat() if row[9] else None,
-                'tariff_name': row[10]
+                'tariff_name': row[10],
+                'max_users': row[11]
             })
 
         return {

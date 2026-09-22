@@ -7,6 +7,7 @@ import RoleCard from '@/components/access/RoleCard';
 import CreateRoleDialog from '@/components/access/CreateRoleDialog';
 import InviteUserDialog from '@/components/access/InviteUserDialog';
 import UsersTable from '@/components/access/UsersTable';
+import PendingInvitesTable from '@/components/access/PendingInvitesTable';
 import Icon from '@/components/ui/icon';
 
 interface CompanyUser {
@@ -20,6 +21,19 @@ interface CompanyUser {
   status: 'active' | 'pending' | 'blocked' | 'removed';
   invited_at: string | null;
   joined_at: string | null;
+}
+
+interface Invite {
+  id: number;
+  phone: string;
+  email: string | null;
+  full_name: string | null;
+  channel: string;
+  role_slug: string;
+  role_name: string;
+  role_color: string;
+  created_at: string | null;
+  expires_at: string | null;
 }
 
 interface Role {
@@ -43,11 +57,27 @@ const modules = [
   { id: 'settings', name: 'Настройки', icon: 'Settings' }
 ];
 
+const channelProviderMap: Record<string, string> = {
+  whatsapp: 'ek_wa',
+  telegram: 'ek_tg',
+  max: 'ek_max',
+  email: 'ek_email'
+};
+
+const channelLabelMap: Record<string, string> = {
+  whatsapp: 'WhatsApp',
+  telegram: 'Telegram',
+  max: 'Max',
+  email: 'почту'
+};
+
 const AccessManagement = () => {
   const { user, currentCompany } = useAuth();
   const companyId = currentCompany?.id;
+  const maxUsers = currentCompany?.max_users;
 
   const [users, setUsers] = useState<CompanyUser[]>([]);
+  const [invites, setInvites] = useState<Invite[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
   const [isPageLoading, setIsPageLoading] = useState(true);
   const [showInviteDialog, setShowInviteDialog] = useState(false);
@@ -61,7 +91,7 @@ const AccessManagement = () => {
     fullName: '',
     email: '',
     role: '',
-    messenger: 'telegram' as 'telegram' | 'whatsapp' | 'max'
+    messenger: 'telegram' as 'telegram' | 'whatsapp' | 'max' | 'email'
   });
 
   const [newRole, setNewRole] = useState({
@@ -83,7 +113,10 @@ const AccessManagement = () => {
       const usersData = await usersRes.json();
       const rolesData = await rolesRes.json();
 
-      if (usersRes.ok) setUsers(usersData.users || []);
+      if (usersRes.ok) {
+        setUsers(usersData.users || []);
+        setInvites(usersData.invites || []);
+      }
       if (rolesRes.ok) setRoles(rolesData.roles || []);
     } catch (error) {
       toast({
@@ -100,16 +133,13 @@ const AccessManagement = () => {
     loadData();
   }, [companyId]);
 
+  const activeAndPendingCount = users.filter(u => u.status !== 'removed').length + invites.length;
+  const isLimitReached = typeof maxUsers === 'number' && activeAndPendingCount >= maxUsers;
+
   const handleInviteUser = async () => {
     if (!companyId || !newUser.phone || !newUser.fullName || !newUser.role) return;
 
     setIsLoading(true);
-
-    const providerMap: Record<string, string> = {
-      whatsapp: 'ek_wa',
-      telegram: 'ek_tg',
-      max: 'ek_max'
-    };
 
     try {
       const inviteRes = await fetch(functionUrls['company-users-invite'], {
@@ -119,7 +149,9 @@ const AccessManagement = () => {
           company_id: companyId,
           phone: newUser.phone,
           full_name: newUser.fullName,
+          email: newUser.email || null,
           role_slug: newUser.role,
+          channel: newUser.messenger,
           invited_by: user?.user_id
         })
       });
@@ -128,30 +160,47 @@ const AccessManagement = () => {
 
       if (!inviteRes.ok || !inviteData.success) {
         toast({
-          title: 'Ошибка приглашения',
-          description: inviteData.error || 'Не удалось добавить пользователя',
+          title: inviteData.error_code === 'limit_reached' ? 'Лимит тарифа исчерпан' : 'Ошибка приглашения',
+          description: inviteData.error || 'Не удалось создать приглашение',
           variant: 'destructive'
         });
         return;
       }
 
-      const link = `https://ecomkassa.pro/invite/${companyId}`;
+      const link = `${window.location.origin}/invite/${inviteData.token}`;
       setInviteLink(link);
 
-      await fetch(functionUrls['send-message'], {
+      const roleName = roles.find(r => r.slug === newUser.role)?.name;
+      const messageText = `Привет, ${newUser.fullName}! Вас пригласили в команду «${currentCompany?.name}» на портале Сверка.\n\nПерейдите по ссылке, чтобы принять приглашение: ${link}\n\nРоль: ${roleName}\nСсылка действует 7 дней.`;
+
+      const recipient = newUser.messenger === 'email'
+        ? newUser.email
+        : newUser.phone.replace(/\D/g, '');
+
+      const sendRes = await fetch(functionUrls['send-message'], {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          provider: providerMap[newUser.messenger],
-          recipient: newUser.phone.replace(/\D/g, ''),
-          message: `Привет, ${newUser.fullName}! Вас пригласили в Сверка (${currentCompany?.name}).\n\nВойдите по вашему номеру телефона: ${link}\n\nРоль: ${roles.find(r => r.slug === newUser.role)?.name}`
+          provider: channelProviderMap[newUser.messenger],
+          recipient,
+          message: messageText
         })
       });
 
-      toast({
-        title: 'Приглашение отправлено',
-        description: `Пользователь ${newUser.fullName} получит приглашение в ${newUser.messenger}`
-      });
+      const sendData = await sendRes.json();
+
+      if (sendRes.ok && sendData.success) {
+        toast({
+          title: 'Приглашение отправлено',
+          description: `${newUser.fullName} получит ссылку через ${channelLabelMap[newUser.messenger]}`
+        });
+      } else {
+        toast({
+          title: 'Приглашение создано, но не доставлено',
+          description: 'Скопируйте ссылку и отправьте её вручную',
+          variant: 'destructive'
+        });
+      }
 
       loadData();
     } catch (error) {
@@ -167,6 +216,28 @@ const AccessManagement = () => {
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
+    toast({ title: 'Ссылка скопирована' });
+  };
+
+  const cancelInvite = async (inviteId: number) => {
+    if (!companyId) return;
+    try {
+      const res = await fetch(functionUrls['company-users-update'], {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ company_id: companyId, invite_id: inviteId })
+      });
+      const data = await res.json();
+
+      if (res.ok && data.success) {
+        setInvites(invites.filter(i => i.id !== inviteId));
+        toast({ title: 'Приглашение отменено' });
+      } else {
+        toast({ title: 'Ошибка', description: data.error, variant: 'destructive' });
+      }
+    } catch {
+      toast({ title: 'Ошибка подключения', variant: 'destructive' });
+    }
   };
 
   const toggleUserStatus = async (userId: number) => {
@@ -252,7 +323,12 @@ const AccessManagement = () => {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-3xl font-display font-bold text-foreground mb-2">Управление доступом</h2>
-          <p className="text-muted-foreground">Роли, пользователи и права доступа компании «{currentCompany?.name}»</p>
+          <p className="text-muted-foreground">
+            Роли, пользователи и права доступа компании «{currentCompany?.name}»
+            {typeof maxUsers === 'number' && (
+              <span className="ml-2 text-xs">· {activeAndPendingCount}/{maxUsers} пользователей по тарифу</span>
+            )}
+          </p>
         </div>
         
         <div className="flex gap-3">
@@ -272,6 +348,7 @@ const AccessManagement = () => {
             roles={rolesForUi}
             inviteLink={inviteLink}
             isLoading={isLoading}
+            isLimitReached={isLimitReached}
             onInvite={handleInviteUser}
             onCopyLink={copyToClipboard}
           />
@@ -304,6 +381,18 @@ const AccessManagement = () => {
           />
         </CardContent>
       </Card>
+
+      {invites.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Ожидают подтверждения</CardTitle>
+            <CardDescription>Приглашения, которые ещё не были приняты</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <PendingInvitesTable invites={invites} onCancel={cancelInvite} />
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 };

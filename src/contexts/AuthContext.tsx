@@ -13,6 +13,7 @@ export interface Company {
   trial_ends_at?: string | null;
   current_period_end?: string | null;
   tariff_name?: string | null;
+  max_users?: number | null;
 }
 
 interface AuthUser {

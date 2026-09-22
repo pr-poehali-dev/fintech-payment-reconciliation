@@ -27,12 +27,14 @@ interface Role {
   permissions: string[];
 }
 
+type Channel = 'telegram' | 'whatsapp' | 'max' | 'email';
+
 interface NewUser {
   phone: string;
   fullName: string;
   email: string;
   role: string;
-  messenger: 'telegram' | 'whatsapp' | 'max';
+  messenger: Channel;
 }
 
 interface InviteUserDialogProps {
@@ -43,25 +45,44 @@ interface InviteUserDialogProps {
   roles: Role[];
   inviteLink: string;
   isLoading: boolean;
+  isLimitReached: boolean;
   onInvite: () => void;
   onCopyLink: (text: string) => void;
 }
 
-const InviteUserDialog = ({ 
-  open, 
-  onOpenChange, 
-  newUser, 
-  setNewUser, 
-  roles, 
-  inviteLink, 
-  isLoading, 
+const channels: { id: Channel; icon: string; label: string }[] = [
+  { id: 'telegram', icon: 'Send', label: 'Telegram' },
+  { id: 'whatsapp', icon: 'MessageCircle', label: 'WhatsApp' },
+  { id: 'max', icon: 'MessageSquare', label: 'Max' },
+  { id: 'email', icon: 'Mail', label: 'Email' },
+];
+
+const InviteUserDialog = ({
+  open,
+  onOpenChange,
+  newUser,
+  setNewUser,
+  roles,
+  inviteLink,
+  isLoading,
+  isLimitReached,
   onInvite,
-  onCopyLink 
+  onCopyLink
 }: InviteUserDialogProps) => {
+  const isEmailChannel = newUser.messenger === 'email';
+  const canSubmit =
+    isValidPhone(newUser.phone) &&
+    !!newUser.fullName &&
+    !!newUser.role &&
+    isValidEmail(newUser.email) &&
+    (!isEmailChannel || (!!newUser.email && isValidEmail(newUser.email))) &&
+    !isLoading &&
+    !isLimitReached;
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogTrigger asChild>
-        <Button className="gap-2">
+        <Button className="gap-2" disabled={isLimitReached}>
           <Icon name="UserPlus" size={16} />
           Пригласить пользователя
         </Button>
@@ -70,10 +91,21 @@ const InviteUserDialog = ({
         <DialogHeader>
           <DialogTitle>Пригласить пользователя</DialogTitle>
           <DialogDescription>
-            Отправьте приглашение через мессенджер
+            Отправим одноразовую ссылку для вступления в компанию
           </DialogDescription>
         </DialogHeader>
-        
+
+        {isLimitReached ? (
+          <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-lg flex items-start gap-3">
+            <Icon name="AlertTriangle" size={20} className="text-destructive shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-medium text-destructive">Лимит тарифа исчерпан</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Чтобы пригласить ещё одного пользователя, перейдите на другой тариф
+              </p>
+            </div>
+          </div>
+        ) : (
         <div className="space-y-4 py-4">
           <div className="space-y-2">
             <Label>Номер телефона</Label>
@@ -95,7 +127,7 @@ const InviteUserDialog = ({
           </div>
 
           <div className="space-y-2">
-            <Label>Email (опционально)</Label>
+            <Label>Email {isEmailChannel ? '' : '(опционально)'}</Label>
             <Input
               type="email"
               placeholder="ivan@company.ru"
@@ -104,6 +136,9 @@ const InviteUserDialog = ({
             />
             {newUser.email && !isValidEmail(newUser.email) && (
               <p className="text-xs text-destructive">Некорректный формат email</p>
+            )}
+            {isEmailChannel && !newUser.email && (
+              <p className="text-xs text-muted-foreground">Укажите email для отправки приглашения</p>
             )}
           </div>
 
@@ -128,23 +163,23 @@ const InviteUserDialog = ({
 
           <div className="space-y-2">
             <Label>Отправить приглашение через</Label>
-            <div className="grid grid-cols-3 gap-2">
-              {['telegram', 'whatsapp', 'max'].map((messenger) => (
+            <div className="grid grid-cols-4 gap-2">
+              {channels.map((channel) => (
                 <button
-                  key={messenger}
-                  onClick={() => setNewUser({ ...newUser, messenger: messenger as any })}
+                  key={channel.id}
+                  onClick={() => setNewUser({ ...newUser, messenger: channel.id })}
                   className={`flex flex-col items-center gap-2 p-3 rounded-lg border-2 transition-all ${
-                    newUser.messenger === messenger
+                    newUser.messenger === channel.id
                       ? 'border-primary bg-primary/5'
                       : 'border-border hover:border-primary/50'
                   }`}
                 >
-                  <Icon 
-                    name={messenger === 'telegram' ? 'Send' : messenger === 'whatsapp' ? 'MessageCircle' : 'Mail'} 
+                  <Icon
+                    name={channel.icon as any}
                     size={20}
-                    className={newUser.messenger === messenger ? 'text-primary' : 'text-muted-foreground'}
+                    className={newUser.messenger === channel.id ? 'text-primary' : 'text-muted-foreground'}
                   />
-                  <span className="text-xs capitalize">{messenger}</span>
+                  <span className="text-xs">{channel.label}</span>
                 </button>
               ))}
             </div>
@@ -152,7 +187,7 @@ const InviteUserDialog = ({
 
           {inviteLink && (
             <div className="space-y-2 p-4 bg-muted rounded-lg">
-              <Label className="text-xs">Ссылка-приглашение создана</Label>
+              <Label className="text-xs">Ссылка-приглашение создана (действует 7 дней)</Label>
               <div className="flex gap-2">
                 <Input value={inviteLink} readOnly className="text-xs" />
                 <Button size="icon" variant="outline" onClick={() => onCopyLink(inviteLink)}>
@@ -160,14 +195,14 @@ const InviteUserDialog = ({
                 </Button>
               </div>
               <p className="text-xs text-muted-foreground">
-                Приглашение отправлено в {newUser.messenger}
+                Приглашение отправлено через {channels.find(c => c.id === newUser.messenger)?.label}
               </p>
             </div>
           )}
 
-          <Button 
+          <Button
             onClick={onInvite}
-            disabled={!isValidPhone(newUser.phone) || !newUser.fullName || !newUser.role || !isValidEmail(newUser.email) || isLoading}
+            disabled={!canSubmit}
             className="w-full"
           >
             {isLoading ? (
@@ -178,6 +213,7 @@ const InviteUserDialog = ({
             ) : inviteLink ? 'Отправить ещё одно приглашение' : 'Отправить приглашение'}
           </Button>
         </div>
+        )}
       </DialogContent>
     </Dialog>
   );

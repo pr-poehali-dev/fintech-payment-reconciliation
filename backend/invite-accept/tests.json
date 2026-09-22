@@ -1,0 +1,37 @@
+{
+  "tests": [
+    {
+      "name": "GET missing token",
+      "method": "GET",
+      "path": "/",
+      "expectedStatus": 400,
+      "expectedBody": {
+        "error": "string"
+      },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "GET invite not found",
+      "method": "GET",
+      "path": "/?token=nonexistent_token_123",
+      "expectedStatus": 404,
+      "expectedBody": {
+        "error": "string"
+      },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "POST missing fields",
+      "method": "POST",
+      "path": "/",
+      "body": {
+        "token": "abc"
+      },
+      "expectedStatus": 400,
+      "expectedBody": {
+        "error": "string"
+      },
+      "bodyMatcher": "partial"
+    }
+  ]
+}
