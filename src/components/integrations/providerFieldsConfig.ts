@@ -27,7 +27,7 @@ export interface UserIntegration {
   forward_url?: string;
 }
 
-export type FieldType = 'text' | 'password' | 'number' | 'checkbox' | 'select' | 'multiselect';
+export type FieldType = 'text' | 'password' | 'number' | 'checkbox' | 'select' | 'multiselect' | 'keywords';
 
 export interface FieldOption {
   value: string;
@@ -44,12 +44,6 @@ export interface FieldConfig {
   required?: boolean;
   options?: FieldOption[];
 }
-
-export const PURPOSE_CATEGORY_OPTIONS: FieldOption[] = [
-  { value: 'acquiring_online', label: 'Интернет-эквайринг' },
-  { value: 'acquiring_offline', label: 'Торговый эквайринг' },
-  { value: 'individual_direct', label: 'Оплата от физлица напрямую на счёт' }
-];
 
 export const SYNC_INTERVAL_OPTIONS: FieldOption[] = [
   { value: '24', label: '1 раз в сутки (каждые 24 часа)' },
@@ -108,13 +102,13 @@ export const PROVIDER_FIELDS: Record<string, FieldConfig[]> = {
   // списка счетов, если владелец подтвердил доступ через Т-Бизнес, либо вручную.
   tbank_account: [
     {
-      key: 'purpose_categories',
-      label: 'Учитывать назначения платежа',
-      type: 'multiselect',
-      options: PURPOSE_CATEGORY_OPTIONS,
-      default: PURPOSE_CATEGORY_OPTIONS.map(o => o.value),
+      key: 'purpose_keywords',
+      label: 'Учитывать назначения платежа по ключевым словам',
+      type: 'keywords',
+      default: '',
       required: false,
-      hint: 'Остальные операции (налоги, зарплата, внутренние переводы) загружаться не будут'
+      placeholder: 'эквайринг, сбп, оплата заказа',
+      hint: 'Через запятую. Операция загрузится, если назначение платежа содержит хотя бы одно из слов. Оставьте пустым, чтобы загружать все операции'
     },
     {
       key: 'sync_interval_hours',

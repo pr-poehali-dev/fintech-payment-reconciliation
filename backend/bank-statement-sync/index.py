@@ -8,7 +8,7 @@ from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta
 
 from tbank_oauth import fetch_statement as fetch_tbank_statement
-from purpose_classifier import classify_purpose, get_included_categories
+from purpose_classifier import matches_keywords, get_purpose_keywords, operation_purpose_text
 
 CORS_HEADERS = {
     'Access-Control-Allow-Origin': '*',
@@ -19,7 +19,7 @@ CORS_HEADERS = {
 
 
 def normalize_tx(external_id, operation_date, amount, direction, counterparty_name,
-                  counterparty_inn, purpose, purpose_category, raw) -> Dict[str, Any]:
+                  counterparty_inn, purpose, raw) -> Dict[str, Any]:
     return {
         'external_id': external_id,
         'operation_date': operation_date,
@@ -28,7 +28,6 @@ def normalize_tx(external_id, operation_date, amount, direction, counterparty_na
         'counterparty_name': counterparty_name,
         'counterparty_inn': counterparty_inn,
         'purpose': purpose,
-        'purpose_category': purpose_category,
         'raw': raw
     }
 
@@ -57,14 +56,14 @@ def fetch_tbank_account_statement(cur, integration_id: int, company_id: int, con
     '''
     Расчётный счёт Т-Банка (T-Business ID + T-API, https://developer.tbank.ru/docs/products/account-info).
     Если компания подтвердила доступ через Т-Бизнес - используем её реальный access_token
-    (в бою) или общий тестовый токен (в песочнице). Каждая операция сразу проходит
-    классификацию по назначению платежа и фильтруется по настройке интеграции -
-    в БД попадают только эквайринг (онлайн/торговый) и прямые оплаты физлиц,
-    остальное (налоги, зарплата, внутренние переводы) отсекается на этом же шаге.
+    (в бою) или общий тестовый токен (в песочнице). Каждая операция фильтруется по
+    ключевым словам из настройки интеграции (purpose_keywords) - в БД попадает
+    операция, только если её назначение платежа содержит хотя бы одно из слов.
+    Если ключевые слова не заданы - загружаются все операции без фильтрации.
     '''
     access = get_tbank_access(cur, company_id)
     account_number = config.get('account_number', '')
-    included_categories = get_included_categories(config)
+    keywords = get_purpose_keywords(config)
 
     all_operations: List[Dict[str, Any]] = []
     cursor = None
@@ -83,8 +82,8 @@ def fetch_tbank_account_statement(cur, integration_id: int, company_id: int, con
             return None if not all_operations else all_operations
 
         for op in data.get('operations', []):
-            category = classify_purpose(op)
-            if category not in included_categories:
+            purpose = operation_purpose_text(op)
+            if not matches_keywords(purpose, keywords):
                 continue
 
             direction = 'in' if op.get('typeOfOperation') == 'Credit' else 'out'
@@ -96,8 +95,7 @@ def fetch_tbank_account_statement(cur, integration_id: int, company_id: int, con
                 direction=direction,
                 counterparty_name=counterparty.get('name'),
                 counterparty_inn=counterparty.get('inn'),
-                purpose=op.get('payPurpose') or op.get('description'),
-                purpose_category=category,
+                purpose=purpose,
                 raw=op
             ))
 
@@ -120,7 +118,7 @@ def fetch_tochka_account_statement(cur, integration_id: int, company_id: int, co
     '''
     api_token = config.get('api_token', '')
     account_id = config.get('account_number', '')
-    included_categories = get_included_categories(config)
+    keywords = get_purpose_keywords(config)
     base_url = 'https://enter.tochka.com/uapi/open-banking/v1.0'
 
     init_req = urllib.request.Request(
@@ -169,12 +167,8 @@ def fetch_tochka_account_statement(cur, integration_id: int, company_id: int, co
 
     result = []
     for tx in raw_transactions:
-        category = classify_purpose({
-            'payPurpose': tx.get('remittanceInformationUnstructured') or tx.get('additionalInformation'),
-            'typeOfOperation': 'Credit' if tx.get('creditDebitIndicator') == 'Credit' else 'Debit',
-            'counterParty': {}
-        })
-        if category not in included_categories:
+        purpose = tx.get('remittanceInformationUnstructured') or tx.get('additionalInformation') or ''
+        if not matches_keywords(purpose, keywords):
             continue
 
         direction = 'in' if tx.get('creditDebitIndicator') == 'Credit' else 'out'
@@ -186,8 +180,7 @@ def fetch_tochka_account_statement(cur, integration_id: int, company_id: int, co
             direction=direction,
             counterparty_name=(agent or {}).get('name'),
             counterparty_inn=None,
-            purpose=tx.get('remittanceInformationUnstructured') or tx.get('additionalInformation'),
-            purpose_category=category,
+            purpose=purpose,
             raw=tx
         ))
 
@@ -206,9 +199,10 @@ STATEMENT_FETCHERS = {
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     '''
     Ручная синхронизация банковской выписки по кнопке "Синхронизировать сейчас".
-    Это второй слой обработки: сюда попадают только операции, прошедшие фильтр
-    по назначению платежа (эквайринг онлайн/торговый + прямые оплаты физлиц),
-    остальное отсекается ещё на этапе получения выписки от банка.
+    Это второй слой обработки: сюда попадают только операции, назначение платежа
+    которых содержит хотя бы одно из ключевых слов настройки purpose_keywords
+    (или все операции, если ключевые слова не заданы) - остальное отсекается
+    ещё на этапе получения выписки от банка.
     Args: integration_id, date_from (ISO, опционально), date_to (ISO, опционально)
     Returns: количество загруженных и новых транзакций
     '''
@@ -292,8 +286,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     INSERT INTO t_p83864310_fintech_payment_reco.bank_statement_transactions (
                         integration_id, company_id, provider_slug, external_transaction_id,
                         operation_date, amount, direction, counterparty_name, counterparty_inn,
-                        purpose, purpose_category, raw_data
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        purpose, raw_data
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     ON CONFLICT (integration_id, external_transaction_id) DO NOTHING
                     RETURNING id
                 ''', (
@@ -307,7 +301,6 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     tx['counterparty_name'],
                     tx['counterparty_inn'],
                     tx['purpose'],
-                    tx['purpose_category'],
                     json.dumps(tx['raw'])
                 ))
 

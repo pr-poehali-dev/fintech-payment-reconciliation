@@ -142,6 +142,21 @@ const IntegrationConfigStep = ({
       );
     }
 
+    if (field.type === 'keywords') {
+      return (
+        <div key={field.key}>
+          <Label htmlFor={field.key}>{field.label}</Label>
+          <Input
+            id={field.key}
+            placeholder={field.placeholder}
+            value={(config[field.key] ?? '') as string}
+            onChange={(e) => onConfigChange({ ...config, [field.key]: e.target.value })}
+          />
+          {field.hint && <p className="text-xs text-muted-foreground mt-1">{field.hint}</p>}
+        </div>
+      );
+    }
+
     const isPassword = field.type === 'password';
     const isVisible = visiblePasswords[field.key];
 

@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import Icon from '@/components/ui/icon';
 import functionUrls from '../../../backend/func2url.json';
-import { PURPOSE_CATEGORY_LABELS, UserIntegration } from './integrationsPageTypes';
+import { UserIntegration } from './integrationsPageTypes';
 
 interface IntegrationCardProps {
   integration: UserIntegration;
@@ -131,14 +131,10 @@ const IntegrationCard = ({
                 </span>
               </div>
             )}
-            {Array.isArray(integration.config?.purpose_categories) && integration.config.purpose_categories.length > 0 && (
+            {integration.config?.purpose_keywords && String(integration.config.purpose_keywords).trim() && (
               <div className="text-sm">
-                <span className="text-muted-foreground">Учитываем: </span>
-                <span className="font-medium">
-                  {integration.config.purpose_categories
-                    .map((c: string) => PURPOSE_CATEGORY_LABELS[c] || c)
-                    .join(', ')}
-                </span>
+                <span className="text-muted-foreground">Ключевые слова: </span>
+                <span className="font-medium">{integration.config.purpose_keywords}</span>
               </div>
             )}
             <div className="pt-1">

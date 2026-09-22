@@ -33,9 +33,3 @@ export interface UserIntegration {
   webhook_settings: any;
   forward_url?: string;
 }
-
-export const PURPOSE_CATEGORY_LABELS: Record<string, string> = {
-  acquiring_online: 'Интернет-эквайринг',
-  acquiring_offline: 'Торговый эквайринг',
-  individual_direct: 'От физлиц напрямую'
-};
