@@ -25,12 +25,15 @@ interface Category {
   providers: Provider[];
 }
 
+type ConfigValue = string | number | boolean;
+type ConfigState = Record<string, ConfigValue>;
+
 interface UserIntegration {
   id: number;
   integration_name: string;
   provider_id: number;
-  config: any;
-  webhook_settings: any;
+  config: ConfigState;
+  webhook_settings: Record<string, boolean>;
   forward_url?: string;
 }
 
@@ -46,23 +49,76 @@ interface AddIntegrationDialogProps {
   onSuccess: () => void;
 }
 
-const defaultConfigFor = (slug: string) => {
-  switch (slug) {
-    case 'tbank':
-      return { terminal_id: '', terminal_password: '' };
-    case 'ofdru':
-      return { api_url: 'https://ofd.ru', inn: '', kkt: '', auth_token: '' };
-    case 'bitrix24':
-      return { webhook_url: '', sync_schedule: true, sync_interval_minutes: 60 };
-    case 'amocrm':
-      return { subdomain: '', api_key: '' };
-    case 'tbank_account':
-    case 'tochka_account':
-    case 'modulbank_account':
-      return { account_number: '', inn: '', api_token: '' };
-    default:
-      return {};
-  }
+type FieldType = 'text' | 'password' | 'number' | 'checkbox';
+
+interface FieldConfig {
+  key: string;
+  label: string;
+  type: FieldType;
+  placeholder?: string;
+  hint?: string;
+  default?: ConfigValue;
+  required?: boolean;
+}
+
+const DEFAULT_WEBHOOK_SETTINGS: Record<string, boolean> = {
+  notify_on_authorized: true,
+  notify_on_confirmed: true,
+  notify_on_rejected: true,
+  notify_on_refunded: true,
+  notify_on_canceled: true
+};
+
+const TBANK_NOTIFY_OPTIONS = [
+  { key: 'notify_on_authorized', label: 'Авторизован (AUTHORIZED)' },
+  { key: 'notify_on_confirmed', label: 'Подтверждён (CONFIRMED)' },
+  { key: 'notify_on_rejected', label: 'Отклонён (REJECTED)' },
+  { key: 'notify_on_refunded', label: 'Возврат (REFUNDED)' },
+  { key: 'notify_on_canceled', label: 'Отменён (CANCELED)' }
+];
+
+const BANK_ACCOUNT_FIELDS: FieldConfig[] = [
+  { key: 'account_number', label: 'Номер расчётного счёта', type: 'text', placeholder: '40702810000000000000' },
+  { key: 'inn', label: 'ИНН организации', type: 'text', placeholder: '1234567890' },
+  { key: 'api_token', label: 'Токен API банка', type: 'password', hint: 'Получите в личном кабинете банка в разделе API/интеграции' }
+];
+
+const PROVIDER_FIELDS: Record<string, FieldConfig[]> = {
+  tbank: [
+    { key: 'terminal_id', label: 'Terminal ID', type: 'text', placeholder: '1234567890', hint: 'Найдите в ЛК Т-Банк → Настройки → Терминалы' },
+    { key: 'terminal_password', label: 'Terminal Password', type: 'password', placeholder: '•••••••••' }
+  ],
+  ofdru: [
+    { key: 'api_url', label: 'API сервер', type: 'text', placeholder: 'https://ofd.ru', default: 'https://ofd.ru', hint: 'Используйте https://demo.ofd.ru для тестирования' },
+    { key: 'inn', label: 'ИНН организации', type: 'text', placeholder: '1234567890', hint: 'ИНН юридического лица (10 или 12 цифр)' },
+    { key: 'kkt', label: 'Регистрационный номер ККТ', type: 'text', placeholder: '0000111122223333', hint: 'Номер контрольно-кассовой техники' },
+    { key: 'auth_token', label: 'Токен API', type: 'password', hint: 'Получите в ЛК OFD.RU → Настройки → Управление передачей данных → Ключи доступа API OFD' }
+  ],
+  bitrix24: [
+    { key: 'webhook_url', label: 'Входящий вебхук Битрикс24', type: 'text', placeholder: 'https://yourcompany.bitrix24.ru/rest/1/xxxxxxxxxx/', hint: 'Битрикс24 → Разработчикам → Другое → Входящий вебхук. Права: crm' },
+    { key: 'sync_schedule', label: 'Обмен по расписанию', type: 'checkbox', default: true, required: false, hint: 'Клиенты и статусы синхронизируются сами, без кнопки' },
+    { key: 'sync_interval_minutes', label: 'Как часто, минут', type: 'number', placeholder: '60', default: 60, required: false, hint: 'Реже — меньше нагрузки на Битрикс' }
+  ],
+  amocrm: [
+    { key: 'subdomain', label: 'Поддомен AmoCRM', type: 'text', placeholder: 'yourcompany', hint: 'Из адреса вида yourcompany.amocrm.ru' },
+    { key: 'api_key', label: 'Долгосрочный токен доступа', type: 'password', hint: 'AmoCRM → Настройки → Интеграции → Создать интеграцию' }
+  ],
+  tbank_account: BANK_ACCOUNT_FIELDS,
+  tochka_account: BANK_ACCOUNT_FIELDS,
+  modulbank_account: BANK_ACCOUNT_FIELDS
+};
+
+// Провайдеры, для которых наш сервис принимает входящие вебхуки.
+// Только для них имеет смысл показывать URL для вебхука и переадресацию.
+const PROVIDERS_WITH_INCOMING_WEBHOOK = ['tbank'];
+
+const buildDefaultConfig = (slug: string): ConfigState => {
+  const fields = PROVIDER_FIELDS[slug] || [];
+  const config: ConfigState = {};
+  fields.forEach((field) => {
+    config[field.key] = field.default ?? (field.type === 'checkbox' ? false : '');
+  });
+  return config;
 };
 
 const AddIntegrationDialog = ({
@@ -90,51 +146,35 @@ const AddIntegrationDialog = ({
   const [isLoading, setIsLoading] = useState(false);
   const [webhookUrl, setWebhookUrl] = useState('');
   const [integrationName, setIntegrationName] = useState(editingIntegration?.integration_name || '');
-  const [config, setConfig] = useState<any>(editingIntegration?.config || {});
-  const [webhookSettings, setWebhookSettings] = useState(editingIntegration?.webhook_settings || {
-    notify_on_authorized: true,
-    notify_on_confirmed: true,
-    notify_on_rejected: true,
-    notify_on_refunded: true,
-    notify_on_canceled: true
-  });
+  const [config, setConfig] = useState<ConfigState>(editingIntegration?.config || {});
+  const [webhookSettings, setWebhookSettings] = useState(editingIntegration?.webhook_settings || DEFAULT_WEBHOOK_SETTINGS);
   const [forwardUrl, setForwardUrl] = useState(editingIntegration?.forward_url || '');
+  const [visiblePasswords, setVisiblePasswords] = useState<Record<string, boolean>>({});
   const { toast } = useToast();
 
   useEffect(() => {
-    if (open) {
-      if (editingIntegration) {
-        const prov = allProviders.find(p => p.id === editingIntegration.provider_id) || null;
-        setStep(2);
-        setSelectedProvider(prov);
-        setSelectedCategory(categories.find(c => c.providers.some(p => p.id === editingIntegration.provider_id)) || null);
-        setIntegrationName(editingIntegration.integration_name || '');
-        setConfig(editingIntegration.config || defaultConfigFor(prov?.slug || ''));
-        setWebhookSettings(editingIntegration.webhook_settings || {
-          notify_on_authorized: true,
-          notify_on_confirmed: true,
-          notify_on_rejected: true,
-          notify_on_refunded: true,
-          notify_on_canceled: true
-        });
-        setForwardUrl(editingIntegration.forward_url || '');
-      } else {
-        setStep(initialCategory ? 1 : 0);
-        setSelectedCategory(initialCategory);
-        setSelectedProvider(null);
-        setIntegrationName('');
-        setConfig({});
-        setWebhookSettings({
-          notify_on_authorized: true,
-          notify_on_confirmed: true,
-          notify_on_rejected: true,
-          notify_on_refunded: true,
-          notify_on_canceled: true
-        });
-        setForwardUrl('');
-      }
-      setWebhookUrl('');
+    if (!open) return;
+
+    if (editingIntegration) {
+      const prov = allProviders.find(p => p.id === editingIntegration.provider_id) || null;
+      setStep(2);
+      setSelectedProvider(prov);
+      setSelectedCategory(categories.find(c => c.providers.some(p => p.id === editingIntegration.provider_id)) || null);
+      setIntegrationName(editingIntegration.integration_name || '');
+      setConfig(editingIntegration.config || buildDefaultConfig(prov?.slug || ''));
+      setWebhookSettings(editingIntegration.webhook_settings || DEFAULT_WEBHOOK_SETTINGS);
+      setForwardUrl(editingIntegration.forward_url || '');
+    } else {
+      setStep(initialCategory ? 1 : 0);
+      setSelectedCategory(initialCategory);
+      setSelectedProvider(null);
+      setIntegrationName('');
+      setConfig({});
+      setWebhookSettings(DEFAULT_WEBHOOK_SETTINGS);
+      setForwardUrl('');
     }
+    setWebhookUrl('');
+    setVisiblePasswords({});
   }, [open, editingIntegration, initialCategory, allProviders, categories]);
 
   const handlePickCategory = (category: Category) => {
@@ -144,9 +184,11 @@ const AddIntegrationDialog = ({
 
   const handlePickProvider = (prov: Provider) => {
     setSelectedProvider(prov);
-    setConfig(defaultConfigFor(prov.slug));
+    setConfig(buildDefaultConfig(prov.slug));
     setStep(2);
   };
+
+  const acceptsIncomingWebhook = (slug?: string) => !!slug && PROVIDERS_WITH_INCOMING_WEBHOOK.includes(slug);
 
   const handleCreate = async () => {
     if (!selectedProvider) return;
@@ -163,7 +205,7 @@ const AddIntegrationDialog = ({
             integration_name: integrationName,
             config,
             webhook_settings: webhookSettings,
-            forward_url: forwardUrl
+            forward_url: acceptsIncomingWebhook(selectedProvider.slug) ? forwardUrl : ''
           })
         });
 
@@ -189,14 +231,14 @@ const AddIntegrationDialog = ({
             integration_name: integrationName || selectedProvider.name,
             config,
             webhook_settings: webhookSettings,
-            forward_url: forwardUrl
+            forward_url: acceptsIncomingWebhook(selectedProvider.slug) ? forwardUrl : ''
           })
         });
 
         const data = await response.json();
 
         if (response.ok && data.success) {
-          setWebhookUrl(data.webhook_url);
+          setWebhookUrl(data.webhook_url || '');
           setStep(3);
           toast({
             title: 'Интеграция создана',
@@ -240,24 +282,68 @@ const AddIntegrationDialog = ({
     });
   };
 
+  const togglePasswordVisibility = (key: string) => {
+    setVisiblePasswords(prev => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const currentFields = selectedProvider ? PROVIDER_FIELDS[selectedProvider.slug] || [] : [];
+
   const isConfigValid = () => {
     if (!selectedProvider) return false;
-    switch (selectedProvider.slug) {
-      case 'tbank':
-        return !!config.terminal_id && !!config.terminal_password;
-      case 'ofdru':
-        return !!config.inn && !!config.kkt && !!config.auth_token;
-      case 'bitrix24':
-        return !!config.webhook_url;
-      case 'amocrm':
-        return !!config.subdomain && !!config.api_key;
-      case 'tbank_account':
-      case 'tochka_account':
-      case 'modulbank_account':
-        return !!config.account_number && !!config.api_token;
-      default:
-        return true;
+    return currentFields
+      .filter(field => field.required !== false)
+      .every(field => {
+        const value = config[field.key];
+        return value !== undefined && value !== null && String(value).trim() !== '';
+      });
+  };
+
+  const renderField = (field: FieldConfig) => {
+    if (field.type === 'checkbox') {
+      return (
+        <label key={field.key} className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            checked={!!config[field.key]}
+            onChange={(e) => setConfig({ ...config, [field.key]: e.target.checked })}
+          />
+          <span className="text-sm">{field.label}</span>
+        </label>
+      );
     }
+
+    const isPassword = field.type === 'password';
+    const isVisible = visiblePasswords[field.key];
+
+    return (
+      <div key={field.key}>
+        <Label htmlFor={field.key}>{field.label}</Label>
+        <div className="relative">
+          <Input
+            id={field.key}
+            type={isPassword && !isVisible ? 'password' : field.type === 'number' ? 'number' : 'text'}
+            placeholder={field.placeholder}
+            value={(config[field.key] ?? '') as string | number}
+            onChange={(e) => setConfig({
+              ...config,
+              [field.key]: field.type === 'number' ? Number(e.target.value) : e.target.value
+            })}
+            className={isPassword ? 'pr-10' : undefined}
+          />
+          {isPassword && (
+            <button
+              type="button"
+              onClick={() => togglePasswordVisibility(field.key)}
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              tabIndex={-1}
+            >
+              <Icon name={isVisible ? 'EyeOff' : 'Eye'} size={16} />
+            </button>
+          )}
+        </div>
+        {field.hint && <p className="text-xs text-muted-foreground mt-1">{field.hint}</p>}
+      </div>
+    );
   };
 
   return (
@@ -352,214 +438,27 @@ const AddIntegrationDialog = ({
               />
             </div>
 
+            {currentFields.map(renderField)}
+
             {selectedProvider.slug === 'tbank' && (
-              <>
-                <div>
-                  <Label htmlFor="terminal_id">Terminal ID</Label>
-                  <Input
-                    id="terminal_id"
-                    placeholder="1234567890"
-                    value={config.terminal_id || ''}
-                    onChange={(e) => setConfig({ ...config, terminal_id: e.target.value })}
-                  />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Найдите в ЛК Т-Банк → Настройки → Терминалы
-                  </p>
-                </div>
-
-                <div>
-                  <Label htmlFor="terminal_password">Terminal Password</Label>
-                  <Input
-                    id="terminal_password"
-                    type="password"
-                    placeholder="•••••••••"
-                    value={config.terminal_password || ''}
-                    onChange={(e) => setConfig({ ...config, terminal_password: e.target.value })}
-                  />
-                </div>
-
+              <div className="space-y-2">
+                <Label>Уведомления о статусах платежей</Label>
                 <div className="space-y-2">
-                  <Label>Уведомления о статусах платежей</Label>
-                  <div className="space-y-2">
-                    {[
-                      { key: 'notify_on_authorized', label: 'Авторизован (AUTHORIZED)' },
-                      { key: 'notify_on_confirmed', label: 'Подтверждён (CONFIRMED)' },
-                      { key: 'notify_on_rejected', label: 'Отклонён (REJECTED)' },
-                      { key: 'notify_on_refunded', label: 'Возврат (REFUNDED)' },
-                      { key: 'notify_on_canceled', label: 'Отменён (CANCELED)' }
-                    ].map(({ key, label }) => (
-                      <label key={key} className="flex items-center gap-2">
-                        <input
-                          type="checkbox"
-                          checked={!!webhookSettings[key]}
-                          onChange={(e) => setWebhookSettings({ ...webhookSettings, [key]: e.target.checked })}
-                        />
-                        <span className="text-sm">{label}</span>
-                      </label>
-                    ))}
-                  </div>
+                  {TBANK_NOTIFY_OPTIONS.map(({ key, label }) => (
+                    <label key={key} className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={!!webhookSettings[key]}
+                        onChange={(e) => setWebhookSettings({ ...webhookSettings, [key]: e.target.checked })}
+                      />
+                      <span className="text-sm">{label}</span>
+                    </label>
+                  ))}
                 </div>
-              </>
+              </div>
             )}
 
-            {selectedProvider.slug === 'ofdru' && (
-              <>
-                <div>
-                  <Label htmlFor="api_url">API сервер</Label>
-                  <Input
-                    id="api_url"
-                    placeholder="https://ofd.ru"
-                    value={config.api_url || 'https://ofd.ru'}
-                    onChange={(e) => setConfig({ ...config, api_url: e.target.value })}
-                  />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Используйте https://demo.ofd.ru для тестирования
-                  </p>
-                </div>
-
-                <div>
-                  <Label htmlFor="inn">ИНН организации</Label>
-                  <Input
-                    id="inn"
-                    placeholder="1234567890"
-                    value={config.inn || ''}
-                    onChange={(e) => setConfig({ ...config, inn: e.target.value })}
-                  />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    ИНН юридического лица (10 или 12 цифр)
-                  </p>
-                </div>
-
-                <div>
-                  <Label htmlFor="kkt">Регистрационный номер ККТ</Label>
-                  <Input
-                    id="kkt"
-                    placeholder="0000111122223333"
-                    value={config.kkt || ''}
-                    onChange={(e) => setConfig({ ...config, kkt: e.target.value })}
-                  />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Номер контрольно-кассовой техники
-                  </p>
-                </div>
-
-                <div>
-                  <Label htmlFor="auth_token">Токен API</Label>
-                  <Input
-                    id="auth_token"
-                    type="password"
-                    placeholder="•••••••••"
-                    value={config.auth_token || ''}
-                    onChange={(e) => setConfig({ ...config, auth_token: e.target.value })}
-                  />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Получите в ЛК OFD.RU → Настройки → Управление передачей данных → Ключи доступа API OFD
-                  </p>
-                </div>
-              </>
-            )}
-
-            {selectedProvider.slug === 'bitrix24' && (
-              <>
-                <div>
-                  <Label htmlFor="webhook_url">Входящий вебхук Битрикс24</Label>
-                  <Input
-                    id="webhook_url"
-                    placeholder="https://yourcompany.bitrix24.ru/rest/1/xxxxxxxxxx/"
-                    value={config.webhook_url || ''}
-                    onChange={(e) => setConfig({ ...config, webhook_url: e.target.value })}
-                  />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Битрикс24 → Разработчикам → Другое → Входящий вебхук. Права: crm
-                  </p>
-                </div>
-
-                <div>
-                  <Label htmlFor="sync_interval">Обмен по расписанию, минут</Label>
-                  <Input
-                    id="sync_interval"
-                    type="number"
-                    placeholder="60"
-                    value={config.sync_interval_minutes || 60}
-                    onChange={(e) => setConfig({ ...config, sync_interval_minutes: Number(e.target.value) })}
-                  />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Клиенты и статусы синхронизируются сами, без кнопки
-                  </p>
-                </div>
-              </>
-            )}
-
-            {selectedProvider.slug === 'amocrm' && (
-              <>
-                <div>
-                  <Label htmlFor="subdomain">Поддомен AmoCRM</Label>
-                  <Input
-                    id="subdomain"
-                    placeholder="yourcompany"
-                    value={config.subdomain || ''}
-                    onChange={(e) => setConfig({ ...config, subdomain: e.target.value })}
-                  />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Из адреса вида yourcompany.amocrm.ru
-                  </p>
-                </div>
-
-                <div>
-                  <Label htmlFor="api_key">Долгосрочный токен доступа</Label>
-                  <Input
-                    id="api_key"
-                    type="password"
-                    placeholder="•••••••••"
-                    value={config.api_key || ''}
-                    onChange={(e) => setConfig({ ...config, api_key: e.target.value })}
-                  />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    AmoCRM → Настройки → Интеграции → Создать интеграцию
-                  </p>
-                </div>
-              </>
-            )}
-
-            {(selectedProvider.slug === 'tbank_account' || selectedProvider.slug === 'tochka_account' || selectedProvider.slug === 'modulbank_account') && (
-              <>
-                <div>
-                  <Label htmlFor="account_number">Номер расчётного счёта</Label>
-                  <Input
-                    id="account_number"
-                    placeholder="40702810000000000000"
-                    value={config.account_number || ''}
-                    onChange={(e) => setConfig({ ...config, account_number: e.target.value })}
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="bank_inn">ИНН организации</Label>
-                  <Input
-                    id="bank_inn"
-                    placeholder="1234567890"
-                    value={config.inn || ''}
-                    onChange={(e) => setConfig({ ...config, inn: e.target.value })}
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="api_token">Токен API банка</Label>
-                  <Input
-                    id="api_token"
-                    type="password"
-                    placeholder="•••••••••"
-                    value={config.api_token || ''}
-                    onChange={(e) => setConfig({ ...config, api_token: e.target.value })}
-                  />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Получите в личном кабинете банка в разделе API/интеграции
-                  </p>
-                </div>
-              </>
-            )}
-
-            {selectedProvider.slug !== 'ofdru' && (
+            {acceptsIncomingWebhook(selectedProvider.slug) && (
               <div>
                 <Label htmlFor="forward_url">URL для переадресации (опционально)</Label>
                 <Input
@@ -600,7 +499,7 @@ const AddIntegrationDialog = ({
           </div>
         )}
 
-        {step === 3 && (
+        {step === 3 && selectedProvider && (
           <div className="space-y-4">
             <div className="bg-success/10 p-4 rounded-lg">
               <div className="flex items-center gap-2 mb-2">
@@ -611,33 +510,47 @@ const AddIntegrationDialog = ({
               </div>
             </div>
 
-            <div>
-              <Label>Ваш уникальный URL для вебхуков</Label>
-              <div className="flex gap-2 mt-1">
-                <Input value={webhookUrl} readOnly className="font-mono text-sm" />
-                <Button onClick={copyToClipboard} variant="outline" size="icon">
-                  <Icon name="Copy" size={16} />
-                </Button>
-              </div>
-            </div>
+            {acceptsIncomingWebhook(selectedProvider.slug) ? (
+              <>
+                <div>
+                  <Label>Ваш уникальный URL для вебхуков</Label>
+                  <div className="flex gap-2 mt-1">
+                    <Input value={webhookUrl} readOnly className="font-mono text-sm" />
+                    <Button onClick={copyToClipboard} variant="outline" size="icon">
+                      <Icon name="Copy" size={16} />
+                    </Button>
+                  </div>
+                </div>
 
-            <div className="bg-info/10 p-4 rounded-lg space-y-3">
-              <div className="flex items-start gap-2">
-                <Icon name="Info" className="text-info mt-0.5" size={18} />
-                <div className="text-sm">
-                  <p className="font-semibold text-foreground mb-2">
-                    Инструкция по настройке:
+                <div className="bg-info/10 p-4 rounded-lg space-y-3">
+                  <div className="flex items-start gap-2">
+                    <Icon name="Info" className="text-info mt-0.5" size={18} />
+                    <div className="text-sm">
+                      <p className="font-semibold text-foreground mb-2">
+                        Инструкция по настройке:
+                      </p>
+                      <ol className="list-decimal list-inside space-y-1 text-muted-foreground">
+                        <li>Откройте личный кабинет сервиса</li>
+                        <li>Перейдите в раздел уведомлений / вебхуков</li>
+                        <li>Вставьте скопированный URL в поле "URL для уведомлений"</li>
+                        <li>Выберите метод: POST</li>
+                        <li>Сохраните настройки</li>
+                      </ol>
+                    </div>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="bg-info/10 p-4 rounded-lg space-y-2">
+                <div className="flex items-start gap-2">
+                  <Icon name="Info" className="text-info mt-0.5" size={18} />
+                  <p className="text-sm text-muted-foreground">
+                    Интеграция подключена и начнёт синхронизацию данных автоматически.
+                    Дополнительных действий на вашей стороне не требуется.
                   </p>
-                  <ol className="list-decimal list-inside space-y-1 text-muted-foreground">
-                    <li>Откройте личный кабинет сервиса</li>
-                    <li>Перейдите в раздел уведомлений / вебхуков</li>
-                    <li>Вставьте скопированный URL в поле "URL для уведомлений"</li>
-                    <li>Выберите метод: POST</li>
-                    <li>Сохраните настройки</li>
-                  </ol>
                 </div>
               </div>
-            </div>
+            )}
 
             <div className="flex justify-end gap-2">
               <Button onClick={handleFinish}>
