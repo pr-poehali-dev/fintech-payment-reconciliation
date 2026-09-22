@@ -99,7 +99,7 @@ const EcomkassaStorePicker = ({ config, onConfigChange }: EcomkassaStorePickerPr
         ) : (
           <Icon name="LogIn" size={14} className="mr-2" />
         )}
-        {hasToken ? 'Обновить список магазинов' : 'Войти и получить список магазинов'}
+        {hasToken ? 'Обновить список магазинов' : 'Выбрать магазин'}
       </Button>
 
       {error && <p className="text-xs text-destructive">{error}</p>}
@@ -124,8 +124,7 @@ const EcomkassaStorePicker = ({ config, onConfigChange }: EcomkassaStorePickerPr
             <SelectContent>
               {stores.map((store) => (
                 <SelectItem key={String(store.id)} value={String(store.id)}>
-                  {store.name || `Магазин #${store.id}`}
-                  {store.address ? ` · ${store.address}` : ''}
+                  {`ID ${store.id}: ${store.name || 'Без названия'}`}
                 </SelectItem>
               ))}
               {storeId && !stores.some((s) => String(s.id) === storeId) && (
