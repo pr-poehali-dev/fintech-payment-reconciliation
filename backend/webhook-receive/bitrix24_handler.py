@@ -15,6 +15,26 @@ STAGE_MAP = {
 }
 
 
+def _extract_deal_id(webhook_data: Dict[str, Any]) -> Optional[str]:
+    '''
+    Битрикс24 присылает ID сделки в разных форматах в зависимости от типа события:
+    - обычный вебхук по сделке: data[FIELDS][ID]=123
+    - робот/бизнес-процесс CRM: document_id[2]=DEAL_123 (и document_id[0]=crm)
+    '''
+    fields = webhook_data.get('data', {}).get('FIELDS', {}) if isinstance(webhook_data.get('data'), dict) else {}
+    deal_id = fields.get('ID') if isinstance(fields, dict) else None
+    if deal_id:
+        return str(deal_id)
+
+    document_id = webhook_data.get('document_id')
+    if isinstance(document_id, dict):
+        raw_ref = document_id.get('2') or document_id.get(2)
+        if isinstance(raw_ref, str) and raw_ref.upper().startswith('DEAL_'):
+            return raw_ref.split('_', 1)[1]
+
+    return None
+
+
 def fetch_deal_details(webhook_url: str, deal_id: str) -> Optional[Dict[str, Any]]:
     '''
     Вебхук Битрикс24 присылает только событие и ID сделки (data[FIELDS][ID]),
@@ -39,8 +59,7 @@ def process(cur, integration_id: int, company_id: int, config: Dict[str, Any],
     if not webhook_url:
         return False, 'webhook_url not configured'
 
-    fields = webhook_data.get('data', {}).get('FIELDS', {}) if isinstance(webhook_data.get('data'), dict) else {}
-    deal_id = fields.get('ID') if isinstance(fields, dict) else None
+    deal_id = _extract_deal_id(webhook_data)
 
     if not deal_id:
         return False, 'Deal ID not found in webhook payload'
