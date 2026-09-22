@@ -6,7 +6,6 @@ import DashboardOverview from './dashboard/DashboardOverview';
 import { useDashboardStats } from './dashboard/useDashboardStats';
 import AccessManagement from './AccessManagement';
 import IntegrationsPage from './IntegrationsPage';
-import PaymentsPage from './PaymentsPage';
 import ReceiptsPage from './ReceiptsPage';
 import EventsPage from './EventsPage';
 import ReconciliationPlaceholder from './ReconciliationPlaceholder';
@@ -46,7 +45,6 @@ const Index = () => {
 
       <main className="ml-64 mt-16 p-8">
         {activeModule === 'dashboard' && <DashboardOverview stats={stats} mounted={mounted} />}
-        {activeModule === 'payments' && <PaymentsPage />}
         {activeModule === 'receipts' && <ReceiptsPage />}
         {activeModule === 'reconciliation' && <ReconciliationPlaceholder />}
         {activeModule === 'events' && <EventsPage />}

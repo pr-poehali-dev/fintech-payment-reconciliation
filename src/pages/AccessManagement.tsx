@@ -48,9 +48,9 @@ interface Role {
 
 const modules = [
   { id: 'dashboard', name: 'Дашборд', icon: 'LayoutDashboard' },
-  { id: 'payments', name: 'Платежи', icon: 'CreditCard' },
   { id: 'receipts', name: 'Чеки', icon: 'Receipt' },
   { id: 'reconciliation', name: 'Сверка', icon: 'GitCompare' },
+  { id: 'events', name: 'События', icon: 'Radio' },
   { id: 'integrations', name: 'Интеграции', icon: 'Plug' },
   { id: 'access', name: 'Управление доступом', icon: 'Users' },
   { id: 'settings', name: 'Настройки', icon: 'Settings' }

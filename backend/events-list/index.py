@@ -18,11 +18,11 @@ PROVIDER_TYPE_LABELS = {
 
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     '''
-    Единая лента событий компании: платежи эквайринга (webhook_payments),
-    сделки CRM (crm_deals - одна строка на сделку, повторные хуки схлопываются
-    через webhook_count), ошибки обработки хуков CRM (сгруппированы по сделке)
-    и операции по расчётному счёту (второй слой обработки, приходит не вебхуком,
-    а дозагрузкой). Для каждого события отдаётся человекочитаемый номер
+    Единая лента событий компании: платежи эквайринга (webhook_payments -
+    группировка по заказу, повторные хуки уходят в webhook_history), сделки
+    CRM (webhook_events - группировка по сделке, аналогично) и операции по
+    расчётному счёту (второй слой обработки, приходит не вебхуком, а
+    дозагрузкой). Для каждого события отдаётся человекочитаемый номер
     (ID платежа/сделки/операции) и краткое summary для отображения в таблице.
     Args: company_id (обязателен), integration_id, provider_slug, limit, offset (опционально)
     Returns: events[] с полями created_at, integration_name, provider_type, event_number, summary, raw
@@ -73,8 +73,11 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     try:
         events = []
 
-        # 1. Платежи эквайринга (Т-Банк и т.д.) - каждая строка это отдельный
-        # входящий вебхук об изменении статуса платежа, с уже разобранными полями.
+        # 1. Платежи эквайринга (Т-Банк и т.д.) - группируем по заказу (order_id,
+        # либо payment_id, если заказа нет), как сделки CRM группируются по
+        # external_deal_id. Каждый входящий вебхук об изменении статуса платежа
+        # попадает в webhook_history этой группы - в интерфейсе это раскрывающийся
+        # список со статусом, датой и raw каждого отдельного вебхука.
         pay_where = 'WHERE wp.company_id = %s'
         pay_params = [company_id]
         if integration_id:
@@ -92,30 +95,56 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             JOIN t_p83864310_fintech_payment_reco.user_integrations ui ON ui.id = wp.integration_id
             JOIN t_p83864310_fintech_payment_reco.integration_providers p ON p.id = ui.provider_id
             {pay_where}
-            ORDER BY wp.created_at DESC
-            LIMIT %s OFFSET %s
-        ''', pay_params + [limit, offset])
+            ORDER BY wp.created_at ASC
+        ''', pay_params)
 
+        pay_groups: Dict[Any, Dict[str, Any]] = {}
         for row in cur.fetchall():
             (pay_id, created_at, p_slug, payment_id, order_id, amount, status,
              raw_data, integration_name, provider_name) = row
 
-            amount_str = f'{float(amount):.2f} ₽' if amount is not None else ''
-            summary = f'Платёж #{payment_id} · {status} {amount_str}'.strip()
-
-            events.append({
-                'id': f'wp_{pay_id}',
-                'source': 'payment',
-                'created_at': created_at.isoformat() if created_at else None,
-                'provider_slug': p_slug,
-                'provider_type': PROVIDER_TYPE_LABELS.get(p_slug, provider_name),
-                'integration_name': integration_name,
-                'event_type': 'payment_status_changed',
+            group_key = order_id or payment_id
+            if group_key not in pay_groups:
+                pay_groups[group_key] = {
+                    'payment_id': payment_id,
+                    'order_id': order_id,
+                    'amount': amount,
+                    'p_slug': p_slug,
+                    'integration_name': integration_name,
+                    'provider_name': provider_name,
+                    'history': []
+                }
+            pay_groups[group_key]['history'].append({
+                'id': pay_id,
                 'status': status,
                 'error_message': None,
-                'event_number': str(payment_id),
+                'created_at': created_at.isoformat() if created_at else None,
+                'raw': raw_data,
+                'event_type': 'payment_status_changed'
+            })
+
+        for group_key, group in pay_groups.items():
+            history = group['history']
+            latest = history[-1]
+            amount_str = f'{float(group["amount"]):.2f} ₽' if group['amount'] is not None else ''
+            summary = f'Платёж #{group["payment_id"]} · {latest["status"]} {amount_str}'.strip()
+            if len(history) > 1:
+                summary += f' ({len(history)} хуков)'
+
+            events.append({
+                'id': f'paygrp_{group_key}',
+                'source': 'payment',
+                'created_at': latest['created_at'],
+                'provider_slug': group['p_slug'],
+                'provider_type': PROVIDER_TYPE_LABELS.get(group['p_slug'], group['provider_name']),
+                'integration_name': group['integration_name'],
+                'event_type': 'payment_status_changed',
+                'status': latest['status'],
+                'error_message': None,
+                'event_number': str(group['payment_id']),
                 'summary': summary,
-                'raw': raw_data
+                'raw': latest['raw'],
+                'webhook_history': history
             })
 
         # 2. События CRM (Битрикс24, AmoCRM) - группируем по сделке (integration_id +
