@@ -1,0 +1,36 @@
+{
+  "tests": [
+    {
+      "name": "Missing integration_id",
+      "method": "POST",
+      "body": {},
+      "expectedStatus": 400,
+      "expectedBody": {
+        "error": "integration_id required"
+      },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Missing legacy_no and order_id",
+      "method": "POST",
+      "body": {
+        "integration_id": 1
+      },
+      "expectedStatus": 400,
+      "expectedBody": {
+        "error": "legacy_no or order_id required"
+      },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Integration not found",
+      "method": "POST",
+      "body": {
+        "integration_id": 999999,
+        "legacy_no": "123"
+      },
+      "expectedStatus": 404,
+      "bodyMatcher": "partial"
+    }
+  ]
+}

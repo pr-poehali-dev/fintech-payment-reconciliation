@@ -1,4 +1,6 @@
 {
+  "ecomkassa-stores-list": "https://functions.poehali.dev/293acc44-92a5-42c7-a447-d81ba1f25675",
+  "ecomkassa-fetch-receipts": "https://functions.poehali.dev/a9ab8e62-305a-4e44-967f-f09088c76d0e",
   "events-list": "https://functions.poehali.dev/b6886169-4418-469f-8f4f-11ed2516c649",
   "tbank-accounts-list": "https://functions.poehali.dev/4fad47a2-b422-43d2-80c3-edb30a7bfd5c",
   "tbank-oauth-callback": "https://functions.poehali.dev/116ac0e9-9ab9-4d33-a80d-6554628b9f53",

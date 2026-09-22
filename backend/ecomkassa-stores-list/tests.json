@@ -1,0 +1,14 @@
+{
+  "tests": [
+    {
+      "name": "Missing login and password",
+      "method": "POST",
+      "body": {},
+      "expectedStatus": 400,
+      "expectedBody": {
+        "error": "login and password required"
+      },
+      "bodyMatcher": "partial"
+    }
+  ]
+}

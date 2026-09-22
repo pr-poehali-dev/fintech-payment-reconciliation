@@ -4,6 +4,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import Icon from '@/components/ui/icon';
 import TbankAccountPicker from './TbankAccountPicker';
+import EcomkassaStorePicker from './EcomkassaStorePicker';
 import {
   ConfigState,
   FieldConfig,
@@ -54,9 +55,14 @@ const IntegrationConfigStep = ({
 }: IntegrationConfigStepProps) => {
   const currentFields = PROVIDER_FIELDS[selectedProvider.slug] || [];
   const isTbankAccount = selectedProvider.slug === 'tbank_account';
+  const isEcomkassa = selectedProvider.slug === 'ecomkassa';
 
   const isConfigValid = () => {
     if (isTbankAccount && !String(config.account_number ?? '').trim()) {
+      return false;
+    }
+
+    if (isEcomkassa && (!config.token || !String(config.store_id ?? '').trim())) {
       return false;
     }
 
@@ -187,6 +193,13 @@ const IntegrationConfigStep = ({
           companyId={companyId}
           accountNumber={String(config.account_number ?? '')}
           onAccountNumberChange={(value) => onConfigChange({ ...config, account_number: value })}
+        />
+      )}
+
+      {isEcomkassa && (
+        <EcomkassaStorePicker
+          config={config}
+          onConfigChange={onConfigChange}
         />
       )}
 

@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import Icon from '@/components/ui/icon';
 import functionUrls from '../../../backend/func2url.json';
 import { PURPOSE_CATEGORY_LABELS, UserIntegration } from './integrationsPageTypes';
+import EcomkassaFetchReceiptBlock from './EcomkassaFetchReceiptBlock';
 
 interface IntegrationCardProps {
   integration: UserIntegration;
@@ -35,6 +36,7 @@ const IntegrationCard = ({
   const isOFD = integration.category_slug === 'ofd';
   const isBank = integration.category_slug === 'banks';
   const isCrm = integration.category_slug === 'crm';
+  const isEcomkassa = integration.provider_slug === 'ecomkassa';
 
   return (
     <Card className="overflow-hidden">
@@ -90,7 +92,23 @@ const IntegrationCard = ({
             <Icon name="Trash2" size={16} />
           </Button>
         </div>
-        {isOFD ? (
+        {isEcomkassa ? (
+          <>
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted-foreground">Магазин:</span>
+              <span className="font-medium font-mono">{integration.config?.store_id || '—'}</span>
+            </div>
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted-foreground">Версия протокола:</span>
+              <span className="font-medium">{integration.config?.protocol_version || 'v4'}</span>
+            </div>
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted-foreground">Последняя загрузка:</span>
+              <span className="font-medium">{formatDate(integration.last_synced_at ?? null)}</span>
+            </div>
+            <EcomkassaFetchReceiptBlock integrationId={integration.id} />
+          </>
+        ) : isOFD ? (
           <>
             <div className="flex items-center justify-between text-sm">
               <span className="text-muted-foreground">ИНН:</span>

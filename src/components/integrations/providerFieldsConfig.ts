@@ -56,6 +56,11 @@ export const SYNC_INTERVAL_OPTIONS: FieldOption[] = [
   { value: '12', label: '2 раза в сутки (каждые 12 часов)' }
 ];
 
+export const ECOMKASSA_PROTOCOL_OPTIONS: FieldOption[] = [
+  { value: 'v4', label: 'v4 (текущая)' },
+  { value: 'v5', label: 'v5' }
+];
+
 export const DEFAULT_WEBHOOK_SETTINGS: Record<string, boolean> = {
   notify_on_authorized: true,
   notify_on_confirmed: true,
@@ -122,7 +127,21 @@ export const PROVIDER_FIELDS: Record<string, FieldConfig[]> = {
     }
   ],
   tochka_account: BANK_ACCOUNT_FIELDS,
-  modulbank_account: BANK_ACCOUNT_FIELDS
+  modulbank_account: BANK_ACCOUNT_FIELDS,
+  // login/password/store_id для ecomkassa не входят в общий список полей -
+  // логин и пароль вводятся в EcomkassaStorePicker, который по ним получает
+  // токен и список магазинов, а сам магазин выбирается там же из списка.
+  ecomkassa: [
+    {
+      key: 'protocol_version',
+      label: 'Версия протокола',
+      type: 'select',
+      options: ECOMKASSA_PROTOCOL_OPTIONS,
+      default: 'v4',
+      required: false,
+      hint: 'Уточните у Екомкассы, если не уверены — по умолчанию v4'
+    }
+  ]
 };
 
 // Провайдеры, для которых наш сервис принимает входящие вебхуки.

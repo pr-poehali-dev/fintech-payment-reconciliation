@@ -1,0 +1,1 @@
+UPDATE t_p83864310_fintech_payment_reco.user_integrations SET status = 'inactive' WHERE id = 13;
