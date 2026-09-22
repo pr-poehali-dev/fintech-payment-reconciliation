@@ -8,6 +8,7 @@ import AccessManagement from './AccessManagement';
 import IntegrationsPage from './IntegrationsPage';
 import PaymentsPage from './PaymentsPage';
 import ReceiptsPage from './ReceiptsPage';
+import EventsPage from './EventsPage';
 import ReconciliationPlaceholder from './ReconciliationPlaceholder';
 import SettingsPlaceholder from './SettingsPlaceholder';
 import { useAuth } from '@/contexts/AuthContext';
@@ -48,6 +49,7 @@ const Index = () => {
         {activeModule === 'payments' && <PaymentsPage />}
         {activeModule === 'receipts' && <ReceiptsPage />}
         {activeModule === 'reconciliation' && <ReconciliationPlaceholder />}
+        {activeModule === 'events' && <EventsPage />}
         {activeModule === 'integrations' && <IntegrationsPage />}
         {activeModule === 'access' && <AccessManagement />}
         {activeModule === 'settings' && <SettingsPlaceholder />}

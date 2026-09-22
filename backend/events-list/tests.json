@@ -1,0 +1,21 @@
+{
+  "tests": [
+    {
+      "name": "Missing company_id",
+      "method": "GET",
+      "path": "/",
+      "expectedStatus": 400,
+      "expectedBody": {
+        "error": "company_id required"
+      },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Get events list",
+      "method": "GET",
+      "path": "/?company_id=2",
+      "expectedStatus": 200,
+      "bodyMatcher": "partial"
+    }
+  ]
+}
