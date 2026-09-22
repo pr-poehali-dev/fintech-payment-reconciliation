@@ -1,4 +1,5 @@
 {
+  "bank-statement-sync": "https://functions.poehali.dev/916892e2-fd4d-4106-8d92-a95be195aa99",
   "invite-accept": "https://functions.poehali.dev/9573a48c-1bb7-452e-babb-9dbc0c56a970",
   "admin-roles-create": "https://functions.poehali.dev/0e566812-9f41-40cc-ae01-2533e0398b52",
   "admin-roles-update": "https://functions.poehali.dev/ea75cd6f-64be-4d5c-98de-45d4aa23902a",

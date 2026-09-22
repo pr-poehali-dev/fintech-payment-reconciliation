@@ -1,81 +1,53 @@
 import json
 import os
-import hashlib
 import psycopg2
 import urllib.request
 import urllib.error
 import time
 from typing import Dict, Any
 
-def verify_tbank_token(data: Dict[str, Any], terminal_password: str) -> bool:
-    '''
-    Проверка подписи вебхука от Тбанка
-    Алгоритм согласно https://developer.tbank.ru/eacq/intro/developer/token:
-    1. Собрать параметры (исключить Token и вложенные объекты)
-    2. Добавить Password
-    3. Отсортировать по ключу
-    4. Сконкатенировать значения
-    5. SHA-256
-    '''
-    received_token = data.get('Token', '')
-    if not received_token:
-        return False
-    
-    params_to_hash = {}
-    
-    for key, value in data.items():
-        if key == 'Token':
-            continue
-        
-        if isinstance(value, (dict, list)):
-            continue
-        
-        if isinstance(value, bool):
-            params_to_hash[key] = 'true' if value else 'false'
-        else:
-            params_to_hash[key] = str(value)
-    
-    params_to_hash['Password'] = terminal_password
-    
-    sorted_keys = sorted(params_to_hash.keys())
-    values_list = [params_to_hash[key] for key in sorted_keys]
-    concatenated = ''.join(values_list)
-    
-    calculated_token = hashlib.sha256(concatenated.encode('utf-8')).hexdigest()
-    
-    print(f"[DEBUG SIGNATURE] Params: {params_to_hash}")
-    print(f"[DEBUG SIGNATURE] Sorted keys: {sorted_keys}")
-    print(f"[DEBUG SIGNATURE] Values: {values_list}")
-    print(f"[DEBUG SIGNATURE] Concatenated: {concatenated}")
-    print(f"[DEBUG SIGNATURE] Calculated: {calculated_token}")
-    print(f"[DEBUG SIGNATURE] Received: {received_token}")
-    print(f"[DEBUG SIGNATURE] Match: {calculated_token == received_token}")
-    
-    return calculated_token == received_token
+from form_parser import parse_webhook_body
+from inbox import save_event, mark_processed
+import tbank_handler
+import bitrix24_handler
+import amocrm_handler
+
+CORS_HEADERS = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Max-Age': '86400'
+}
+
+# Каждый провайдер имеет свой изолированный обработчик и свой event_type -
+# события разных провайдеров никогда не смешиваются, даже если прилетят
+# в одну и ту же секунду.
+EVENT_TYPE_BY_PROVIDER = {
+    'tbank': 'payment_status_changed',
+    'bitrix24': 'deal_updated',
+    'amocrm': 'lead_updated'
+}
+
 
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     '''
-    Прием вебхуков от платежных провайдеров по уникальному токену
-    Сохраняет данные платежа в БД для дальнейшей обработки
+    Роутер входящих вебхуков от всех провайдеров (эквайринг, CRM).
+    Определяет провайдера по уникальному webhook_token, сохраняет сырое событие
+    в inbox-таблицу webhook_events (чтобы событие не потерялось и не перепуталось
+    с событием другого провайдера), затем передаёт его в изолированный обработчик
+    конкретного провайдера.
     '''
-    
-    print(f"[DEBUG] Webhook received: {json.dumps(event)}")
-    
+
     method = event.get('httpMethod', 'POST')
-    
+
     if method == 'OPTIONS':
         return {
             'statusCode': 200,
-            'headers': {
-                'Access-Control-Allow-Origin': '*',
-                'Access-Control-Allow-Methods': 'POST, OPTIONS',
-                'Access-Control-Allow-Headers': 'Content-Type',
-                'Access-Control-Max-Age': '86400'
-            },
+            'headers': CORS_HEADERS,
             'body': '',
             'isBase64Encoded': False
         }
-    
+
     if method != 'POST':
         return {
             'statusCode': 200,
@@ -83,10 +55,10 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             'body': json.dumps({'error': True, 'message': 'Запрос с заданными параметрами не поддерживается'}, ensure_ascii=False),
             'isBase64Encoded': False
         }
-    
+
     params = event.get('queryStringParameters', {}) or {}
     webhook_token = params.get('token', '')
-    
+
     if not webhook_token:
         return {
             'statusCode': 400,
@@ -94,21 +66,24 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             'body': json.dumps({'error': 'Token required'}),
             'isBase64Encoded': False
         }
-    
+
+    headers = event.get('headers', {}) or {}
+    content_type = headers.get('Content-Type') or headers.get('content-type') or ''
+
     try:
-        webhook_data = json.loads(event.get('body', '{}'))
-    except json.JSONDecodeError:
+        webhook_data = parse_webhook_body(event.get('body', '{}'), content_type)
+    except Exception:
         return {
             'statusCode': 400,
             'headers': {'Content-Type': 'application/json'},
-            'body': json.dumps({'error': 'Invalid JSON'}),
+            'body': json.dumps({'error': 'Invalid body'}),
             'isBase64Encoded': False
         }
-    
+
     dsn = os.environ['DATABASE_URL']
     conn = psycopg2.connect(dsn)
     cur = conn.cursor()
-    
+
     try:
         cur.execute('''
             SELECT 
@@ -122,7 +97,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             JOIN t_p83864310_fintech_payment_reco.integration_providers p ON p.id = ui.provider_id
             WHERE ui.webhook_token = %s AND ui.status = 'active'
         ''', (webhook_token,))
-        
+
         integration_row = cur.fetchone()
         if not integration_row:
             return {
@@ -131,81 +106,42 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 'body': json.dumps({'error': 'Integration not found'}),
                 'isBase64Encoded': False
             }
-        
+
         integration_id, company_id, config, webhook_settings, provider_slug, forward_url = integration_row
-        
-        config = json.loads(config) if isinstance(config, str) else config
-        webhook_settings = json.loads(webhook_settings) if isinstance(webhook_settings, str) else webhook_settings
-        
+
+        config = json.loads(config) if isinstance(config, str) else (config or {})
+        webhook_settings = json.loads(webhook_settings) if isinstance(webhook_settings, str) else (webhook_settings or {})
+
+        # Шаг 1: событие сразу попадает в inbox как есть, до какой-либо обработки -
+        # это гарантирует, что даже при сбое обработчика сырые данные не потеряются.
+        event_type = EVENT_TYPE_BY_PROVIDER.get(provider_slug, 'unknown')
+        event_id = save_event(cur, integration_id, company_id, provider_slug, event_type, webhook_data)
+        conn.commit()
+
+        # Шаг 2: событие передаётся в обработчик именно своего провайдера.
+        webhook_payment_id = None
+        handler_error = None
+
         if provider_slug == 'tbank':
-            terminal_password = config.get('terminal_password', '')
-            signature_valid = verify_tbank_token(webhook_data, terminal_password)
-            
+            signature_valid, webhook_payment_id, handler_error = tbank_handler.process(
+                cur, integration_id, company_id, config, webhook_settings, webhook_data
+            )
             if not signature_valid:
-                print(f"[SECURITY] Invalid signature rejected")
+                mark_processed(cur, event_id, 'rejected', handler_error)
+                conn.commit()
                 return {
                     'statusCode': 403,
                     'headers': {'Content-Type': 'application/json'},
-                    'body': json.dumps({'error': 'Invalid signature'}),
+                    'body': json.dumps({'error': handler_error}),
                     'isBase64Encoded': False
                 }
-            
-            status = webhook_data.get('Status', '')
-            print(f"[DEBUG] Webhook status: {status}, settings: {webhook_settings}")
-            
-            payment_status_map = {
-                'AUTHORIZED': 'notify_on_authorized',
-                'CONFIRMED': 'notify_on_confirmed',
-                'REJECTED': 'notify_on_rejected',
-                'REFUNDED': 'notify_on_refunded',
-                'CANCELED': 'notify_on_canceled'
-            }
-            
-            notify_key = payment_status_map.get(status)
-            if notify_key and not webhook_settings.get(notify_key, True):
-                print(f"[DEBUG] Status {status} disabled in settings, skipping save")
-                return {
-                    'statusCode': 200,
-                    'headers': {'Content-Type': 'text/plain'},
-                    'body': 'OK',
-                    'isBase64Encoded': False
-                }
-            
-            webhook_payment_id = None
-            cur.execute('''
-                INSERT INTO t_p83864310_fintech_payment_reco.webhook_payments (
-                    integration_id, company_id, payment_id, terminal_key,
-                    amount, order_id, status, payment_status, error_code,
-                    customer_email, customer_phone, pan, card_type, exp_date,
-                    raw_data
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                ON CONFLICT (integration_id, payment_id, status) DO NOTHING
-                RETURNING id
-            ''', (
-                integration_id,
-                company_id,
-                webhook_data.get('PaymentId'),
-                webhook_data.get('TerminalKey'),
-                float(webhook_data.get('Amount', 0)) / 100,
-                webhook_data.get('OrderId'),
-                webhook_data.get('Status'),
-                webhook_data.get('PaymentStatus'),
-                webhook_data.get('ErrorCode'),
-                webhook_data.get('CardData', {}).get('Email') if isinstance(webhook_data.get('CardData'), dict) else None,
-                webhook_data.get('Phone'),
-                webhook_data.get('Pan'),
-                webhook_data.get('CardType'),
-                webhook_data.get('ExpDate'),
-                json.dumps(webhook_data)
-            ))
-            
-            result = cur.fetchone()
-            if result:
-                webhook_payment_id = result[0]
-                print(f"[DEBUG] Webhook saved: id={webhook_payment_id}, status={webhook_data.get('Status')}")
-            else:
-                print(f"[DEBUG] Webhook duplicate skipped: integration={integration_id}, payment={webhook_data.get('PaymentId')}, status={webhook_data.get('Status')}")
-        
+        elif provider_slug == 'bitrix24':
+            _, handler_error = bitrix24_handler.process(cur, integration_id, company_id, config, webhook_data)
+        elif provider_slug == 'amocrm':
+            _, handler_error = amocrm_handler.process(cur, integration_id, company_id, config, webhook_data)
+
+        mark_processed(cur, event_id, 'failed' if handler_error else 'processed', handler_error)
+
         cur.execute('''
             UPDATE t_p83864310_fintech_payment_reco.user_integrations 
             SET last_webhook_at = NOW(), 
@@ -213,14 +149,14 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 updated_at = NOW()
             WHERE id = %s
         ''', (integration_id,))
-        
+
         conn.commit()
-        
+
         if forward_url and webhook_payment_id:
             start_time = int(time.time() * 1000)
             status_code = None
             error_message = None
-            
+
             try:
                 req = urllib.request.Request(
                     forward_url,
@@ -239,23 +175,23 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             except Exception as e:
                 status_code = 0
                 error_message = f"Error: {str(e)}"
-            
+
             response_time = int(time.time() * 1000) - start_time
-            
+
             cur.execute('''
                 INSERT INTO t_p83864310_fintech_payment_reco.webhook_forward_logs 
                 (webhook_payment_id, forward_url, status_code, error_message, response_time_ms)
                 VALUES (%s, %s, %s, %s, %s)
             ''', (webhook_payment_id, forward_url, status_code, error_message, response_time))
             conn.commit()
-        
+
         return {
             'statusCode': 200,
             'headers': {'Content-Type': 'text/plain'},
             'body': 'OK',
             'isBase64Encoded': False
         }
-        
+
     except Exception as e:
         conn.rollback()
         return {

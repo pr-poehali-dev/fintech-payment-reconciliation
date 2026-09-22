@@ -62,6 +62,7 @@ const IntegrationsPage = () => {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [loadingReceipts, setLoadingReceipts] = useState<number | null>(null);
+  const [loadingStatement, setLoadingStatement] = useState<number | null>(null);
   const { toast } = useToast();
   const { currentCompany } = useAuth();
   const companyId = currentCompany?.id;
@@ -225,6 +226,40 @@ const IntegrationsPage = () => {
     }
   };
 
+  const handleSyncStatement = async (integrationId: number) => {
+    setLoadingStatement(integrationId);
+
+    try {
+      const response = await fetch(functionUrls['bank-statement-sync'], {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ integration_id: integrationId })
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        toast({
+          title: 'Выписка синхронизирована',
+          description: `Загружено ${data.inserted} новых операций из ${data.total_transactions}`
+        });
+      } else {
+        toast({
+          title: 'Ошибка синхронизации',
+          description: data.error || 'Не удалось получить выписку',
+          variant: 'destructive'
+        });
+      }
+    } catch (error) {
+      toast({
+        title: 'Ошибка подключения',
+        variant: 'destructive'
+      });
+    } finally {
+      setLoadingStatement(null);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-96">
@@ -269,6 +304,8 @@ const IntegrationsPage = () => {
               <div className="grid gap-4 mb-6">
                 {categoryIntegrations.map((integration) => {
                   const isOFD = integration.category_slug === 'ofd';
+                  const isBank = integration.category_slug === 'banks';
+                  const isCrm = integration.category_slug === 'crm';
                   return (
                   <Card key={integration.id}>
                     <CardHeader>
@@ -334,8 +371,41 @@ const IntegrationsPage = () => {
                             </div>
                           </div>
                         </>
+                      ) : isBank ? (
+                        <>
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-muted-foreground">Счёт:</span>
+                            <span className="font-medium font-mono">{integration.config?.account_number || '—'}</span>
+                          </div>
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="text-muted-foreground">Последняя синхронизация:</span>
+                            <span className="font-medium">{formatDate(integration.last_webhook_at)}</span>
+                          </div>
+                          <div className="pt-1">
+                            <Button
+                              onClick={() => handleSyncStatement(integration.id)}
+                              disabled={loadingStatement === integration.id}
+                              variant="outline"
+                              size="sm"
+                              className="w-full"
+                            >
+                              {loadingStatement === integration.id ? (
+                                <Icon name="Loader2" className="animate-spin mr-2" size={14} />
+                              ) : (
+                                <Icon name="RefreshCw" size={14} className="mr-2" />
+                              )}
+                              Синхронизировать сейчас
+                            </Button>
+                          </div>
+                        </>
                       ) : (
                         <>
+                          {isCrm && (
+                            <div className="flex items-center justify-between text-sm">
+                              <span className="text-muted-foreground">Обновляется:</span>
+                              <span className="font-medium">по вебхуку от CRM</span>
+                            </div>
+                          )}
                           <div className="flex items-center justify-between text-sm">
                             <span className="text-muted-foreground">Последний вебхук:</span>
                             <span className="font-medium">{formatDate(integration.last_webhook_at)}</span>
