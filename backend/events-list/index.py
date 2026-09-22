@@ -118,108 +118,103 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 'raw': raw_data
             })
 
-        # 2a. Успешно обработанные сделки CRM (Битрикс24, AmoCRM) - одна строка на
-        # сделку из crm_deals вместо отдельной строки на каждый входящий хук.
-        # webhook_count показывает, сколько раз по этой сделке прилетал хук.
-        crm_where = 'WHERE cd.company_id = %s'
+        # 2. События CRM (Битрикс24, AmoCRM) - группируем по сделке (integration_id +
+        # external_deal_id), как платежи группируются по order_id. Каждый входящий
+        # хук по сделке попадает в webhook_history этой группы - в интерфейсе это
+        # раскрывающийся список со статусом, датой и raw каждого отдельного хука,
+        # а не отдельная строка в общей ленте. Хуки без распознанного ID сделки
+        # не группируются - у каждого своя запись.
+        crm_where = "WHERE we.company_id = %s AND we.provider_slug IN ('bitrix24', 'amocrm')"
         crm_params = [company_id]
         if integration_id:
-            crm_where += ' AND cd.integration_id = %s'
+            crm_where += ' AND we.integration_id = %s'
             crm_params.append(integration_id)
         if provider_slug:
-            crm_where += ' AND cd.provider_slug = %s'
+            crm_where += ' AND we.provider_slug = %s'
             crm_params.append(provider_slug)
 
         cur.execute(f'''
             SELECT
-                cd.id, cd.updated_at, cd.provider_slug, cd.external_deal_id,
-                cd.title, cd.stage, cd.amount, cd.currency, cd.webhook_count,
-                cd.raw_data, ui.integration_name, p.name
-            FROM t_p83864310_fintech_payment_reco.crm_deals cd
-            JOIN t_p83864310_fintech_payment_reco.user_integrations ui ON ui.id = cd.integration_id
-            JOIN t_p83864310_fintech_payment_reco.integration_providers p ON p.id = ui.provider_id
-            {crm_where}
-            ORDER BY cd.updated_at DESC
-            LIMIT %s OFFSET %s
-        ''', crm_params + [limit, offset])
-
-        for row in cur.fetchall():
-            (deal_pk, updated_at, p_slug, external_deal_id, title, stage, amount,
-             currency, webhook_count, raw_data, integration_name, provider_name) = row
-
-            noun = 'Сделка' if p_slug == 'bitrix24' else 'Лид'
-            amount_str = f' · {float(amount):.2f} {currency or "₽"}' if amount is not None else ''
-            summary = f'{noun} #{external_deal_id} · {title or stage or ""}{amount_str}'.strip()
-            if webhook_count and webhook_count > 1:
-                summary += f' ({webhook_count} обновл.)'
-
-            events.append({
-                'id': f'cd_{deal_pk}',
-                'source': 'crm',
-                'created_at': updated_at.isoformat() if updated_at else None,
-                'provider_slug': p_slug,
-                'provider_type': PROVIDER_TYPE_LABELS.get(p_slug, provider_name),
-                'integration_name': integration_name,
-                'event_type': 'deal_updated' if p_slug == 'bitrix24' else 'lead_updated',
-                'status': 'processed',
-                'error_message': None,
-                'event_number': str(external_deal_id),
-                'summary': summary,
-                'raw': raw_data
-            })
-
-        # 2b. Хуки CRM, которые не удалось обработать (не нашли ID сделки, сбой API
-        # и т.д.) - группируем по сделке через external_deal_id, показываем только
-        # последнюю ошибку по каждой сделке плюс счётчик повторов. Хуки без
-        # распознанного ID сделки (external_deal_id IS NULL) не группируются - у
-        # каждого своя строка, т.к. неизвестно, к одной ли они сделке относятся.
-        crm_fail_where = "WHERE we.company_id = %s AND we.provider_slug IN ('bitrix24', 'amocrm') AND we.status IN ('failed', 'rejected')"
-        crm_fail_params = [company_id]
-        if integration_id:
-            crm_fail_where += ' AND we.integration_id = %s'
-            crm_fail_params.append(integration_id)
-        if provider_slug:
-            crm_fail_where += ' AND we.provider_slug = %s'
-            crm_fail_params.append(provider_slug)
-
-        cur.execute(f'''
-            SELECT DISTINCT ON (COALESCE(we.external_deal_id, 'id_' || we.id))
-                we.id, we.created_at, we.provider_slug, we.event_type, we.status,
-                we.error_message, we.external_deal_id, ui.integration_name, p.name,
-                COUNT(*) OVER (PARTITION BY we.external_deal_id) AS fail_count
+                we.id, we.integration_id, we.created_at, we.provider_slug, we.event_type,
+                we.status, we.error_message, we.external_deal_id, we.raw_payload,
+                ui.integration_name, p.name
             FROM t_p83864310_fintech_payment_reco.webhook_events we
             JOIN t_p83864310_fintech_payment_reco.user_integrations ui ON ui.id = we.integration_id
             JOIN t_p83864310_fintech_payment_reco.integration_providers p ON p.id = ui.provider_id
-            {crm_fail_where}
-            ORDER BY COALESCE(we.external_deal_id, 'id_' || we.id), we.created_at DESC
-            LIMIT %s OFFSET %s
-        ''', crm_fail_params + [limit, offset])
+            {crm_where}
+            ORDER BY we.created_at ASC
+        ''', crm_params)
 
-        for row in cur.fetchall():
-            (event_id, created_at, p_slug, event_type, status, error_message,
-             external_deal_id, integration_name, provider_name, fail_count) = row
+        crm_raw_rows = cur.fetchall()
 
-            noun_gen = 'сделки' if p_slug == 'bitrix24' else 'лида'
-            if external_deal_id:
-                summary = f'Ошибка обработки {noun_gen} #{external_deal_id}'
-                if fail_count and fail_count > 1:
-                    summary += f' ({fail_count} попыток)'
-            else:
-                summary = f'Не удалось распознать хук {provider_name}'
+        deals_where = 'WHERE company_id = %s'
+        deals_params = [company_id]
+        cur.execute(f'''
+            SELECT integration_id, external_deal_id, title, stage, amount, currency
+            FROM t_p83864310_fintech_payment_reco.crm_deals
+            {deals_where}
+        ''', deals_params)
+        deals_info = {(row[0], row[1]): row for row in cur.fetchall()}
 
-            events.append({
-                'id': f'we_{event_id}',
-                'source': 'crm',
-                'created_at': created_at.isoformat() if created_at else None,
-                'provider_slug': p_slug,
-                'provider_type': PROVIDER_TYPE_LABELS.get(p_slug, provider_name),
-                'integration_name': integration_name,
-                'event_type': event_type,
+        crm_groups: Dict[Any, Dict[str, Any]] = {}
+        for row in crm_raw_rows:
+            (ev_id, ev_integration_id, created_at, p_slug, event_type, status,
+             error_message, external_deal_id, raw_payload, integration_name, provider_name) = row
+
+            group_key = (ev_integration_id, external_deal_id) if external_deal_id else ('single', ev_id)
+            if group_key not in crm_groups:
+                crm_groups[group_key] = {
+                    'integration_id': ev_integration_id,
+                    'p_slug': p_slug,
+                    'external_deal_id': external_deal_id,
+                    'integration_name': integration_name,
+                    'provider_name': provider_name,
+                    'history': []
+                }
+            crm_groups[group_key]['history'].append({
+                'id': ev_id,
                 'status': status,
                 'error_message': error_message,
+                'created_at': created_at.isoformat() if created_at else None,
+                'raw': raw_payload,
+                'event_type': event_type
+            })
+
+        for group_key, group in crm_groups.items():
+            history = group['history']
+            latest = history[-1]
+            p_slug = group['p_slug']
+            external_deal_id = group['external_deal_id']
+            noun = 'Сделка' if p_slug == 'bitrix24' else 'Лид'
+
+            deal_info = deals_info.get((group['integration_id'], external_deal_id)) if external_deal_id else None
+
+            if deal_info:
+                _, _, title, stage, amount, currency = deal_info
+                amount_str = f' · {float(amount):.2f} {currency or "₽"}' if amount is not None else ''
+                summary = f'{noun} #{external_deal_id} · {title or stage or ""}{amount_str}'.strip()
+            elif external_deal_id:
+                summary = f'{noun} #{external_deal_id}'
+            else:
+                summary = f'Не удалось распознать хук {group["provider_name"]}'
+
+            if len(history) > 1:
+                summary += f' ({len(history)} хуков)'
+
+            events.append({
+                'id': f'crmgrp_{group_key[0]}_{group_key[1]}',
+                'source': 'crm',
+                'created_at': latest['created_at'],
+                'provider_slug': p_slug,
+                'provider_type': PROVIDER_TYPE_LABELS.get(p_slug, group['provider_name']),
+                'integration_name': group['integration_name'],
+                'event_type': latest['event_type'],
+                'status': latest['status'],
+                'error_message': latest['error_message'],
                 'event_number': str(external_deal_id) if external_deal_id else None,
                 'summary': summary,
-                'raw': None
+                'raw': latest['raw'],
+                'webhook_history': history
             })
 
         # 3. Операции по расчётному счёту - второй слой обработки (дозагрузка,

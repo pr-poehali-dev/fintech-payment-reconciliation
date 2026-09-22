@@ -1,3 +1,12 @@
+export interface EventWebhookHistoryItem {
+  id: number;
+  status: string | null;
+  error_message: string | null;
+  created_at: string | null;
+  raw: any;
+  event_type: string | null;
+}
+
 export interface AppEvent {
   id: string;
   source: 'payment' | 'crm' | 'bank_statement';
@@ -11,4 +20,5 @@ export interface AppEvent {
   event_number: string | null;
   summary: string;
   raw: any;
+  webhook_history?: EventWebhookHistoryItem[];
 }
