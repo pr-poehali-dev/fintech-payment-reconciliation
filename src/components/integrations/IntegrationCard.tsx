@@ -4,7 +4,6 @@ import { Badge } from '@/components/ui/badge';
 import Icon from '@/components/ui/icon';
 import functionUrls from '../../../backend/func2url.json';
 import { PURPOSE_CATEGORY_LABELS, UserIntegration } from './integrationsPageTypes';
-import EcomkassaFetchReceiptBlock from './EcomkassaFetchReceiptBlock';
 
 interface IntegrationCardProps {
   integration: UserIntegration;
@@ -14,9 +13,7 @@ interface IntegrationCardProps {
   onDeleteClick: (integration: UserIntegration) => void;
   onCopyWebhookUrl: (token: string) => void;
   formatDate: (dateStr: string | null) => string;
-  loadingReceipts: number | null;
   loadingStatement: number | null;
-  onFetchReceipts: (integrationId: number, days: number) => void;
   onSyncStatement: (integrationId: number) => void;
 }
 
@@ -28,9 +25,7 @@ const IntegrationCard = ({
   onDeleteClick,
   onCopyWebhookUrl,
   formatDate,
-  loadingReceipts,
   loadingStatement,
-  onFetchReceipts,
   onSyncStatement
 }: IntegrationCardProps) => {
   const isOFD = integration.category_slug === 'ofd';
@@ -106,7 +101,6 @@ const IntegrationCard = ({
               <span className="text-muted-foreground">Последняя загрузка:</span>
               <span className="font-medium">{formatDate(integration.last_synced_at ?? null)}</span>
             </div>
-            <EcomkassaFetchReceiptBlock integrationId={integration.id} />
           </>
         ) : isOFD ? (
           <>
@@ -117,30 +111,6 @@ const IntegrationCard = ({
             <div className="flex items-center justify-between text-sm">
               <span className="text-muted-foreground">РНМ:</span>
               <span className="font-medium font-mono">{integration.config?.kkt || '—'}</span>
-            </div>
-            <div className="pt-2 space-y-2">
-              <div className="text-xs text-muted-foreground mb-1">
-                <Icon name="Download" size={12} className="inline mr-1" />
-                Загрузить чеки
-              </div>
-              <div className="grid grid-cols-5 gap-1">
-                {[1, 7, 30, 60, 90].map((days) => (
-                  <Button
-                    key={days}
-                    onClick={() => onFetchReceipts(integration.id, days)}
-                    disabled={loadingReceipts === integration.id}
-                    variant="outline"
-                    size="sm"
-                    className="text-xs px-2 h-8"
-                  >
-                    {loadingReceipts === integration.id ? (
-                      <Icon name="Loader2" className="animate-spin" size={12} />
-                    ) : (
-                      `${days === 1 ? 'Вчера' : days + 'д'}`
-                    )}
-                  </Button>
-                ))}
-              </div>
             </div>
           </>
         ) : isBank ? (

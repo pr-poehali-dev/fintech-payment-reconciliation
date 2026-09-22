@@ -17,7 +17,6 @@ const IntegrationsPage = () => {
     showDeleteDialog,
     setShowDeleteDialog,
     isLoading,
-    loadingReceipts,
     loadingStatement,
     expandedIds,
     companyId,
@@ -29,7 +28,6 @@ const IntegrationsPage = () => {
     handleDeleteConfirm,
     copyWebhookUrl,
     formatDate,
-    handleFetchReceipts,
     handleSyncStatement,
     getCategoryIntegrations
   } = useIntegrationsPageData();
@@ -70,9 +68,7 @@ const IntegrationsPage = () => {
         onDeleteClick={handleDeleteClick}
         onCopyWebhookUrl={copyWebhookUrl}
         formatDate={formatDate}
-        loadingReceipts={loadingReceipts}
         loadingStatement={loadingStatement}
-        onFetchReceipts={handleFetchReceipts}
         onSyncStatement={handleSyncStatement}
         onAddNew={handleAddNew}
       />

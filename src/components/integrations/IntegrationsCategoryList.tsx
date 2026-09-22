@@ -14,9 +14,7 @@ interface IntegrationsCategoryListProps {
   onDeleteClick: (integration: UserIntegration) => void;
   onCopyWebhookUrl: (token: string) => void;
   formatDate: (dateStr: string | null) => string;
-  loadingReceipts: number | null;
   loadingStatement: number | null;
-  onFetchReceipts: (integrationId: number, days: number) => void;
   onSyncStatement: (integrationId: number) => void;
   onAddNew: () => void;
 }
@@ -31,9 +29,7 @@ const IntegrationsCategoryList = ({
   onDeleteClick,
   onCopyWebhookUrl,
   formatDate,
-  loadingReceipts,
   loadingStatement,
-  onFetchReceipts,
   onSyncStatement,
   onAddNew
 }: IntegrationsCategoryListProps) => {
@@ -61,9 +57,7 @@ const IntegrationsCategoryList = ({
                     onDeleteClick={onDeleteClick}
                     onCopyWebhookUrl={onCopyWebhookUrl}
                     formatDate={formatDate}
-                    loadingReceipts={loadingReceipts}
                     loadingStatement={loadingStatement}
-                    onFetchReceipts={onFetchReceipts}
                     onSyncStatement={onSyncStatement}
                   />
                 ))}
