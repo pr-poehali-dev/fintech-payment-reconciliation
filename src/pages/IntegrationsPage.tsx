@@ -71,6 +71,7 @@ const IntegrationsPage = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [loadingReceipts, setLoadingReceipts] = useState<number | null>(null);
   const [loadingStatement, setLoadingStatement] = useState<number | null>(null);
+  const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
   const { toast } = useToast();
   const { currentCompany } = useAuth();
   const companyId = currentCompany?.id;
@@ -112,6 +113,18 @@ const IntegrationsPage = () => {
   useEffect(() => {
     fetchIntegrations();
   }, [companyId]);
+
+  const toggleExpand = (id: number) => {
+    setExpandedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
 
   const handleAddNew = () => {
     setEditingIntegration(null);
@@ -314,36 +327,61 @@ const IntegrationsPage = () => {
                   const isOFD = integration.category_slug === 'ofd';
                   const isBank = integration.category_slug === 'banks';
                   const isCrm = integration.category_slug === 'crm';
+                  const isExpanded = expandedIds.has(integration.id);
                   return (
-                  <Card key={integration.id}>
-                    <CardHeader>
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <CardTitle className="text-lg">{integration.integration_name}</CardTitle>
-                          <CardDescription>{integration.provider_name}</CardDescription>
+                  <Card key={integration.id} className="overflow-hidden">
+                    <button
+                      type="button"
+                      onClick={() => toggleExpand(integration.id)}
+                      className="w-full text-left"
+                    >
+                      <CardHeader className="hover:bg-muted/40 transition-colors">
+                        <div className="flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-3 min-w-0">
+                            <Icon
+                              name="ChevronRight"
+                              size={18}
+                              className={`text-muted-foreground shrink-0 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
+                            />
+                            <div className="min-w-0">
+                              <CardTitle className="text-lg truncate">{integration.integration_name}</CardTitle>
+                              <CardDescription className="truncate">{integration.provider_name}</CardDescription>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <Badge
+                              variant="outline"
+                              className={
+                                integration.status === 'active'
+                                  ? 'border-success/40 text-success bg-success/10'
+                                  : 'border-muted-foreground/30 text-muted-foreground bg-transparent'
+                              }
+                            >
+                              {integration.status === 'active' ? 'Подключено' : 'Неактивно'}
+                            </Badge>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <Badge variant={integration.status === 'active' ? 'default' : 'secondary'}>
-                            {integration.status === 'active' ? 'Активно' : 'Неактивно'}
-                          </Badge>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleEdit(integration)}
-                          >
-                            <Icon name="Settings" size={16} />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleDeleteClick(integration)}
-                          >
-                            <Icon name="Trash2" size={16} />
-                          </Button>
-                        </div>
+                      </CardHeader>
+                    </button>
+                    {isExpanded && (
+                    <CardContent className="space-y-3 pt-0 animate-fade-in">
+                      <div className="flex justify-end gap-2 -mt-1 mb-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleEdit(integration)}
+                        >
+                          <Icon name="Settings" size={16} className="mr-1" />
+                          Настроить
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDeleteClick(integration)}
+                        >
+                          <Icon name="Trash2" size={16} />
+                        </Button>
                       </div>
-                    </CardHeader>
-                    <CardContent className="space-y-3">
                       {isOFD ? (
                         <>
                           <div className="flex items-center justify-between text-sm">
@@ -464,6 +502,7 @@ const IntegrationsPage = () => {
                         </>
                       )}
                     </CardContent>
+                    )}
                   </Card>
                 )})}
               </div>
