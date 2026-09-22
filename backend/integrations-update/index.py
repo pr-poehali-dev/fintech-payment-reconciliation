@@ -43,6 +43,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     config = body.get('config', {})
     webhook_settings = body.get('webhook_settings', {})
     forward_url = body.get('forward_url')
+    sync_interval_hours = body.get('sync_interval_hours')
     
     if not integration_id or not company_id:
         return {
@@ -64,6 +65,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 config = COALESCE(%s::jsonb, config),
                 webhook_settings = COALESCE(%s::jsonb, webhook_settings),
                 forward_url = %s,
+                sync_interval_hours = COALESCE(%s, sync_interval_hours),
                 updated_at = CURRENT_TIMESTAMP
             WHERE id = %s AND company_id = %s
             RETURNING id
@@ -72,6 +74,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             json.dumps(config) if config else None,
             json.dumps(webhook_settings) if webhook_settings else None,
             forward_url,
+            sync_interval_hours,
             integration_id,
             company_id
         ))

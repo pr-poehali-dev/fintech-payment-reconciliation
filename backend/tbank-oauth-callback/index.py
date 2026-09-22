@@ -1,0 +1,162 @@
+import json
+import os
+import psycopg2
+from typing import Dict, Any
+
+from tbank_oauth import (
+    build_authorize_url,
+    exchange_code_for_token,
+    is_production_configured,
+    SANDBOX_TOKEN
+)
+
+CORS_HEADERS = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Max-Age': '86400'
+}
+
+
+def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
+    '''
+    OAuth-обвязка T-Business ID: подключение счёта компании владельцем через "Т-Бизнес".
+    GET  ?action=authorize_url&company_id=..&redirect_uri=.. -> ссылка на согласие в Т-Банке
+         (если реальные партнёрские ключи ещё не выданы банком - сразу активирует
+         демо-режим песочницы для компании без перехода по внешней ссылке)
+    POST { code, state, company_id, redirect_uri } -> обмен кода на токен, сохранение гранта
+    '''
+
+    method = event.get('httpMethod', 'GET')
+
+    if method == 'OPTIONS':
+        return {'statusCode': 200, 'headers': CORS_HEADERS, 'body': '', 'isBase64Encoded': False}
+
+    dsn = os.environ['DATABASE_URL']
+    conn = psycopg2.connect(dsn)
+    cur = conn.cursor()
+
+    try:
+        if method == 'GET':
+            params = event.get('queryStringParameters', {}) or {}
+            action = params.get('action')
+            company_id = params.get('company_id')
+            redirect_uri = params.get('redirect_uri', '')
+
+            if not company_id:
+                return {
+                    'statusCode': 400,
+                    'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+                    'body': json.dumps({'error': 'company_id required'}),
+                    'isBase64Encoded': False
+                }
+
+            if action == 'authorize_url':
+                if not is_production_configured():
+                    # Партнёрские ключи Т-Банка ещё не выданы - подключаем компанию
+                    # сразу в демо-режиме песочницы, чтобы можно было проверить сценарий
+                    # без ожидания одобрения банком (порог входа в T-ID - от 30 000 авторизаций/мес).
+                    cur.execute('''
+                        INSERT INTO t_p83864310_fintech_payment_reco.company_bank_oauth_grants
+                            (company_id, provider_slug, is_sandbox, access_token, scope)
+                        VALUES (%s, 'tbank_account', true, %s, 'accounts')
+                        ON CONFLICT (company_id, provider_slug) DO UPDATE SET
+                            is_sandbox = true, access_token = EXCLUDED.access_token, updated_at = NOW()
+                        RETURNING id
+                    ''', (company_id, SANDBOX_TOKEN))
+                    conn.commit()
+
+                    return {
+                        'statusCode': 200,
+                        'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+                        'body': json.dumps({
+                            'sandbox': True,
+                            'connected': True,
+                            'message': 'Партнёрские ключи Т-Банка ещё не выданы, подключено в демо-режиме песочницы'
+                        }),
+                        'isBase64Encoded': False
+                    }
+
+                url = build_authorize_url(redirect_uri, state=str(company_id))
+                return {
+                    'statusCode': 200,
+                    'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+                    'body': json.dumps({'sandbox': False, 'authorize_url': url}),
+                    'isBase64Encoded': False
+                }
+
+            return {
+                'statusCode': 400,
+                'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+                'body': json.dumps({'error': 'Unknown action'}),
+                'isBase64Encoded': False
+            }
+
+        if method == 'POST':
+            body = json.loads(event.get('body') or '{}')
+            code = body.get('code')
+            company_id = body.get('company_id') or body.get('state')
+            redirect_uri = body.get('redirect_uri', '')
+
+            if not code or not company_id:
+                return {
+                    'statusCode': 400,
+                    'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+                    'body': json.dumps({'error': 'code and company_id required'}),
+                    'isBase64Encoded': False
+                }
+
+            token_data = exchange_code_for_token(code, redirect_uri)
+            if not token_data:
+                return {
+                    'statusCode': 200,
+                    'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+                    'body': json.dumps({'success': False, 'error': 'Не удалось получить токен от Т-Банка'}),
+                    'isBase64Encoded': False
+                }
+
+            cur.execute('''
+                INSERT INTO t_p83864310_fintech_payment_reco.company_bank_oauth_grants
+                    (company_id, provider_slug, is_sandbox, access_token, refresh_token, scope, expires_at)
+                VALUES (%s, 'tbank_account', false, %s, %s, %s, NOW() + (%s || ' seconds')::interval)
+                ON CONFLICT (company_id, provider_slug) DO UPDATE SET
+                    is_sandbox = false,
+                    access_token = EXCLUDED.access_token,
+                    refresh_token = EXCLUDED.refresh_token,
+                    scope = EXCLUDED.scope,
+                    expires_at = EXCLUDED.expires_at,
+                    updated_at = NOW()
+            ''', (
+                company_id,
+                token_data.get('access_token'),
+                token_data.get('refresh_token'),
+                token_data.get('scope'),
+                str(token_data.get('expires_in', 3600))
+            ))
+            conn.commit()
+
+            return {
+                'statusCode': 200,
+                'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+                'body': json.dumps({'success': True}),
+                'isBase64Encoded': False
+            }
+
+        return {
+            'statusCode': 405,
+            'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+            'body': json.dumps({'error': 'Method not allowed'}),
+            'isBase64Encoded': False
+        }
+
+    except Exception as e:
+        conn.rollback()
+        return {
+            'statusCode': 500,
+            'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+            'body': json.dumps({'error': str(e)}),
+            'isBase64Encoded': False
+        }
+    finally:
+        cur.close()
+        conn.close()

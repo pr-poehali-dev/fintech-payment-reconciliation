@@ -15,7 +15,7 @@ export interface Category {
   providers: Provider[];
 }
 
-export type ConfigValue = string | number | boolean;
+export type ConfigValue = string | number | boolean | string[];
 export type ConfigState = Record<string, ConfigValue>;
 
 export interface UserIntegration {
@@ -27,7 +27,12 @@ export interface UserIntegration {
   forward_url?: string;
 }
 
-export type FieldType = 'text' | 'password' | 'number' | 'checkbox';
+export type FieldType = 'text' | 'password' | 'number' | 'checkbox' | 'select' | 'multiselect';
+
+export interface FieldOption {
+  value: string;
+  label: string;
+}
 
 export interface FieldConfig {
   key: string;
@@ -37,7 +42,19 @@ export interface FieldConfig {
   hint?: string;
   default?: ConfigValue;
   required?: boolean;
+  options?: FieldOption[];
 }
+
+export const PURPOSE_CATEGORY_OPTIONS: FieldOption[] = [
+  { value: 'acquiring_online', label: 'Интернет-эквайринг' },
+  { value: 'acquiring_offline', label: 'Торговый эквайринг' },
+  { value: 'individual_direct', label: 'Оплата от физлица напрямую на счёт' }
+];
+
+export const SYNC_INTERVAL_OPTIONS: FieldOption[] = [
+  { value: '24', label: '1 раз в сутки (каждые 24 часа)' },
+  { value: '12', label: '2 раза в сутки (каждые 12 часов)' }
+];
 
 export const DEFAULT_WEBHOOK_SETTINGS: Record<string, boolean> = {
   notify_on_authorized: true,
@@ -81,7 +98,29 @@ export const PROVIDER_FIELDS: Record<string, FieldConfig[]> = {
     { key: 'subdomain', label: 'Поддомен AmoCRM', type: 'text', placeholder: 'yourcompany', hint: 'Из адреса вида yourcompany.amocrm.ru' },
     { key: 'api_key', label: 'Долгосрочный токен доступа', type: 'password', hint: 'AmoCRM → Настройки → Интеграции → Создать интеграцию' }
   ],
-  tbank_account: BANK_ACCOUNT_FIELDS,
+  // account_number для tbank_account не входит в общий список полей -
+  // выбирается отдельным компонентом (TbankAccountPicker): автоматически из
+  // списка счетов, если владелец подтвердил доступ через Т-Бизнес, либо вручную.
+  tbank_account: [
+    {
+      key: 'purpose_categories',
+      label: 'Учитывать назначения платежа',
+      type: 'multiselect',
+      options: PURPOSE_CATEGORY_OPTIONS,
+      default: PURPOSE_CATEGORY_OPTIONS.map(o => o.value),
+      required: false,
+      hint: 'Остальные операции (налоги, зарплата, внутренние переводы) загружаться не будут'
+    },
+    {
+      key: 'sync_interval_hours',
+      label: 'Периодичность синхронизации',
+      type: 'select',
+      options: SYNC_INTERVAL_OPTIONS,
+      default: '24',
+      required: false,
+      hint: 'Пока реально работает только кнопка «Синхронизировать сейчас» — настройка сохранится на будущее'
+    }
+  ],
   tochka_account: BANK_ACCOUNT_FIELDS,
   modulbank_account: BANK_ACCOUNT_FIELDS
 };

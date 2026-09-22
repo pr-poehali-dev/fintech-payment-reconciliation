@@ -5,7 +5,7 @@
       "method": "PUT",
       "path": "/",
       "body": {
-        "integration_id": 1,
+        "integration_id": 12,
         "company_id": 1,
         "integration_name": "Updated name",
         "config": {

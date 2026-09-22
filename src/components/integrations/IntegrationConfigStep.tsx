@@ -1,7 +1,9 @@
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import Icon from '@/components/ui/icon';
+import TbankAccountPicker from './TbankAccountPicker';
 import {
   ConfigState,
   FieldConfig,
@@ -14,6 +16,7 @@ import {
 interface IntegrationConfigStepProps {
   selectedProvider: Provider;
   isEditing: boolean;
+  companyId: number;
   integrationName: string;
   onIntegrationNameChange: (value: string) => void;
   config: ConfigState;
@@ -33,6 +36,7 @@ interface IntegrationConfigStepProps {
 const IntegrationConfigStep = ({
   selectedProvider,
   isEditing,
+  companyId,
   integrationName,
   onIntegrationNameChange,
   config,
@@ -49,12 +53,20 @@ const IntegrationConfigStep = ({
   onSubmit
 }: IntegrationConfigStepProps) => {
   const currentFields = PROVIDER_FIELDS[selectedProvider.slug] || [];
+  const isTbankAccount = selectedProvider.slug === 'tbank_account';
 
   const isConfigValid = () => {
+    if (isTbankAccount && !String(config.account_number ?? '').trim()) {
+      return false;
+    }
+
     return currentFields
       .filter(field => field.required !== false)
       .every(field => {
         const value = config[field.key];
+        if (field.type === 'multiselect') {
+          return Array.isArray(value) && value.length > 0;
+        }
         return value !== undefined && value !== null && String(value).trim() !== '';
       });
   };
@@ -70,6 +82,57 @@ const IntegrationConfigStep = ({
           />
           <span className="text-sm">{field.label}</span>
         </label>
+      );
+    }
+
+    if (field.type === 'select') {
+      return (
+        <div key={field.key}>
+          <Label>{field.label}</Label>
+          <Select
+            value={String(config[field.key] ?? field.default ?? '')}
+            onValueChange={(value) => onConfigChange({ ...config, [field.key]: value })}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder={field.placeholder} />
+            </SelectTrigger>
+            <SelectContent>
+              {(field.options || []).map((opt) => (
+                <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {field.hint && <p className="text-xs text-muted-foreground mt-1">{field.hint}</p>}
+        </div>
+      );
+    }
+
+    if (field.type === 'multiselect') {
+      const selected = Array.isArray(config[field.key]) ? (config[field.key] as string[]) : [];
+      const toggle = (value: string) => {
+        const next = selected.includes(value)
+          ? selected.filter((v) => v !== value)
+          : [...selected, value];
+        onConfigChange({ ...config, [field.key]: next });
+      };
+
+      return (
+        <div key={field.key} className="space-y-2">
+          <Label>{field.label}</Label>
+          <div className="space-y-2">
+            {(field.options || []).map((opt) => (
+              <label key={opt.value} className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={selected.includes(opt.value)}
+                  onChange={() => toggle(opt.value)}
+                />
+                <span className="text-sm">{opt.label}</span>
+              </label>
+            ))}
+          </div>
+          {field.hint && <p className="text-xs text-muted-foreground mt-1">{field.hint}</p>}
+        </div>
       );
     }
 
@@ -118,6 +181,14 @@ const IntegrationConfigStep = ({
           onChange={(e) => onIntegrationNameChange(e.target.value)}
         />
       </div>
+
+      {isTbankAccount && (
+        <TbankAccountPicker
+          companyId={companyId}
+          accountNumber={String(config.account_number ?? '')}
+          onAccountNumberChange={(value) => onConfigChange({ ...config, account_number: value })}
+        />
+      )}
 
       {currentFields.map(renderField)}
 

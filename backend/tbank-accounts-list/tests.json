@@ -1,0 +1,24 @@
+{
+  "tests": [
+    {
+      "name": "Missing company_id",
+      "method": "GET",
+      "path": "/",
+      "expectedStatus": 400,
+      "expectedBody": {
+        "error": "company_id required"
+      },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Not connected company",
+      "method": "GET",
+      "path": "/?company_id=999999",
+      "expectedStatus": 200,
+      "expectedBody": {
+        "is_connected": false
+      },
+      "bodyMatcher": "partial"
+    }
+  ]
+}

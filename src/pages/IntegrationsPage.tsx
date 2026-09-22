@@ -42,6 +42,8 @@ interface UserIntegration {
   status: string;
   webhook_count: number;
   last_webhook_at: string | null;
+  last_synced_at?: string | null;
+  sync_interval_hours?: number | null;
   created_at: string;
   provider_name: string;
   provider_slug: string;
@@ -51,6 +53,12 @@ interface UserIntegration {
   webhook_settings: any;
   forward_url?: string;
 }
+
+const PURPOSE_CATEGORY_LABELS: Record<string, string> = {
+  acquiring_online: 'Интернет-эквайринг',
+  acquiring_offline: 'Торговый эквайринг',
+  individual_direct: 'От физлиц напрямую'
+};
 
 const IntegrationsPage = () => {
   const [categories, setCategories] = useState<Category[]>([]);
@@ -379,8 +387,26 @@ const IntegrationsPage = () => {
                           </div>
                           <div className="flex items-center justify-between text-sm">
                             <span className="text-muted-foreground">Последняя синхронизация:</span>
-                            <span className="font-medium">{formatDate(integration.last_webhook_at)}</span>
+                            <span className="font-medium">{formatDate(integration.last_synced_at ?? null)}</span>
                           </div>
+                          {integration.sync_interval_hours && (
+                            <div className="flex items-center justify-between text-sm">
+                              <span className="text-muted-foreground">Периодичность:</span>
+                              <span className="font-medium">
+                                {integration.sync_interval_hours === 12 ? '2 раза в сутки' : '1 раз в сутки'}
+                              </span>
+                            </div>
+                          )}
+                          {Array.isArray(integration.config?.purpose_categories) && integration.config.purpose_categories.length > 0 && (
+                            <div className="text-sm">
+                              <span className="text-muted-foreground">Учитываем: </span>
+                              <span className="font-medium">
+                                {integration.config.purpose_categories
+                                  .map((c: string) => PURPOSE_CATEGORY_LABELS[c] || c)
+                                  .join(', ')}
+                              </span>
+                            </div>
+                          )}
                           <div className="pt-1">
                             <Button
                               onClick={() => handleSyncStatement(integration.id)}

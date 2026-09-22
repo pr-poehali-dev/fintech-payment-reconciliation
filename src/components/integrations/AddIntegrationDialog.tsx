@@ -100,6 +100,10 @@ const AddIntegrationDialog = ({
 
     setIsLoading(true);
     try {
+      const syncIntervalHours = config.sync_interval_hours
+        ? Number(config.sync_interval_hours)
+        : undefined;
+
       if (editingIntegration) {
         const response = await fetch(functionUrls['integrations-update'], {
           method: 'PUT',
@@ -110,7 +114,8 @@ const AddIntegrationDialog = ({
             integration_name: integrationName,
             config,
             webhook_settings: webhookSettings,
-            forward_url: acceptsIncomingWebhook(selectedProvider.slug) ? forwardUrl : ''
+            forward_url: acceptsIncomingWebhook(selectedProvider.slug) ? forwardUrl : '',
+            sync_interval_hours: syncIntervalHours
           })
         });
 
@@ -136,7 +141,8 @@ const AddIntegrationDialog = ({
             integration_name: integrationName || selectedProvider.name,
             config,
             webhook_settings: webhookSettings,
-            forward_url: acceptsIncomingWebhook(selectedProvider.slug) ? forwardUrl : ''
+            forward_url: acceptsIncomingWebhook(selectedProvider.slug) ? forwardUrl : '',
+            sync_interval_hours: syncIntervalHours
           })
         });
 
@@ -235,6 +241,7 @@ const AddIntegrationDialog = ({
           <IntegrationConfigStep
             selectedProvider={selectedProvider}
             isEditing={!!editingIntegration}
+            companyId={companyId}
             integrationName={integrationName}
             onIntegrationNameChange={setIntegrationName}
             config={config}

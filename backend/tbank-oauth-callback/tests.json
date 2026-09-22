@@ -1,0 +1,31 @@
+{
+  "tests": [
+    {
+      "name": "Missing company_id on authorize_url",
+      "method": "GET",
+      "path": "/?action=authorize_url",
+      "expectedStatus": 400,
+      "expectedBody": {
+        "error": "company_id required"
+      },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Unknown action",
+      "method": "GET",
+      "path": "/?action=unknown&company_id=1",
+      "expectedStatus": 400,
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Missing code on POST",
+      "method": "POST",
+      "body": {},
+      "expectedStatus": 400,
+      "expectedBody": {
+        "error": "code and company_id required"
+      },
+      "bodyMatcher": "partial"
+    }
+  ]
+}
