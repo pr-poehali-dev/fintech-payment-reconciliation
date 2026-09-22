@@ -1,7 +1,10 @@
 import json
+import os
+import re
+import psycopg2
 from typing import Dict, Any
 
-from ecomkassa_api import get_token, fetch_firm_profile, extract_stores
+from ecomkassa_api import get_token, fetch_firm_profile, extract_stores, extract_firm_inn
 
 CORS_HEADERS = {
     'Access-Control-Allow-Origin': '*',
@@ -11,13 +14,20 @@ CORS_HEADERS = {
 }
 
 
+def normalize_inn(value: Any) -> str:
+    return re.sub(r'\D', '', str(value)) if value else ''
+
+
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     '''
     По логину/паролю Екомкассы получает токен авторизации и список магазинов (stores)
     из профиля организации - чтобы пользователь мог выбрать нужный storeId
     при настройке интеграции, не открывая личный кабинет Екомкассы.
-    Args: login, password, protocol_version ('v4' или 'v5')
-    Returns: token, stores[] (id, name/title и другие поля как есть от API)
+    Дополнительно сверяет ИНН организации в Екомкассе с ИНН компании в кабинете
+    сервиса - защита от ошибки (особенно у бухгалтера), если случайно указаны
+    логин/пароль от чужой Екомкассы, привязанной к другому юрлицу.
+    Args: login, password, protocol_version ('v4' или 'v5'), company_id (опционально, для сверки ИНН)
+    Returns: token, stores[], ecomkassa_inn, company_inn, inn_match
     '''
 
     method = event.get('httpMethod', 'POST')
@@ -37,6 +47,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     login = body.get('login', '').strip()
     password = body.get('password', '')
     protocol_version = body.get('protocol_version', 'v4')
+    company_id = body.get('company_id')
 
     if protocol_version not in ('v4', 'v5'):
         protocol_version = 'v4'
@@ -82,13 +93,37 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         if isinstance(store, dict)
     ]
 
+    ecomkassa_inn = extract_firm_inn(firm_profile)
+    company_inn = None
+    inn_match = None
+
+    if company_id:
+        dsn = os.environ['DATABASE_URL']
+        conn = psycopg2.connect(dsn)
+        cur = conn.cursor()
+        try:
+            cur.execute('''
+                SELECT inn FROM t_p83864310_fintech_payment_reco.companies WHERE id = %s
+            ''', (company_id,))
+            row = cur.fetchone()
+            company_inn = row[0] if row else None
+        finally:
+            cur.close()
+            conn.close()
+
+        if company_inn and ecomkassa_inn:
+            inn_match = normalize_inn(company_inn) == normalize_inn(ecomkassa_inn)
+
     return {
         'statusCode': 200,
         'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
         'body': json.dumps({
             'success': True,
             'token': token,
-            'stores': stores
+            'stores': stores,
+            'ecomkassa_inn': ecomkassa_inn,
+            'company_inn': company_inn,
+            'inn_match': inn_match
         }),
         'isBase64Encoded': False
     }

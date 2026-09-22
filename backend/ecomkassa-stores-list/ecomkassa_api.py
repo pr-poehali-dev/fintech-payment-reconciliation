@@ -56,6 +56,29 @@ def fetch_firm_profile(token: str) -> Optional[Dict[str, Any]]:
         return None
 
 
+def extract_firm_inn(firm_profile: Dict[str, Any]) -> Optional[str]:
+    '''
+    Достаёт ИНН организации из ответа profile/firm: {"payload": {"taxIdentity": "..."}}.
+    Нужен, чтобы сверить с ИНН компании в кабинете сервиса и предупредить
+    пользователя (особенно бухгалтера), если он случайно подключил чужую Екомкассу.
+    '''
+    if not isinstance(firm_profile, dict):
+        return None
+
+    payload = firm_profile.get('payload')
+    if isinstance(payload, dict):
+        tax_identity = payload.get('taxIdentity')
+        if tax_identity:
+            return str(tax_identity)
+
+    for key in ('taxIdentity', 'inn', 'INN'):
+        value = firm_profile.get(key)
+        if value:
+            return str(value)
+
+    return None
+
+
 def extract_stores(firm_profile: Dict[str, Any]) -> List[Dict[str, Any]]:
     '''
     Ищет список магазинов в ответе profile/firm. Реальный формат ответа:

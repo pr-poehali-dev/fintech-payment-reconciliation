@@ -198,6 +198,7 @@ const IntegrationConfigStep = ({
 
       {isEcomkassa && (
         <EcomkassaStorePicker
+          companyId={companyId}
           config={config}
           onConfigChange={onConfigChange}
         />
