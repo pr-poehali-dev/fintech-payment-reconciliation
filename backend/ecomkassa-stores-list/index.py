@@ -1,7 +1,7 @@
 import json
 from typing import Dict, Any
 
-from ecomkassa_api import get_token, fetch_firm_profile
+from ecomkassa_api import get_token, fetch_firm_profile, extract_stores
 
 CORS_HEADERS = {
     'Access-Control-Allow-Origin': '*',
@@ -67,7 +67,20 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             'isBase64Encoded': False
         }
 
-    stores = firm_profile.get('stores', []) if isinstance(firm_profile, dict) else []
+    raw_stores = extract_stores(firm_profile)
+
+    # Нормализуем поля Екомкассы (storeId/storeName/storeAddress) в единый
+    # формат id/name/address, чтобы фронтенду не нужно было знать про их нейминг.
+    stores = [
+        {
+            'id': store.get('storeId'),
+            'name': store.get('storeName'),
+            'address': store.get('storeAddress'),
+            'type': store.get('storeType')
+        }
+        for store in raw_stores
+        if isinstance(store, dict)
+    ]
 
     return {
         'statusCode': 200,

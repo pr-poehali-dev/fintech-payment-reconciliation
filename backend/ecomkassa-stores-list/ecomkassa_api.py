@@ -44,9 +44,48 @@ def fetch_firm_profile(token: str) -> Optional[Dict[str, Any]]:
 
     try:
         with urllib.request.urlopen(req, timeout=15) as response:
-            return json.loads(response.read().decode('utf-8'))
-    except (urllib.error.URLError, urllib.error.HTTPError, json.JSONDecodeError):
+            raw_body = response.read().decode('utf-8')
+            print(f'[DEBUG] profile/firm raw response: {raw_body[:2000]}')
+            return json.loads(raw_body)
+    except urllib.error.HTTPError as e:
+        error_body = e.read().decode('utf-8') if e.fp else str(e)
+        print(f'[DEBUG] profile/firm HTTP error {e.code}: {error_body[:1000]}')
         return None
+    except (urllib.error.URLError, json.JSONDecodeError) as e:
+        print(f'[DEBUG] profile/firm error: {str(e)}')
+        return None
+
+
+def extract_stores(firm_profile: Dict[str, Any]) -> List[Dict[str, Any]]:
+    '''
+    Ищет список магазинов в ответе profile/firm. Реальный формат ответа:
+    {"errorCode": 0, "payload": {"firmId": ..., "stores": [{"storeId": 2, "storeName": "...", ...}]}}
+    Дополнительно проверяем ещё пару вероятных мест на случай отличий между
+    протоколами v4/v5, т.к. структура не задокументирована публично.
+    '''
+    if not isinstance(firm_profile, dict):
+        return []
+
+    payload = firm_profile.get('payload')
+    if isinstance(payload, dict):
+        stores = payload.get('stores')
+        if isinstance(stores, list) and stores:
+            return stores
+
+    for key in ('stores', 'shops', 'Stores', 'Shops'):
+        value = firm_profile.get(key)
+        if isinstance(value, list) and value:
+            return value
+
+    for wrapper_key in ('data', 'firm', 'result', 'Data', 'Firm', 'Result'):
+        wrapper = firm_profile.get(wrapper_key)
+        if isinstance(wrapper, dict):
+            for key in ('stores', 'shops', 'Stores', 'Shops'):
+                value = wrapper.get(key)
+                if isinstance(value, list) and value:
+                    return value
+
+    return []
 
 
 def find_receipt_by_legacy_no(token: str, legacy_no: str, store_id: str,

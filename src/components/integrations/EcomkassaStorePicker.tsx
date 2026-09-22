@@ -10,7 +10,7 @@ import functionUrls from '../../../backend/func2url.json';
 interface EcomkassaStore {
   id: string | number;
   name?: string;
-  title?: string;
+  address?: string;
   [key: string]: unknown;
 }
 
@@ -124,7 +124,8 @@ const EcomkassaStorePicker = ({ config, onConfigChange }: EcomkassaStorePickerPr
             <SelectContent>
               {stores.map((store) => (
                 <SelectItem key={String(store.id)} value={String(store.id)}>
-                  {store.name || store.title || `Магазин #${store.id}`}
+                  {store.name || `Магазин #${store.id}`}
+                  {store.address ? ` · ${store.address}` : ''}
                 </SelectItem>
               ))}
               {storeId && !stores.some((s) => String(s.id) === storeId) && (
