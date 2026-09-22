@@ -1,29 +1,20 @@
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import Icon from '@/components/ui/icon';
-import { AppEvent } from './eventsTypes';
 
 interface EventsFiltersProps {
   searchQuery: string;
   setSearchQuery: (query: string) => void;
-  providerTypeFilter: string;
-  setProviderTypeFilter: (type: string) => void;
   integrationFilter: string;
   setIntegrationFilter: (integration: string) => void;
-  events: AppEvent[];
-  uniqueProviderTypes: string[];
   uniqueIntegrations: string[];
 }
 
 const EventsFilters = ({
   searchQuery,
   setSearchQuery,
-  providerTypeFilter,
-  setProviderTypeFilter,
   integrationFilter,
   setIntegrationFilter,
-  events,
-  uniqueProviderTypes,
   uniqueIntegrations
 }: EventsFiltersProps) => {
   return (
@@ -41,28 +32,6 @@ const EventsFilters = ({
           className="pl-9"
         />
       </div>
-
-      {uniqueProviderTypes.length > 1 && (
-        <div className="flex gap-2 flex-wrap">
-          <Button
-            variant={providerTypeFilter === 'all' ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setProviderTypeFilter('all')}
-          >
-            Все типы ({events.length})
-          </Button>
-          {uniqueProviderTypes.map(type => (
-            <Button
-              key={type}
-              variant={providerTypeFilter === type ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setProviderTypeFilter(type)}
-            >
-              {type} ({events.filter(e => e.provider_type === type).length})
-            </Button>
-          ))}
-        </div>
-      )}
 
       {uniqueIntegrations.length > 1 && (
         <div className="flex gap-2 flex-wrap">

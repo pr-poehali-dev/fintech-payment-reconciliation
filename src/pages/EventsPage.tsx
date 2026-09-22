@@ -16,7 +16,6 @@ const EventsPage = () => {
   const [selectedEvent, setSelectedEvent] = useState<AppEvent | null>(null);
   const [showDetails, setShowDetails] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [providerTypeFilter, setProviderTypeFilter] = useState('all');
   const [integrationFilter, setIntegrationFilter] = useState('all');
   const { toast } = useToast();
   const { currentCompany } = useAuth();
@@ -59,7 +58,6 @@ const EventsPage = () => {
     setShowDetails(true);
   };
 
-  const uniqueProviderTypes = Array.from(new Set(events.map(e => e.provider_type)));
   const uniqueIntegrations = Array.from(new Set(events.map(e => e.integration_name)));
 
   const filteredEvents = events.filter(event => {
@@ -71,10 +69,9 @@ const EventsPage = () => {
       );
     })();
 
-    const matchesProviderType = providerTypeFilter === 'all' || event.provider_type === providerTypeFilter;
     const matchesIntegration = integrationFilter === 'all' || event.integration_name === integrationFilter;
 
-    return matchesSearch && matchesProviderType && matchesIntegration;
+    return matchesSearch && matchesIntegration;
   });
 
   if (isLoading) {
@@ -114,12 +111,8 @@ const EventsPage = () => {
           <EventsFilters
             searchQuery={searchQuery}
             setSearchQuery={setSearchQuery}
-            providerTypeFilter={providerTypeFilter}
-            setProviderTypeFilter={setProviderTypeFilter}
             integrationFilter={integrationFilter}
             setIntegrationFilter={setIntegrationFilter}
-            events={events}
-            uniqueProviderTypes={uniqueProviderTypes}
             uniqueIntegrations={uniqueIntegrations}
           />
 
