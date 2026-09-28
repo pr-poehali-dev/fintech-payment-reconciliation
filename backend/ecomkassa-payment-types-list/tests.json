@@ -1,0 +1,26 @@
+{
+  "tests": [
+    {
+      "name": "Missing company_id",
+      "method": "GET",
+      "path": "/",
+      "expectedStatus": 400,
+      "expectedBody": {
+        "error": "company_id required"
+      },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "No cash register connected",
+      "method": "GET",
+      "path": "/?company_id=999999",
+      "expectedStatus": 200,
+      "expectedBody": {
+        "success": true,
+        "cash_register_connected": false,
+        "payment_types": []
+      },
+      "bodyMatcher": "partial"
+    }
+  ]
+}

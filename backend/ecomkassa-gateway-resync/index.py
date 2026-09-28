@@ -115,7 +115,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             if not report_data or report_data.get('status') != RECEIPT_DONE_STATUS:
                 continue
 
-            receipt_id, total_sum = save_receipt_from_report(cur, cash_integration_id, company_id, uid, report_data)
+            receipt_id, total_sum, payment_provider = save_receipt_from_report(cur, cash_integration_id, company_id, uid, report_data)
             if not receipt_id:
                 continue
 
@@ -123,9 +123,10 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 UPDATE t_p83864310_fintech_payment_reco.webhook_payments
                 SET receipt_id = %s,
                     amount = CASE WHEN amount = 0 THEN %s ELSE amount END,
+                    payment_provider = COALESCE(%s, payment_provider),
                     updated_at = NOW()
                 WHERE id = %s
-            ''', (receipt_id, total_sum, webhook_payment_id))
+            ''', (receipt_id, total_sum, payment_provider, webhook_payment_id))
             resolved += 1
 
         conn.commit()

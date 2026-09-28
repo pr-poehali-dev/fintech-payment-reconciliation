@@ -8,6 +8,9 @@ interface EventsFiltersProps {
   integrationFilter: string;
   setIntegrationFilter: (integration: string) => void;
   uniqueIntegrations: string[];
+  paymentProviderFilter: string;
+  setPaymentProviderFilter: (provider: string) => void;
+  uniquePaymentProviders: string[];
 }
 
 const EventsFilters = ({
@@ -15,7 +18,10 @@ const EventsFilters = ({
   setSearchQuery,
   integrationFilter,
   setIntegrationFilter,
-  uniqueIntegrations
+  uniqueIntegrations,
+  paymentProviderFilter,
+  setPaymentProviderFilter,
+  uniquePaymentProviders
 }: EventsFiltersProps) => {
   return (
     <div className="flex flex-col gap-4">
@@ -50,6 +56,28 @@ const EventsFilters = ({
               onClick={() => setIntegrationFilter(integration)}
             >
               {integration}
+            </Button>
+          ))}
+        </div>
+      )}
+
+      {uniquePaymentProviders.length > 1 && (
+        <div className="flex gap-2 flex-wrap">
+          <Button
+            variant={paymentProviderFilter === 'all' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setPaymentProviderFilter('all')}
+          >
+            Все виды оплат
+          </Button>
+          {uniquePaymentProviders.map(provider => (
+            <Button
+              key={provider}
+              variant={paymentProviderFilter === provider ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setPaymentProviderFilter(provider)}
+            >
+              {provider}
             </Button>
           ))}
         </div>

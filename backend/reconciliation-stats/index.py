@@ -94,7 +94,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     wp.payment_id,
                     MAX(wp.amount) AS amount,
                     MIN(wp.created_at)::date AS payment_date,
-                    (array_agg(wp.status ORDER BY wp.created_at DESC))[1] AS latest_status
+                    (array_agg(wp.status ORDER BY wp.created_at DESC))[1] AS latest_status,
+                    (array_agg(wp.payment_provider ORDER BY wp.created_at DESC))[1] AS payment_provider
                 FROM {SCHEMA}.webhook_payments wp
                 JOIN {SCHEMA}.user_integrations ui ON ui.id = wp.integration_id
                 JOIN {SCHEMA}.integration_providers p ON p.id = ui.provider_id
@@ -102,7 +103,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 WHERE wp.company_id = %s AND c.slug = 'payments'
                 GROUP BY wp.integration_id, wp.payment_id
             )
-            SELECT payment_date, latest_status, amount
+            SELECT payment_date, latest_status, amount, payment_provider
             FROM latest
             WHERE payment_date BETWEEN %s AND %s
         ''', (company_id, date_from, date_to))
@@ -112,8 +113,11 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         payments_count = 0
         payments_by_status: Dict[str, int] = {}
         daily_payments: Dict[str, float] = {}
+        # Детализация по видам оплат внутри шлюза Екомкассы (ЮKassa, СБП и т.п.) -
+        # только по успешным платежам, у одной кассы их может быть больше 10.
+        payments_by_provider: Dict[str, Dict[str, float]] = {}
 
-        for payment_date, latest_status, amount in payments_rows:
+        for payment_date, latest_status, amount, payment_provider in payments_rows:
             payments_by_status[latest_status] = payments_by_status.get(latest_status, 0) + 1
             if latest_status in ('AUTHORIZED', 'CONFIRMED'):
                 amount_f = float(amount) if amount else 0.0
@@ -121,6 +125,12 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 payments_count += 1
                 day_key = payment_date.isoformat()
                 daily_payments[day_key] = daily_payments.get(day_key, 0.0) + amount_f
+
+                provider_key = payment_provider or 'Без указания провайдера'
+                if provider_key not in payments_by_provider:
+                    payments_by_provider[provider_key] = {'amount': 0.0, 'count': 0}
+                payments_by_provider[provider_key]['amount'] += amount_f
+                payments_by_provider[provider_key]['count'] += 1
 
         # 2. Чеки: касса (ecomkassa_receipts) + ОФД (ofd_receipts), только приход.
         cur.execute(f'''
@@ -205,8 +215,14 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             })
             cursor_date += timedelta(days=1)
 
+        payments_by_provider_rounded = {
+            provider: {'amount': round(data['amount'], 2), 'count': data['count']}
+            for provider, data in payments_by_provider.items()
+        }
+
         details = {
             'payments_by_status': payments_by_status,
+            'payments_by_provider': payments_by_provider_rounded,
             'bank_transactions_total': bank_count,
             'bank_transactions_with_registry_commission': bank_with_known_commission,
             'bank_commission_note': (

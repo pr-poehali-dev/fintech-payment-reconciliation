@@ -125,6 +125,9 @@ const EventsTable = ({ events, onRowClick }: EventsTableProps) => {
                     </TableCell>
                     <TableCell>
                       <Badge variant="outline">{event.provider_type}</Badge>
+                      {event.payment_provider && (
+                        <Badge variant="secondary" className="ml-1">{event.payment_provider}</Badge>
+                      )}
                     </TableCell>
                     <TableCell className="font-mono text-sm">
                       {event.event_number || '—'}

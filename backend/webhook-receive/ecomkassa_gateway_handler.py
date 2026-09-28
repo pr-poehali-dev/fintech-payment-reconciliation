@@ -89,54 +89,66 @@ def find_cash_register_integration(cur, company_id: int) -> Optional[Tuple[int, 
 
 
 def save_receipt_from_report(cur, integration_id: int, company_id: int, uid: str,
-                              report_data: Dict[str, Any]) -> Tuple[Optional[int], float]:
-    '''Сохраняет фискальный чек по ответу report(status="done") в ecomkassa_receipts. Returns (receipt_id, total_sum).'''
+                              report_data: Dict[str, Any]) -> Tuple[Optional[int], float, Optional[str]]:
+    '''
+    Сохраняет фискальный чек по ответу report(status="done") в ecomkassa_receipts.
+    Для счетов на оплату (kind="INVOICE") report() дополнительно отдаёт invoice_payload
+    с полем "provider" - дискриминатором конкретной платёжной системы внутри шлюза
+    (у одной кассы Екомкассы их может быть подключено больше 10). Сохраняем его
+    отдельной колонкой, чтобы фильтровать события и детализировать сверку по
+    конкретному способу оплаты, а не только по шлюзу в целом.
+    Returns: (receipt_id, total_sum, payment_provider)
+    '''
     payload = report_data.get('payload') or {}
     total_sum = payload.get('total')
     doc_number = payload.get('fiscal_receipt_number') or payload.get('fiscal_document_number')
     doc_datetime = _parse_receipt_datetime(payload.get('receipt_datetime'))
 
+    invoice_payload = report_data.get('invoice_payload') or {}
+    payment_provider = invoice_payload.get('provider') if isinstance(invoice_payload, dict) else None
+
     cur.execute('''
         INSERT INTO t_p83864310_fintech_payment_reco.ecomkassa_receipts (
             integration_id, company_id, order_id, legacy_no, status,
-            total_sum, doc_number, doc_datetime, raw_data
-        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            total_sum, doc_number, doc_datetime, raw_data, payment_provider
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         ON CONFLICT (integration_id, order_id) DO UPDATE SET
             status = EXCLUDED.status,
             total_sum = EXCLUDED.total_sum,
             doc_number = EXCLUDED.doc_number,
             doc_datetime = EXCLUDED.doc_datetime,
-            raw_data = EXCLUDED.raw_data
+            raw_data = EXCLUDED.raw_data,
+            payment_provider = COALESCE(EXCLUDED.payment_provider, t_p83864310_fintech_payment_reco.ecomkassa_receipts.payment_provider)
         RETURNING id
     ''', (
         integration_id, company_id, str(uid), str(uid), RECEIPT_DONE_STATUS,
-        total_sum, str(doc_number) if doc_number else None, doc_datetime, json.dumps(report_data)
+        total_sum, str(doc_number) if doc_number else None, doc_datetime, json.dumps(report_data), payment_provider
     ))
     result = cur.fetchone()
     receipt_id = result[0] if result else None
-    return receipt_id, float(total_sum) if total_sum else 0.0
+    return receipt_id, float(total_sum) if total_sum else 0.0, payment_provider
 
 
-def try_resolve_receipt(cur, company_id: int, uid: str) -> Tuple[Optional[int], float]:
+def try_resolve_receipt(cur, company_id: int, uid: str) -> Tuple[Optional[int], float, Optional[str]]:
     '''
     Пробует немедленно получить и сохранить чек по uid через report(). Если чек ещё
-    не пробит (status != "done") или касса не настроена - возвращает (None, 0.0),
+    не пробит (status != "done") или касса не настроена - возвращает (None, 0.0, None),
     и довязку позже завершит дозагрузка ecomkassa-gateway-resync.
     '''
     cash_integration = find_cash_register_integration(cur, company_id)
     if not cash_integration:
-        return None, 0.0
+        return None, 0.0, None
 
     cash_integration_id, cash_config = cash_integration
     token = cash_config.get('token')
     store_id = cash_config.get('store_id')
     protocol_version = cash_config.get('protocol_version', 'v4')
     if not token or not store_id:
-        return None, 0.0
+        return None, 0.0, None
 
     report_data = fetch_report(token, store_id, uid, protocol_version)
     if not report_data or report_data.get('status') != RECEIPT_DONE_STATUS:
-        return None, 0.0
+        return None, 0.0, None
 
     return save_receipt_from_report(cur, cash_integration_id, company_id, uid, report_data)
 
@@ -176,13 +188,14 @@ def process(cur, integration_id: int, company_id: int, config: Dict[str, Any],
 
     amount = 0.0
     receipt_id = None
+    payment_provider = None
 
     # Деньги фактически проведены только на статусах "оплачен, ожидает
     # подтверждения" и "оплачен, подтверждён" - только тогда есть смысл сразу
     # пробовать получить чек (на CREATED чека ещё не может быть, на
     # CANCELED/REJECTED он не нужен).
     if status in ('AUTHORIZED', 'CONFIRMED'):
-        receipt_id, amount = try_resolve_receipt(cur, company_id, uid)
+        receipt_id, amount, payment_provider = try_resolve_receipt(cur, company_id, uid)
 
     if not amount and webhook_data.get('amount'):
         try:
@@ -195,10 +208,11 @@ def process(cur, integration_id: int, company_id: int, config: Dict[str, Any],
             integration_id, company_id, payment_id, terminal_key,
             amount, order_id, status, payment_status, error_code,
             customer_email, customer_phone, pan, card_type, exp_date,
-            raw_data, receipt_id
-        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            raw_data, receipt_id, payment_provider
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         ON CONFLICT (integration_id, payment_id, status) DO UPDATE SET
             receipt_id = COALESCE(EXCLUDED.receipt_id, t_p83864310_fintech_payment_reco.webhook_payments.receipt_id),
+            payment_provider = COALESCE(EXCLUDED.payment_provider, t_p83864310_fintech_payment_reco.webhook_payments.payment_provider),
             amount = CASE WHEN t_p83864310_fintech_payment_reco.webhook_payments.amount = 0
                           THEN EXCLUDED.amount
                           ELSE t_p83864310_fintech_payment_reco.webhook_payments.amount END
@@ -207,7 +221,7 @@ def process(cur, integration_id: int, company_id: int, config: Dict[str, Any],
         integration_id, company_id, uid, None,
         amount, uid, status, str(status_code) if status_code is not None else None, None,
         None, None, None, None, None,
-        json.dumps(webhook_data), receipt_id
+        json.dumps(webhook_data), receipt_id, payment_provider
     ))
 
     result = cur.fetchone()

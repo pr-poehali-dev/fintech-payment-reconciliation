@@ -5,6 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import Icon from '@/components/ui/icon';
 import TbankAccountPicker from './TbankAccountPicker';
 import EcomkassaStorePicker from './EcomkassaStorePicker';
+import EcomkassaPaymentTypesPicker from './EcomkassaPaymentTypesPicker';
 import {
   ConfigState,
   FieldConfig,
@@ -57,6 +58,7 @@ const IntegrationConfigStep = ({
   const currentFields = PROVIDER_FIELDS[selectedProvider.slug] || [];
   const isTbankAccount = selectedProvider.slug === 'tbank_account';
   const isEcomkassa = selectedProvider.slug === 'ecomkassa';
+  const isEcomkassaGateway = selectedProvider.slug === 'ecomkassa_gateway';
 
   const isConfigValid = () => {
     if (isTbankAccount && !String(config.account_number ?? '').trim()) {
@@ -214,6 +216,14 @@ const IntegrationConfigStep = ({
 
       {isEcomkassa && (
         <EcomkassaStorePicker
+          companyId={companyId}
+          config={config}
+          onConfigChange={onConfigChange}
+        />
+      )}
+
+      {isEcomkassaGateway && (
+        <EcomkassaPaymentTypesPicker
           companyId={companyId}
           config={config}
           onConfigChange={onConfigChange}

@@ -6,6 +6,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import ReconciliationPeriodPicker from '@/components/reconciliation/ReconciliationPeriodPicker';
 import ReconciliationTiles from '@/components/reconciliation/ReconciliationTiles';
 import ReconciliationChart from '@/components/reconciliation/ReconciliationChart';
+import ReconciliationByProvider from '@/components/reconciliation/ReconciliationByProvider';
 import functionUrls from '../../backend/func2url.json';
 
 interface ReconciliationTotals {
@@ -27,6 +28,7 @@ interface ReconciliationResponse {
   daily: DailyPoint[];
   details: {
     bank_commission_note: string | null;
+    payments_by_provider?: Record<string, { amount: number; count: number }>;
   };
 }
 
@@ -148,6 +150,9 @@ const ReconciliationPage = () => {
         <>
           <ReconciliationTiles totals={data.totals} />
           <ReconciliationChart daily={data.daily} />
+          {data.details.payments_by_provider && (
+            <ReconciliationByProvider paymentsByProvider={data.details.payments_by_provider} />
+          )}
           {data.details.bank_commission_note && (
             <div className="flex items-start gap-2 text-sm text-muted-foreground bg-muted/50 rounded-lg p-4">
               <Icon name="Info" size={16} className="mt-0.5 shrink-0" />

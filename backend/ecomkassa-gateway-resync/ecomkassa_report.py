@@ -38,29 +38,40 @@ def parse_receipt_datetime(value: Any) -> Optional[str]:
 
 
 def save_receipt_from_report(cur, integration_id: int, company_id: int, uid: str,
-                              report_data: Dict[str, Any]) -> Tuple[Optional[int], float]:
-    '''Сохраняет фискальный чек по ответу report(status="done") в ecomkassa_receipts. Returns (receipt_id, total_sum).'''
+                              report_data: Dict[str, Any]) -> Tuple[Optional[int], float, Optional[str]]:
+    '''
+    Сохраняет фискальный чек по ответу report(status="done") в ecomkassa_receipts.
+    Для счетов на оплату (kind="INVOICE") report() дополнительно отдаёт invoice_payload
+    с полем "provider" - дискриминатором конкретной платёжной системы внутри шлюза
+    (у одной кассы Екомкассы их может быть подключено больше 10). Сохраняем его
+    отдельной колонкой для фильтрации событий и детализации сверки.
+    Returns: (receipt_id, total_sum, payment_provider)
+    '''
     payload = report_data.get('payload') or {}
     total_sum = payload.get('total')
     doc_number = payload.get('fiscal_receipt_number') or payload.get('fiscal_document_number')
     doc_datetime = parse_receipt_datetime(payload.get('receipt_datetime'))
 
+    invoice_payload = report_data.get('invoice_payload') or {}
+    payment_provider = invoice_payload.get('provider') if isinstance(invoice_payload, dict) else None
+
     cur.execute('''
         INSERT INTO t_p83864310_fintech_payment_reco.ecomkassa_receipts (
             integration_id, company_id, order_id, legacy_no, status,
-            total_sum, doc_number, doc_datetime, raw_data
-        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            total_sum, doc_number, doc_datetime, raw_data, payment_provider
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         ON CONFLICT (integration_id, order_id) DO UPDATE SET
             status = EXCLUDED.status,
             total_sum = EXCLUDED.total_sum,
             doc_number = EXCLUDED.doc_number,
             doc_datetime = EXCLUDED.doc_datetime,
-            raw_data = EXCLUDED.raw_data
+            raw_data = EXCLUDED.raw_data,
+            payment_provider = COALESCE(EXCLUDED.payment_provider, t_p83864310_fintech_payment_reco.ecomkassa_receipts.payment_provider)
         RETURNING id
     ''', (
         integration_id, company_id, str(uid), str(uid), RECEIPT_DONE_STATUS,
-        total_sum, str(doc_number) if doc_number else None, doc_datetime, json.dumps(report_data)
+        total_sum, str(doc_number) if doc_number else None, doc_datetime, json.dumps(report_data), payment_provider
     ))
     result = cur.fetchone()
     receipt_id = result[0] if result else None
-    return receipt_id, float(total_sum) if total_sum else 0.0
+    return receipt_id, float(total_sum) if total_sum else 0.0, payment_provider

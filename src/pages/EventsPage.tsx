@@ -17,6 +17,7 @@ const EventsPage = () => {
   const [showDetails, setShowDetails] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [integrationFilter, setIntegrationFilter] = useState('all');
+  const [paymentProviderFilter, setPaymentProviderFilter] = useState('all');
   const { toast } = useToast();
   const { currentCompany } = useAuth();
   const companyId = currentCompany?.id;
@@ -76,6 +77,9 @@ const EventsPage = () => {
   };
 
   const uniqueIntegrations = Array.from(new Set(events.map(e => e.integration_name)));
+  const uniquePaymentProviders = Array.from(
+    new Set(events.map(e => e.payment_provider).filter((p): p is string => !!p))
+  );
 
   const filteredEvents = events.filter(event => {
     const matchesSearch = !searchQuery || (() => {
@@ -87,8 +91,9 @@ const EventsPage = () => {
     })();
 
     const matchesIntegration = integrationFilter === 'all' || event.integration_name === integrationFilter;
+    const matchesPaymentProvider = paymentProviderFilter === 'all' || event.payment_provider === paymentProviderFilter;
 
-    return matchesSearch && matchesIntegration;
+    return matchesSearch && matchesIntegration && matchesPaymentProvider;
   });
 
   if (isLoading) {
@@ -131,6 +136,9 @@ const EventsPage = () => {
             integrationFilter={integrationFilter}
             setIntegrationFilter={setIntegrationFilter}
             uniqueIntegrations={uniqueIntegrations}
+            paymentProviderFilter={paymentProviderFilter}
+            setPaymentProviderFilter={setPaymentProviderFilter}
+            uniquePaymentProviders={uniquePaymentProviders}
           />
 
           <EventsTable events={filteredEvents} onRowClick={handleRowClick} />

@@ -24,8 +24,11 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     расчётному счёту (второй слой обработки, приходит не вебхуком, а
     дозагрузкой). Для каждого события отдаётся человекочитаемый номер
     (ID платежа/сделки/операции) и краткое summary для отображения в таблице.
-    Args: company_id (обязателен), integration_id, provider_slug, limit, offset (опционально)
-    Returns: events[] с полями created_at, integration_name, provider_type, event_number, summary, raw
+    Args: company_id (обязателен), integration_id, provider_slug, payment_provider, limit, offset (опционально).
+    payment_provider - дискриминатор конкретной платёжной системы внутри шлюза
+    Екомкассы (invoice_payload.provider из report(), например "ЮKassa") - у одной
+    кассы может быть подключено больше 10 видов оплат, фильтр сужает до одного.
+    Returns: events[] с полями created_at, integration_name, provider_type, payment_provider, event_number, summary, raw
     '''
 
     method = event.get('httpMethod', 'GET')
@@ -55,6 +58,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     company_id = params.get('company_id')
     integration_id = params.get('integration_id')
     provider_slug = params.get('provider_slug')
+    payment_provider = params.get('payment_provider')
     limit = int(params.get('limit', 100))
     offset = int(params.get('offset', 0))
 
@@ -86,11 +90,15 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         if provider_slug:
             pay_where += ' AND p.slug = %s'
             pay_params.append(provider_slug)
+        if payment_provider:
+            pay_where += ' AND wp.payment_provider = %s'
+            pay_params.append(payment_provider)
 
         cur.execute(f'''
             SELECT
                 wp.id, wp.created_at, p.slug, wp.payment_id, wp.order_id,
-                wp.amount, wp.status, wp.raw_data, ui.integration_name, p.name
+                wp.amount, wp.status, wp.raw_data, ui.integration_name, p.name,
+                wp.payment_provider
             FROM t_p83864310_fintech_payment_reco.webhook_payments wp
             JOIN t_p83864310_fintech_payment_reco.user_integrations ui ON ui.id = wp.integration_id
             JOIN t_p83864310_fintech_payment_reco.integration_providers p ON p.id = ui.provider_id
@@ -101,7 +109,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         pay_groups: Dict[Any, Dict[str, Any]] = {}
         for row in cur.fetchall():
             (pay_id, created_at, p_slug, payment_id, order_id, amount, status,
-             raw_data, integration_name, provider_name) = row
+             raw_data, integration_name, provider_name, payment_provider_value) = row
 
             group_key = order_id or payment_id
             if group_key not in pay_groups:
@@ -112,8 +120,11 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     'p_slug': p_slug,
                     'integration_name': integration_name,
                     'provider_name': provider_name,
+                    'payment_provider': payment_provider_value,
                     'history': []
                 }
+            if payment_provider_value:
+                pay_groups[group_key]['payment_provider'] = payment_provider_value
             pay_groups[group_key]['history'].append({
                 'id': pay_id,
                 'status': status,
@@ -127,7 +138,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             history = group['history']
             latest = history[-1]
             amount_str = f'{float(group["amount"]):.2f} ₽' if group['amount'] is not None else ''
-            summary = f'Платёж #{group["payment_id"]} · {latest["status"]} {amount_str}'.strip()
+            provider_str = f' [{group["payment_provider"]}]' if group['payment_provider'] else ''
+            summary = f'Платёж #{group["payment_id"]}{provider_str} · {latest["status"]} {amount_str}'.strip()
             if len(history) > 1:
                 summary += f' ({len(history)} хуков)'
 
@@ -138,6 +150,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 'provider_slug': group['p_slug'],
                 'provider_type': PROVIDER_TYPE_LABELS.get(group['p_slug'], group['provider_name']),
                 'integration_name': group['integration_name'],
+                'payment_provider': group['payment_provider'],
                 'event_type': 'payment_status_changed',
                 'status': latest['status'],
                 'error_message': None,

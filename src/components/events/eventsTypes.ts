@@ -13,6 +13,7 @@ export interface AppEvent {
   created_at: string | null;
   provider_slug: string;
   provider_type: string;
+  payment_provider?: string | null;
   integration_name: string;
   event_type: string | null;
   status: string | null;
