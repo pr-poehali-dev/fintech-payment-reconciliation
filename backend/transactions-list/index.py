@@ -2,7 +2,7 @@ import json
 import os
 
 import psycopg2
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from decimal import Decimal
 
 SCHEMA = 't_p83864310_fintech_payment_reco'
@@ -34,6 +34,69 @@ def wants(type_filter, t):
     return False
 
 
+def classify_receipt_sign(operation_type: Optional[str]) -> int:
+    '''
+    Знак вклада фискального документа в выручку по его типу операции (54-ФЗ):
+    Income/приход - продажа, +; Refund Income/возврат прихода - деньги отданы
+    обратно клиенту, -; Expense/расход - вы платите (напр. приём у физлица), -;
+    Refund Expense/возврат расхода - деньги вернулись вам, +. Неизвестный тип,
+    который явно начинается с "возврат"/"refund" - считаем отрицательным на
+    всякий случай, иначе по умолчанию считаем приходом (+).
+    '''
+    if not operation_type:
+        return 1
+    t = operation_type.strip().lower()
+    is_refund = 'возврат' in t or 'refund' in t
+    is_expense = 'расход' in t or 'expense' in t
+    if is_refund and is_expense:
+        return 1
+    if is_refund:
+        return -1
+    if is_expense:
+        return -1
+    return 1
+
+
+def compute_signed_amount(row: Dict[str, Any]) -> float:
+    '''
+    Сумма транзакции с учётом знака - именно она используется в суммах для
+    сверки (в отличие от row['amount'], который всегда хранит абсолютную
+    величину документа как есть).
+    - payment: платёж вносит вклад только пока он реально "жив" деньгами -
+      AUTHORIZED/CONFIRMED (последний статус группы вебхуков) = +amount;
+      REFUNDED - деньги пришли и ушли обратно, чистый эффект 0; CANCELED/
+      REJECTED - деньги вообще не двигались, тоже 0.
+    - receipt_ofd: знак по operation_type самого документа (54-ФЗ).
+    - receipt_kassa: касса не хранит тип операции - берём знак из связанного
+      чека ОФД, если пара найдена по фискальным реквизитам; без пары считаем
+      продажей (+), как и есть по умолчанию сейчас.
+    - money: банковская выписка уже отфильтрована по ключевым словам
+      назначения платежа на этапе синхронизации (это все "наши" операции
+      терминала/счёта) - direction='in' значит деньги пришли (+), 'out' -
+      ушли, например возврат клиенту (-).
+    '''
+    amount = float(row.get('amount') or 0)
+    t = row['type']
+
+    if t == 'money':
+        return amount if row.get('status') == 'in' else -amount
+
+    if t == 'receipt_ofd':
+        return amount * classify_receipt_sign(row.get('status'))
+
+    if t == 'receipt_kassa':
+        linked_status = row.get('linked_ofd_status')
+        return amount * classify_receipt_sign(linked_status)
+
+    if t == 'payment':
+        status = row.get('status')
+        if status in ('AUTHORIZED', 'CONFIRMED'):
+            return amount
+        return 0.0
+
+    return amount
+
+
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     '''
     Единый реестр готовых для сверки транзакций: объединяет уже насыщенные
@@ -58,6 +121,12 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     статусов) - платёж считается связанным, если связь нашлась хотя бы у
     одного из вебхуков в группе.
 
+    УЧЁТ ВОЗВРАТОВ: количество транзакций (count) считается по числу
+    документов как есть, без вычетов. А суммы (amount в totals_by_type и
+    поле signed_amount у каждой строки) - НЕТТО с учётом знака операции:
+    возврат вычитается из суммы, а не увеличивает её. Подробности знака
+    смотри в compute_signed_amount().
+
     Связывание (linked_type/linked_source/linked_id/match_method):
     - платёж -> чек кассы: webhook_payments.receipt_id, а если его нет -
       совпадение order_id/payment_id с order_id/legacy_no/external_id/uuid
@@ -71,9 +140,11 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     Args: company_id (обязателен), type (payment/receipt_ofd/receipt_kassa/
     money/receipt-алиас, опционально), limit, offset (опционально)
     Returns: transactions[] с полями type, source, id, occurred_at, amount,
-    status, title, subtitle, integration_name, reference, raw_data,
-    linked_type, linked_source, linked_id, match_method,
-    webhook_history (только для payment с несколькими вебхуками)
+    signed_amount, status, title, subtitle, integration_name, reference,
+    raw_data, linked_type, linked_source, linked_id, match_method,
+    webhook_history (только для payment с несколькими вебхуками).
+    totals_by_type[].amount - это сумма signed_amount (нетто, с учётом
+    возвратов), totals_by_type[].count - число документов без вычетов.
     '''
 
     method = event.get('httpMethod', 'GET')
@@ -131,7 +202,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                         WHEN wp.receipt_id IS NOT NULL THEN 'receipt_id'
                         WHEN km.id IS NOT NULL THEN 'order_id'
                     END AS match_method,
-                    COALESCE(wp.order_id, wp.payment_id) AS group_key
+                    COALESCE(wp.order_id, wp.payment_id) AS group_key,
+                    NULL::text AS linked_ofd_status
                 FROM {SCHEMA}.webhook_payments wp
                 JOIN {SCHEMA}.user_integrations ui ON ui.id = wp.integration_id
                 JOIN {SCHEMA}.integration_providers p ON p.id = ui.provider_id
@@ -171,7 +243,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     CASE WHEN km.id IS NOT NULL THEN 'ecomkassa' END AS linked_source,
                     km.id AS linked_id,
                     CASE WHEN km.id IS NOT NULL THEN 'fiscal_triplet' END AS match_method,
-                    NULL::text AS group_key
+                    NULL::text AS group_key,
+                    NULL::text AS linked_ofd_status
                 FROM {SCHEMA}.ofd_receipts ofd
                 JOIN {SCHEMA}.user_integrations ui ON ui.id = ofd.integration_id
                 LEFT JOIN LATERAL (
@@ -207,11 +280,12 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     CASE WHEN om.id IS NOT NULL THEN 'ofd' END AS linked_source,
                     om.id AS linked_id,
                     CASE WHEN om.id IS NOT NULL THEN 'fiscal_triplet' END AS match_method,
-                    NULL::text AS group_key
+                    NULL::text AS group_key,
+                    om.operation_type AS linked_ofd_status
                 FROM {SCHEMA}.ecomkassa_receipts ekr
                 JOIN {SCHEMA}.user_integrations ui ON ui.id = ekr.integration_id
                 LEFT JOIN LATERAL (
-                    SELECT ofd.id
+                    SELECT ofd.id, ofd.operation_type
                     FROM {SCHEMA}.ofd_receipts ofd
                     WHERE ofd.company_id = ekr.company_id
                       AND (ekr.raw_data->'payload'->>'fn_number') IS NOT NULL
@@ -243,7 +317,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     NULL::text AS linked_source,
                     NULL::integer AS linked_id,
                     NULL::text AS match_method,
-                    NULL::text AS group_key
+                    NULL::text AS group_key,
+                    NULL::text AS linked_ofd_status
                 FROM {SCHEMA}.bank_statement_transactions bst
                 JOIN {SCHEMA}.user_integrations ui ON ui.id = bst.integration_id
                 WHERE bst.company_id = %(company_id)s
@@ -259,7 +334,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
         # LIMIT/OFFSET намеренно не применяется в SQL: платежи с одним и тем же
         # номером схлопываются в одну транзакцию уже в Python (ниже), а обрезать
-        # строки до этого схлопывания means could split одну группу пополам
+        # строки до этого схлопывания могло бы разбить одну группу пополам
         # между страницами. При типичных объёмах теста/демо это не проблема -
         # компания вряд ли накопит десятки тысяч транзакций.
         union_query = ' UNION ALL '.join(parts)
@@ -315,10 +390,14 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
         totals_by_type: Dict[str, Dict[str, Any]] = {}
         for row in final_rows:
+            signed = compute_signed_amount(row)
+            row['signed_amount'] = signed
+            row.pop('linked_ofd_status', None)
+
             t = row['type']
             bucket = totals_by_type.setdefault(t, {'count': 0, 'amount': 0.0, 'matched_count': 0})
             bucket['count'] += 1
-            bucket['amount'] += float(row['amount'] or 0)
+            bucket['amount'] += signed
             if row.get('linked_id'):
                 bucket['matched_count'] += 1
 

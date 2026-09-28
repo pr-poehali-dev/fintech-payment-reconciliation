@@ -92,10 +92,19 @@ const TransactionDetailsDialog = ({ transaction, relatedItems, open, onOpenChang
           <Separator />
 
           <div className="bg-muted/50 rounded-lg p-4">
-            <div className="text-sm text-muted-foreground mb-1">Сумма</div>
-            <div className="text-2xl font-bold text-foreground">
-              {formatAmount(transaction.amount)}
+            <div className="text-sm text-muted-foreground mb-1">
+              {transaction.signed_amount !== null && transaction.signed_amount !== transaction.amount
+                ? 'Вклад в выручку (с учётом возврата)'
+                : 'Сумма'}
             </div>
+            <div className={`text-2xl font-bold ${(transaction.signed_amount ?? 0) < 0 ? 'text-destructive' : 'text-foreground'}`}>
+              {formatAmount(transaction.signed_amount ?? transaction.amount)}
+            </div>
+            {transaction.signed_amount !== null && transaction.signed_amount !== transaction.amount && (
+              <div className="text-xs text-muted-foreground mt-1">
+                Сумма документа: {formatAmount(transaction.amount)}
+              </div>
+            )}
           </div>
 
           {transaction.webhook_history && transaction.webhook_history.length > 1 && (

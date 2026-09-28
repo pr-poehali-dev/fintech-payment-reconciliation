@@ -13,6 +13,7 @@ export interface Transaction {
   id: number;
   occurred_at: string | null;
   amount: number | null;
+  signed_amount: number | null;
   status: string | null;
   title: string;
   subtitle: string | null;

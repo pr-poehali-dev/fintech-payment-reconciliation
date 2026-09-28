@@ -62,8 +62,24 @@ const TransactionsTable = ({ groups, onRowClick }: TransactionsTableProps) => {
     return new Intl.NumberFormat('ru-RU', {
       style: 'currency',
       currency: 'RUB',
-      minimumFractionDigits: 0
+      minimumFractionDigits: 0,
+      signDisplay: 'exceptZero'
     }).format(amount);
+  };
+
+  // Знак суммы - это чистый вклад транзакции в выручку (возврат вычитается,
+  // а не увеличивает итог), в отличие от amount - абсолютной величины
+  // документа как она есть в исходных данных.
+  const renderAmountCell = (tx: Transaction) => {
+    const signed = tx.signed_amount ?? tx.amount;
+    const isNegative = (signed ?? 0) < 0;
+    const isZero = signed === 0 && tx.amount !== 0;
+    return (
+      <div className={isNegative ? 'text-destructive' : isZero ? 'text-muted-foreground' : ''}>
+        {formatAmount(signed)}
+        {isZero && <div className="text-xs font-normal text-muted-foreground">возврат, эффект 0</div>}
+      </div>
+    );
   };
 
   const toggleExpand = (groupId: string) => {
@@ -111,7 +127,7 @@ const TransactionsTable = ({ groups, onRowClick }: TransactionsTableProps) => {
         </TableCell>
         <TableCell />
         <TableCell className="text-right font-semibold">
-          {formatAmount(tx.amount)}
+          {renderAmountCell(tx)}
         </TableCell>
       </TableRow>
     );
@@ -205,7 +221,7 @@ const TransactionsTable = ({ groups, onRowClick }: TransactionsTableProps) => {
                       )}
                     </TableCell>
                     <TableCell className="text-right font-semibold">
-                      {formatAmount(primary.amount)}
+                      {renderAmountCell(primary)}
                     </TableCell>
                   </TableRow>
                   {isMatched && isExpanded && rest.map((tx) => renderRow(tx, true))}

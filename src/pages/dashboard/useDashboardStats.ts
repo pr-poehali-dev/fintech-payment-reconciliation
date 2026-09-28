@@ -65,7 +65,9 @@ export const useDashboardStats = (companyId: number | undefined) => {
         sum + (p.amount || 0), 0
       );
 
-      const receiptsSum = receipts.reduce((sum: number, r: any) => sum + (r.amount || 0), 0);
+      // signed_amount - чистый вклад чека в выручку (возврат вычитается, а не
+      // прибавляется) - см. backend/transactions-list для деталей знака.
+      const receiptsSum = receipts.reduce((sum: number, r: any) => sum + (r.signed_amount ?? r.amount ?? 0), 0);
       const activeIntegrations = integrations.filter((i: any) => i.status === 'active').length;
 
       setStats({
