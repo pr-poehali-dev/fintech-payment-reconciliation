@@ -18,6 +18,7 @@ const TransactionsPage = () => {
   const [showDetails, setShowDetails] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState<TransactionType | 'all'>('all');
+  const [showUnmatchedOnly, setShowUnmatchedOnly] = useState(false);
   const { toast } = useToast();
   const { currentCompany } = useAuth();
   const companyId = currentCompany?.id;
@@ -83,6 +84,7 @@ const TransactionsPage = () => {
 
   const filteredTransactions = transactions.filter((tx) => {
     if (typeFilter !== 'all' && tx.type !== typeFilter) return false;
+    if (showUnmatchedOnly && tx.linked_id) return false;
 
     if (!searchQuery) return true;
     const query = searchQuery.toLowerCase();
@@ -141,6 +143,10 @@ const TransactionsPage = () => {
             <div className="text-sm text-muted-foreground mt-1">
               {new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB', minimumFractionDigits: 0 }).format(totalsByType.payment?.amount ?? 0)}
             </div>
+            <div className="text-xs text-muted-foreground mt-2 flex items-center gap-1">
+              <Icon name="Link2" size={11} />
+              Связано {totalsByType.payment?.matched_count ?? 0} из {totalsByType.payment?.count ?? 0}
+            </div>
           </CardContent>
         </Card>
 
@@ -157,6 +163,10 @@ const TransactionsPage = () => {
             </div>
             <div className="text-sm text-muted-foreground mt-1">
               {new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB', minimumFractionDigits: 0 }).format(totalsByType.receipt?.amount ?? 0)}
+            </div>
+            <div className="text-xs text-muted-foreground mt-2 flex items-center gap-1">
+              <Icon name="Link2" size={11} />
+              Связано {totalsByType.receipt?.matched_count ?? 0} из {totalsByType.receipt?.count ?? 0}
             </div>
           </CardContent>
         </Card>
@@ -194,6 +204,8 @@ const TransactionsPage = () => {
             setTypeFilter={setTypeFilter}
             totalsByType={totalsByType}
             totalCount={transactions.length}
+            showUnmatchedOnly={showUnmatchedOnly}
+            setShowUnmatchedOnly={setShowUnmatchedOnly}
           />
 
           <TransactionsTable transactions={filteredTransactions} onRowClick={handleRowClick} />

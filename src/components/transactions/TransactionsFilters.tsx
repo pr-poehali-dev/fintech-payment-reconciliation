@@ -11,6 +11,8 @@ interface TransactionsFiltersProps {
   setTypeFilter: (value: TransactionType | 'all') => void;
   totalsByType: TransactionTotalsByType;
   totalCount: number;
+  showUnmatchedOnly: boolean;
+  setShowUnmatchedOnly: (value: boolean) => void;
 }
 
 const typeButtons: { id: TransactionType | 'all'; label: string; icon: string }[] = [
@@ -26,7 +28,9 @@ const TransactionsFilters = ({
   typeFilter,
   setTypeFilter,
   totalsByType,
-  totalCount
+  totalCount,
+  showUnmatchedOnly,
+  setShowUnmatchedOnly
 }: TransactionsFiltersProps) => {
   const countFor = (id: TransactionType | 'all') =>
     id === 'all' ? totalCount : totalsByType[id]?.count ?? 0;
@@ -59,6 +63,16 @@ const TransactionsFilters = ({
             </Button>
           ))}
         </div>
+
+        <Button
+          variant={showUnmatchedOnly ? 'default' : 'outline'}
+          size="sm"
+          onClick={() => setShowUnmatchedOnly(!showUnmatchedOnly)}
+          className="gap-2 ml-auto"
+        >
+          <Icon name="Unlink" size={14} />
+          Только без пары
+        </Button>
       </div>
     </div>
   );

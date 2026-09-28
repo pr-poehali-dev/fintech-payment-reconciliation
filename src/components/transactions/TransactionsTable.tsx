@@ -48,6 +48,12 @@ const getStatusColor = (status: string | null) => {
   }
 };
 
+const matchMethodLabels: Record<string, string> = {
+  receipt_id: 'по чеку шлюза',
+  order_id: 'по номеру заказа',
+  fiscal_triplet: 'по фискальным данным'
+};
+
 const TransactionsTable = ({ transactions, onRowClick }: TransactionsTableProps) => {
   const { currentCompany } = useAuth();
   const timezone = currentCompany?.timezone || DEFAULT_TIMEZONE;
@@ -70,13 +76,14 @@ const TransactionsTable = ({ transactions, onRowClick }: TransactionsTableProps)
             <TableHead>Описание</TableHead>
             <TableHead>Интеграция</TableHead>
             <TableHead>Статус</TableHead>
+            <TableHead>Связь</TableHead>
             <TableHead className="text-right">Сумма</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {transactions.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+              <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                 Транзакции не найдены
               </TableCell>
             </TableRow>
@@ -111,6 +118,23 @@ const TransactionsTable = ({ transactions, onRowClick }: TransactionsTableProps)
                     {tx.status && (
                       <Badge className={`${getStatusColor(tx.status)} text-white`}>
                         {tx.status}
+                      </Badge>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {tx.linked_id ? (
+                      <Badge
+                        variant="outline"
+                        className="gap-1.5 bg-success/10 text-success border-success/30"
+                        title={matchMethodLabels[tx.match_method || ''] || ''}
+                      >
+                        <Icon name="Link2" size={12} />
+                        Связано
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline" className="gap-1.5 text-muted-foreground">
+                        <Icon name="Unlink" size={12} />
+                        Нет пары
                       </Badge>
                     )}
                   </TableCell>

@@ -18,6 +18,12 @@ const typeConfig: Record<string, { icon: string; label: string; className: strin
   money: { icon: 'Landmark', label: 'Деньги', className: 'bg-success/10 text-success border-success/30' },
 };
 
+const matchMethodLabels: Record<string, string> = {
+  receipt_id: 'Чек привязан при обработке вебхука шлюза Екомкассы',
+  order_id: 'Совпал номер заказа / внешний ID платежа и чека',
+  fiscal_triplet: 'Совпали фискальные реквизиты: ФН + номер ФД + ФПД'
+};
+
 const TransactionDetailsDialog = ({ transaction, open, onOpenChange }: TransactionDetailsDialogProps) => {
   const { currentCompany } = useAuth();
   const timezone = currentCompany?.timezone || DEFAULT_TIMEZONE;
@@ -88,6 +94,32 @@ const TransactionDetailsDialog = ({ transaction, open, onOpenChange }: Transacti
             <div className="text-2xl font-bold text-foreground">
               {formatAmount(transaction.amount)}
             </div>
+          </div>
+
+          <Separator />
+
+          <div>
+            <div className="text-sm text-muted-foreground mb-2">Связанная запись для сверки</div>
+            {transaction.linked_id ? (
+              <div className="flex items-center gap-3 bg-success/10 border border-success/30 rounded-lg p-4">
+                <Icon name="Link2" size={20} className="text-success shrink-0" />
+                <div>
+                  <div className="font-medium">
+                    {typeConfig[transaction.linked_type || '']?.label || transaction.linked_type} · {transaction.linked_source}
+                  </div>
+                  <div className="text-sm text-muted-foreground">
+                    {matchMethodLabels[transaction.match_method || ''] || 'Связано'}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center gap-3 bg-muted/50 border border-border rounded-lg p-4">
+                <Icon name="Unlink" size={20} className="text-muted-foreground shrink-0" />
+                <div className="text-sm text-muted-foreground">
+                  Пара не найдена — для платежа ещё нет пробитого чека, либо для чека нет второй записи с совпадающими фискальными данными
+                </div>
+              </div>
+            )}
           </div>
 
           <Separator />
