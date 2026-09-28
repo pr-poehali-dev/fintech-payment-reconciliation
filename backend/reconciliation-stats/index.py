@@ -1,7 +1,7 @@
 import json
 import os
 import psycopg2
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from datetime import datetime, date, timedelta
 
 SCHEMA = 't_p83864310_fintech_payment_reco'
@@ -23,25 +23,58 @@ def parse_date(value: str, fallback: date) -> date:
         return fallback
 
 
+def classify_receipt_sign(operation_type: Optional[str]) -> int:
+    '''
+    Знак вклада фискального документа в выручку по его типу операции (54-ФЗ) -
+    та же классификация, что в transactions-list/compute_signed_amount, чтобы
+    раздел "Сверка" и раздел "Транзакции" показывали одинаковые нетто-суммы.
+    Income/приход = +, Refund income/возврат прихода = -, Expense/расход = -,
+    Refund expense/возврат расхода = +. Неизвестный тип по умолчанию = приход.
+    '''
+    if not operation_type:
+        return 1
+    t = operation_type.strip().lower()
+    is_refund = 'возврат' in t or 'refund' in t
+    is_expense = 'расход' in t or 'expense' in t
+    if is_refund and is_expense:
+        return 1
+    if is_refund:
+        return -1
+    if is_expense:
+        return -1
+    return 1
+
+
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     '''
     Сверка трёх точек контроля выручки компании за выбранный период:
     1) платежи, пришедшие вебхуками из интеграций эквайринга (webhook_payments,
        провайдеры категории "payments") - берём последний статус по каждому
-       payment_id и считаем успешным AUTHORIZED/CONFIRMED;
-    2) чеки из кассы (ecomkassa_receipts) и ОФД (ofd_receipts) с типом Income;
-    3) реальные деньги, поступившие на расчётный счёт (bank_statement_transactions,
-       направление in) - эти операции уже отфильтрованы по ключевым словам на
-       этапе синхронизации выписки. Так как банк может выплачивать сумму за
-       вычетом комиссии эквайринга, к каждой операции прибавляется известная
-       комиссия (commission_amount, заполняется когда появится загрузка реестра
-       платежей терминала - пока для всех операций NULL, то есть 0).
+       payment_id. Количество (payments_count) считается по числу платёжных
+       документов вне зависимости от статуса, а сумма - НЕТТО: платёж вносит
+       вклад только пока он реально "жив" деньгами (AUTHORIZED/CONFIRMED),
+       возврат (REFUNDED) или отмена дают 0 - деньги пришли и ушли обратно,
+       либо вообще не двигались.
+    2) чеки из кассы (ecomkassa_receipts) и ОФД (ofd_receipts) - количество
+       считается по числу документов, сумма - НЕТТО с учётом знака операции
+       (Income/+, Refund income/-, по 54-ФЗ). У чека кассы нет собственного
+       поля типа операции - знак берётся из связанного чека ОФД (по триплету
+       фискальных реквизитов ФН+ФД+ФПД), если пара найдена; без пары считается
+       продажей (+), как и в разделе "Транзакции".
+    3) реальные деньги, поступившие и списанные с расчётного счёта
+       (bank_statement_transactions) - эти операции уже отфильтрованы по
+       ключевым словам назначения платежа на этапе синхронизации выписки
+       (это все "наши" операции терминала/счёта). Количество считается по
+       числу операций, сумма - НЕТТО: direction='in' даёт +amount (плюс
+       известная комиссия эквайринга, если появится), 'out' (например,
+       возврат клиенту со счёта) вычитается.
     Результат сохраняется снапшотом в reconciliation_snapshots (upsert по
     company_id+period), чтобы не пересчитывать и в будущем показать детализацию.
     День "сегодня" в расчёт не берётся - сверяем только полностью закрытые дни,
     поэтому period_to не может быть позже вчера.
     Args: company_id (обязателен), date_from, date_to (YYYY-MM-DD, опционально)
-    Returns: totals по трём точкам, daily[] для графика, details для будущей детализации
+    Returns: totals по трём точкам (НЕТТО-суммы, count - число документов),
+    daily[] для графика, details для детализации
     '''
 
     method = event.get('httpMethod', 'GET')
@@ -84,9 +117,9 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     cur = conn.cursor()
 
     try:
-        # 1. Платежи: последний статус по каждому payment_id, считаем успешным
-        # AUTHORIZED/CONFIRMED. Дата платежа - первое появление вебхука (когда
-        # платёж был создан), а не дата последнего обновления статуса.
+        # 1. Платежи: последний статус по каждому payment_id. Дата платежа -
+        # первое появление вебхука (когда платёж был создан), а не дата
+        # последнего обновления статуса.
         cur.execute(f'''
             WITH latest AS (
                 SELECT
@@ -119,32 +152,58 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
         for payment_date, latest_status, amount, payment_provider in payments_rows:
             payments_by_status[latest_status] = payments_by_status.get(latest_status, 0) + 1
-            if latest_status in ('AUTHORIZED', 'CONFIRMED'):
-                amount_f = float(amount) if amount else 0.0
-                payments_total += amount_f
-                payments_count += 1
-                day_key = payment_date.isoformat()
-                daily_payments[day_key] = daily_payments.get(day_key, 0.0) + amount_f
+            # Количество - по числу документов вне зависимости от статуса
+            # (возврат тоже был платежом и должен быть виден в счётчике).
+            payments_count += 1
 
+            amount_f = float(amount) if amount else 0.0
+            # Сумма - нетто: вклад в выручку только у реально подтверждённых
+            # денег, возврат/отмена дают 0 (деньги не задержались на счету).
+            contribution = amount_f if latest_status in ('AUTHORIZED', 'CONFIRMED') else 0.0
+            payments_total += contribution
+
+            day_key = payment_date.isoformat()
+            daily_payments[day_key] = daily_payments.get(day_key, 0.0) + contribution
+
+            if latest_status in ('AUTHORIZED', 'CONFIRMED'):
                 provider_key = payment_provider or 'Без указания провайдера'
                 if provider_key not in payments_by_provider:
                     payments_by_provider[provider_key] = {'amount': 0.0, 'count': 0}
                 payments_by_provider[provider_key]['amount'] += amount_f
                 payments_by_provider[provider_key]['count'] += 1
 
-        # 2. Чеки: касса (ecomkassa_receipts) + ОФД (ofd_receipts), только приход.
+        # 2. Чеки: касса (ecomkassa_receipts) + ОФД (ofd_receipts). Знак чека
+        # кассы берётся из связанного чека ОФД (тот же fiscal_triplet матчинг,
+        # что и в transactions-list), без пары - считается продажей.
         cur.execute(f'''
-            SELECT doc_datetime::date AS receipt_date, total_sum
-            FROM {SCHEMA}.ecomkassa_receipts
-            WHERE company_id = %s
-              AND status IS DISTINCT FROM 'cancelled'
-              AND doc_datetime::date BETWEEN %s AND %s
+            SELECT
+                ekr.doc_datetime::date AS receipt_date,
+                ekr.total_sum,
+                om.operation_type AS linked_ofd_status
+            FROM {SCHEMA}.ecomkassa_receipts ekr
+            LEFT JOIN LATERAL (
+                SELECT ofd.operation_type
+                FROM {SCHEMA}.ofd_receipts ofd
+                WHERE ofd.company_id = ekr.company_id
+                  AND (ekr.raw_data->'payload'->>'fn_number') IS NOT NULL
+                  AND (ekr.raw_data->'payload'->>'fiscal_document_number') IS NOT NULL
+                  AND (ekr.raw_data->'payload'->>'fiscal_document_attribute') IS NOT NULL
+                  AND ofd.fn_number = (ekr.raw_data->'payload'->>'fn_number')
+                  AND ofd.doc_number = (ekr.raw_data->'payload'->>'fiscal_document_number')
+                  AND (ofd.raw_data->>'DecimalFiscalSign') = (ekr.raw_data->'payload'->>'fiscal_document_attribute')
+                LIMIT 1
+            ) om ON true
+            WHERE ekr.company_id = %s
+              AND ekr.status IS DISTINCT FROM 'cancelled'
+              AND ekr.doc_datetime::date BETWEEN %s AND %s
             UNION ALL
-            SELECT doc_datetime::date AS receipt_date, total_sum
-            FROM {SCHEMA}.ofd_receipts
-            WHERE company_id = %s
-              AND operation_type = 'Income'
-              AND doc_datetime::date BETWEEN %s AND %s
+            SELECT
+                ofd.doc_datetime::date AS receipt_date,
+                ofd.total_sum,
+                ofd.operation_type AS linked_ofd_status
+            FROM {SCHEMA}.ofd_receipts ofd
+            WHERE ofd.company_id = %s
+              AND ofd.doc_datetime::date BETWEEN %s AND %s
         ''', (company_id, date_from, date_to, company_id, date_from, date_to))
 
         receipts_rows = cur.fetchall()
@@ -152,31 +211,32 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         receipts_count = 0
         daily_receipts: Dict[str, float] = {}
 
-        for receipt_date, total_sum in receipts_rows:
+        for receipt_date, total_sum, linked_ofd_status in receipts_rows:
             amount_f = float(total_sum) if total_sum else 0.0
-            receipts_total += amount_f
+            signed = amount_f * classify_receipt_sign(linked_ofd_status)
+            receipts_total += signed
             receipts_count += 1
             if receipt_date:
                 day_key = receipt_date.isoformat()
-                daily_receipts[day_key] = daily_receipts.get(day_key, 0.0) + amount_f
+                daily_receipts[day_key] = daily_receipts.get(day_key, 0.0) + signed
 
-        # 3. Деньги на р/с: только поступления (direction = in). Операции уже
-        # отфильтрованы по ключевым словам назначения платежа на этапе
-        # синхронизации выписки (bank-statement-sync). Комиссия эквайринга,
-        # удержанная банком при выплате, прибавляется обратно, если она известна
-        # (появится, когда будет реализована загрузка реестра платежей терминала -
-        # тогда commission_amount будет заполняться по каждой операции).
+        # 3. Деньги на р/с: обе стороны (in/out) - выписка уже отфильтрована по
+        # ключевым словам назначения платежа на этапе синхронизации (это все
+        # "наши" операции терминала/счёта). in = +amount (плюс известная
+        # комиссия эквайринга, если появится), out = -amount (например,
+        # возврат клиенту прямо со счёта).
         cur.execute(f'''
             SELECT
                 bst.operation_date::date AS op_date,
                 bst.amount,
+                bst.direction,
                 COALESCE(bst.commission_amount, 0) AS commission_amount,
                 bst.commission_source
             FROM {SCHEMA}.bank_statement_transactions bst
             JOIN {SCHEMA}.user_integrations ui ON ui.id = bst.integration_id
             JOIN {SCHEMA}.integration_providers p ON p.id = ui.provider_id
             JOIN {SCHEMA}.integration_categories c ON c.id = p.category_id
-            WHERE bst.company_id = %s AND c.slug = 'banks' AND bst.direction = 'in'
+            WHERE bst.company_id = %s AND c.slug = 'banks'
               AND bst.operation_date::date BETWEEN %s AND %s
         ''', (company_id, date_from, date_to))
 
@@ -187,17 +247,22 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         bank_with_known_commission = 0
         daily_bank: Dict[str, float] = {}
 
-        for op_date, amount, commission_amount, commission_source in bank_rows:
+        for op_date, amount, direction, commission_amount, commission_source in bank_rows:
             amount_f = float(amount) if amount else 0.0
-            commission_f = float(commission_amount) if commission_amount else 0.0
-            bank_raw_total += amount_f
+            is_in = direction == 'in'
+            signed_amount = amount_f if is_in else -amount_f
+            # Комиссия учитывается только для поступлений - это удержание
+            # эквайринга при выплате, к списаниям (возвратам) отношения не имеет.
+            commission_f = float(commission_amount) if (commission_amount and is_in) else 0.0
+
+            bank_raw_total += signed_amount
             bank_commission_total += commission_f
             bank_count += 1
             if commission_source == 'registry':
                 bank_with_known_commission += 1
             if op_date:
                 day_key = op_date.isoformat()
-                daily_bank[day_key] = daily_bank.get(day_key, 0.0) + amount_f + commission_f
+                daily_bank[day_key] = daily_bank.get(day_key, 0.0) + signed_amount + commission_f
 
         bank_total = bank_raw_total + bank_commission_total
 
