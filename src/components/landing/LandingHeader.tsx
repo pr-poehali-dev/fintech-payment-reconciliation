@@ -39,7 +39,7 @@ const LandingHeader = ({ onCtaClick }: { onCtaClick: () => void }) => {
         <div className="hidden md:flex items-center gap-3">
           {user ? (
             <Button onClick={() => navigate('/app')} className="gap-2">
-              <Icon name="LayoutDashboard" size={16} />
+              <Icon name="Zap" size={16} />
               В кабинет
             </Button>
           ) : (
@@ -78,7 +78,7 @@ const LandingHeader = ({ onCtaClick }: { onCtaClick: () => void }) => {
           <div className="flex flex-col gap-2 pt-2">
             {user ? (
               <Button onClick={() => navigate('/app')} className="gap-2">
-                <Icon name="LayoutDashboard" size={16} />
+                <Icon name="Zap" size={16} />
                 В кабинет
               </Button>
             ) : (
