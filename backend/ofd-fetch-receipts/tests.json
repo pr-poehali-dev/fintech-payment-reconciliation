@@ -1,7 +1,7 @@
 {
   "tests": [
     {
-      "name": "Missing integration_id",
+      "name": "Missing integration_id and company_id",
       "method": "POST",
       "body": {
         "date_from": "2025-01-01T00:00:00",
@@ -9,8 +9,21 @@
       },
       "expectedStatus": 400,
       "expectedBody": {
-        "error": "integration_id required"
+        "error": "integration_id or company_id required"
       }
+    },
+    {
+      "name": "Auto-sync by company_id with no OFD integrations",
+      "method": "POST",
+      "body": {
+        "company_id": 999999
+      },
+      "expectedStatus": 200,
+      "expectedBody": {
+        "success": true,
+        "integrations_checked": 0
+      },
+      "bodyMatcher": "partial"
     },
     {
       "name": "GET request returns error",

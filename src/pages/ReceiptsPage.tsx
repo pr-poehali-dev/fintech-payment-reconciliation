@@ -72,7 +72,24 @@ const ReceiptsPage = () => {
   };
 
   useEffect(() => {
+    if (!companyId) return;
+
+    // В платформе нет cron-планировщика для фоновых задач, поэтому загрузка
+    // новых чеков ОФД запускается автоматически при каждом открытии страницы -
+    // без участия пользователя. Список чеков обновится сам, если что-то загрузилось.
+    fetch(functionUrls['ofd-fetch-receipts'], {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ company_id: companyId })
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.inserted > 0) loadReceipts();
+      })
+      .catch(() => {});
+
     loadReceipts();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [companyId]);
 
   const formatDateTime = (isoString: string) => {
