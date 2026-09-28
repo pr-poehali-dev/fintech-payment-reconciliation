@@ -21,11 +21,22 @@ const Index = () => {
   const [unreadCount] = useState(3);
 
   const companyId = currentCompany?.id;
-  const { stats } = useDashboardStats(companyId);
+  const { stats, reload: reloadDashboardStats } = useDashboardStats(companyId);
 
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  // Хук грузит статистику один раз при монтировании - без этого при переходе
+  // на вкладку "Дашборд" из другого раздела (например, после переноса
+  // интеграции в другую компанию) показывались бы данные, загруженные ещё
+  // при открытии приложения.
+  useEffect(() => {
+    if (activeModule === 'dashboard') {
+      reloadDashboardStats();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeModule]);
 
   const activeModuleName = APP_MODULES.find(m => m.id === activeModule)?.name || 'Дашборд';
 
