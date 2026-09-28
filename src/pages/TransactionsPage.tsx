@@ -7,6 +7,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import TransactionsTable from '@/components/transactions/TransactionsTable';
 import TransactionsFilters from '@/components/transactions/TransactionsFilters';
 import TransactionDetailsDialog from '@/components/transactions/TransactionDetailsDialog';
+import BackfillDialog from '@/components/transactions/BackfillDialog';
 import { Transaction, TransactionType, TransactionTotalsByType } from '@/components/transactions/transactionsTypes';
 import { groupTransactions, computeMatchedKeys, nodeKey } from '@/lib/transactionGrouping';
 import functionUrls from '../../backend/func2url.json';
@@ -20,6 +21,9 @@ const TransactionsPage = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState<TransactionType | 'all'>('all');
   const [showUnmatchedOnly, setShowUnmatchedOnly] = useState(false);
+  const [showBackfillDialog, setShowBackfillDialog] = useState(false);
+  const [hasEcomkassa, setHasEcomkassa] = useState(false);
+  const [hasOfd, setHasOfd] = useState(false);
   const { toast } = useToast();
   const { currentCompany } = useAuth();
   const companyId = currentCompany?.id;
@@ -75,6 +79,17 @@ const TransactionsPage = () => {
       .catch(() => {});
 
     fetchTransactions();
+
+    // Узнаём, есть ли у компании активные касса Екомкасса и/или интеграция ОФД -
+    // от этого зависит, какие вкладки показать в диалоге дозагрузки исторических данных.
+    fetch(`${functionUrls['integrations-list']}?company_id=${companyId}`)
+      .then((res) => res.json())
+      .then((data) => {
+        const integrations = data.user_integrations || [];
+        setHasEcomkassa(integrations.some((i: any) => i.provider_slug === 'ecomkassa' && i.status === 'active'));
+        setHasOfd(integrations.some((i: any) => i.provider_slug === 'ofdru' && i.status === 'active'));
+      })
+      .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [companyId]);
 
@@ -137,10 +152,15 @@ const TransactionsPage = () => {
             Готовые данные для сверки: платежи, чеки и деньги на счету
           </p>
         </div>
-        <Button onClick={fetchTransactions} variant="outline">
-          <Icon name="RefreshCw" size={16} className="mr-2" />
-          Обновить
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button onClick={() => setShowBackfillDialog(true)} variant="outline" className="gap-2">
+            <Icon name="Download" size={16} />
+            Загрузить
+          </Button>
+          <Button onClick={fetchTransactions} variant="outline" size="icon" title="Обновить">
+            <Icon name="RefreshCw" size={16} />
+          </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -238,6 +258,14 @@ const TransactionsPage = () => {
         }
         open={showDetails}
         onOpenChange={setShowDetails}
+      />
+
+      <BackfillDialog
+        open={showBackfillDialog}
+        onOpenChange={setShowBackfillDialog}
+        hasEcomkassa={hasEcomkassa}
+        hasOfd={hasOfd}
+        onFinished={fetchTransactions}
       />
     </div>
   );
