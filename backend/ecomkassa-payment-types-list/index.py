@@ -5,6 +5,8 @@ import urllib.error
 import psycopg2
 from typing import Dict, Any
 
+from ecomkassa_token import ensure_valid_token
+
 CORS_HEADERS = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET, OPTIONS',
@@ -67,7 +69,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
     try:
         cur.execute('''
-            SELECT ui.config
+            SELECT ui.id, ui.config
             FROM t_p83864310_fintech_payment_reco.user_integrations ui
             JOIN t_p83864310_fintech_payment_reco.integration_providers p ON p.id = ui.provider_id
             WHERE ui.company_id = %s AND p.slug = 'ecomkassa' AND ui.status = 'active'
@@ -84,9 +86,11 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 'isBase64Encoded': False
             }
 
-        cash_config = cash_row[0]
+        cash_integration_id, cash_config = cash_row
         cash_config = json.loads(cash_config) if isinstance(cash_config, str) else (cash_config or {})
-        token = cash_config.get('token')
+        # Токен Екомкассы живёт 24 часа - если истёк, получаем новый по
+        # сохранённым логину/паролю и сразу обновляем config в БД.
+        token = ensure_valid_token(cur, cash_integration_id, cash_config)
         store_id = cash_config.get('store_id')
         protocol_version = cash_config.get('protocol_version', 'v4')
 
@@ -110,6 +114,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
         if not isinstance(payment_types, list):
             payment_types = []
+
+        conn.commit()
 
         return {
             'statusCode': 200,

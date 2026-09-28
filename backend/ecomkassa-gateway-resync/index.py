@@ -4,6 +4,7 @@ import psycopg2
 from typing import Dict, Any
 
 from ecomkassa_report import fetch_report, save_receipt_from_report, RECEIPT_DONE_STATUS
+from ecomkassa_token import ensure_valid_token
 
 CORS_HEADERS = {
     'Access-Control-Allow-Origin': '*',
@@ -78,7 +79,9 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
         cash_integration_id, cash_config = cash_row
         cash_config = json.loads(cash_config) if isinstance(cash_config, str) else (cash_config or {})
-        token = cash_config.get('token')
+        # Токен Екомкассы живёт 24 часа - если истёк, получаем новый по
+        # сохранённым логину/паролю и сразу обновляем config в БД.
+        token = ensure_valid_token(cur, cash_integration_id, cash_config)
         store_id = cash_config.get('store_id')
         protocol_version = cash_config.get('protocol_version', 'v4')
 

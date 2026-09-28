@@ -5,6 +5,7 @@ from typing import Dict, Any
 from datetime import datetime
 
 from ecomkassa_api import find_receipt_by_legacy_no, poll_order_until_ready
+from ecomkassa_token import ensure_valid_token
 
 CORS_HEADERS = {
     'Access-Control-Allow-Origin': '*',
@@ -110,7 +111,9 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         config, company_id = row
         config = json.loads(config) if isinstance(config, str) else (config or {})
 
-        token = config.get('token')
+        # Токен Екомкассы живёт 24 часа - если истёк, получаем новый по
+        # сохранённым логину/паролю и сразу обновляем config в БД.
+        token = ensure_valid_token(cur, integration_id, config)
         store_id = config.get('store_id')
         protocol_version = config.get('protocol_version', 'v4')
 

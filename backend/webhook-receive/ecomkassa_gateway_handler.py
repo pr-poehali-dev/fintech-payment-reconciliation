@@ -4,6 +4,8 @@ import urllib.error
 from datetime import datetime
 from typing import Any, Dict, Optional, Tuple
 
+from ecomkassa_token import ensure_valid_token
+
 # Формат тела callback от payments.ecomkassa.ru официально не задокументирован -
 # описан только формат ответа метода проверки статуса по ID (GET /api/v1/payments/{ID}):
 # status: 0 - создан, ожидает оплаты; 1 - оплачен, ожидает подтверждения;
@@ -140,7 +142,9 @@ def try_resolve_receipt(cur, company_id: int, uid: str) -> Tuple[Optional[int], 
         return None, 0.0, None
 
     cash_integration_id, cash_config = cash_integration
-    token = cash_config.get('token')
+    # Токен Екомкассы живёт 24 часа - если истёк, получаем новый по
+    # сохранённым логину/паролю и сразу обновляем config в БД.
+    token = ensure_valid_token(cur, cash_integration_id, cash_config)
     store_id = cash_config.get('store_id')
     protocol_version = cash_config.get('protocol_version', 'v4')
     if not token or not store_id:

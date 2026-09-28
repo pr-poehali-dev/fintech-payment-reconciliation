@@ -29,6 +29,7 @@ const EcomkassaStorePicker = ({ companyId, config, onConfigChange }: EcomkassaSt
   const [innMismatch, setInnMismatch] = useState<{ companyInn: string; ecomkassaInn: string } | null>(null);
 
   const hasToken = !!config.token;
+  const hasSavedPassword = !!config.password && !password;
   const storeId = config.store_id ? String(config.store_id) : '';
   const protocolVersion = String(config.protocol_version ?? 'v4');
 
@@ -55,6 +56,10 @@ const EcomkassaStorePicker = ({ companyId, config, onConfigChange }: EcomkassaSt
         onConfigChange({
           ...config,
           login,
+          // Пароль сохраняется вместе с токеном - JWT Екомкассы живёт всего
+          // 24 часа, без пароля бэкенду будет нечем получить новый токен
+          // взамен истёкшего, и все запросы к API начнут падать с 401.
+          password,
           token: data.token,
           store_id: config.store_id || ''
         });
@@ -93,7 +98,7 @@ const EcomkassaStorePicker = ({ companyId, config, onConfigChange }: EcomkassaSt
           <Input
             id="ecomkassa_password"
             type="password"
-            placeholder="••••••••"
+            placeholder={hasSavedPassword ? '•••••••• (сохранён)' : '••••••••'}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
           />
@@ -114,7 +119,7 @@ const EcomkassaStorePicker = ({ companyId, config, onConfigChange }: EcomkassaSt
       {hasToken && !innMismatch && (
         <div className="flex items-center gap-2 text-xs text-success">
           <Icon name="ShieldCheck" size={14} />
-          Токен получен
+          Токен получен, будет обновляться автоматически
         </div>
       )}
 
