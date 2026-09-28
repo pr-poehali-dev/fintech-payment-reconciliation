@@ -16,8 +16,6 @@ const EventsPage = () => {
   const [selectedEvent, setSelectedEvent] = useState<AppEvent | null>(null);
   const [showDetails, setShowDetails] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [integrationFilter, setIntegrationFilter] = useState('all');
-  const [paymentProviderFilter, setPaymentProviderFilter] = useState('all');
   const { toast } = useToast();
   const { currentCompany } = useAuth();
   const companyId = currentCompany?.id;
@@ -76,24 +74,27 @@ const EventsPage = () => {
     setShowDetails(true);
   };
 
-  const uniqueIntegrations = Array.from(new Set(events.map(e => e.integration_name)));
-  const uniquePaymentProviders = Array.from(
-    new Set(events.map(e => e.payment_provider).filter((p): p is string => !!p))
-  );
-
   const filteredEvents = events.filter(event => {
-    const matchesSearch = !searchQuery || (() => {
-      const query = searchQuery.toLowerCase();
-      return (
-        event.event_number?.toLowerCase().includes(query) ||
-        event.summary.toLowerCase().includes(query)
-      );
-    })();
+    if (!searchQuery) return true;
 
-    const matchesIntegration = integrationFilter === 'all' || event.integration_name === integrationFilter;
-    const matchesPaymentProvider = paymentProviderFilter === 'all' || event.payment_provider === paymentProviderFilter;
+    const query = searchQuery.toLowerCase();
 
-    return matchesSearch && matchesIntegration && matchesPaymentProvider;
+    // Ищем не только по номеру события, но и по любым данным внутри
+    // присланного вебхука (сумма, email, номер заказа и т.д.) - сериализуем
+    // raw в строку и историю повторных хуков, чтобы не плодить ручные проверки
+    // под каждое поле у каждого провайдера.
+    const haystack = [
+      event.event_number,
+      event.summary,
+      event.integration_name,
+      event.payment_provider,
+      JSON.stringify(event.raw ?? ''),
+      JSON.stringify(event.webhook_history?.map(h => h.raw) ?? '')
+    ]
+      .join(' ')
+      .toLowerCase();
+
+    return haystack.includes(query);
   });
 
   if (isLoading) {
@@ -133,12 +134,6 @@ const EventsPage = () => {
           <EventsFilters
             searchQuery={searchQuery}
             setSearchQuery={setSearchQuery}
-            integrationFilter={integrationFilter}
-            setIntegrationFilter={setIntegrationFilter}
-            uniqueIntegrations={uniqueIntegrations}
-            paymentProviderFilter={paymentProviderFilter}
-            setPaymentProviderFilter={setPaymentProviderFilter}
-            uniquePaymentProviders={uniquePaymentProviders}
           />
 
           <EventsTable events={filteredEvents} onRowClick={handleRowClick} />
