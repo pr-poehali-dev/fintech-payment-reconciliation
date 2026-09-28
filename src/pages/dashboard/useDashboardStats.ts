@@ -28,20 +28,20 @@ export const useDashboardStats = (companyId: number | undefined) => {
 
     setIsLoading(true);
     try {
-      const [paymentsRes, receiptsRes, integrationsRes] = await Promise.all([
+      const [paymentsRes, transactionsRes, integrationsRes] = await Promise.all([
         fetch(`${functionUrls['payments-list']}?company_id=${companyId}&limit=1000&offset=0`),
-        fetch(`${functionUrls['receipts-list']}?company_id=${companyId}&limit=1000&offset=0`),
+        fetch(`${functionUrls['transactions-list']}?company_id=${companyId}&type=receipt&limit=1000&offset=0`),
         fetch(`${functionUrls['integrations-list']}?company_id=${companyId}`)
       ]);
 
-      const [paymentsData, receiptsData, integrationsData] = await Promise.all([
+      const [paymentsData, transactionsData, integrationsData] = await Promise.all([
         paymentsRes.json(),
-        receiptsRes.json(),
+        transactionsRes.json(),
         integrationsRes.json()
       ]);
 
       const rawPayments = paymentsData.payments || [];
-      const receipts = receiptsData.receipts || [];
+      const receipts = transactionsData.transactions || [];
       const integrations = integrationsData.user_integrations || [];
 
       // По одному платежу может прийти несколько вебхуков подряд (например,
@@ -65,7 +65,7 @@ export const useDashboardStats = (companyId: number | undefined) => {
         sum + (p.amount || 0), 0
       );
 
-      const receiptsSum = receipts.reduce((sum: number, r: any) => sum + (r.total_sum || 0), 0);
+      const receiptsSum = receipts.reduce((sum: number, r: any) => sum + (r.amount || 0), 0);
       const activeIntegrations = integrations.filter((i: any) => i.status === 'active').length;
 
       setStats({
