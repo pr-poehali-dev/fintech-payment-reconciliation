@@ -109,7 +109,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             FROM user_integrations ui
             JOIN integration_providers p ON p.id = ui.provider_id
             JOIN integration_categories c ON c.id = p.category_id
-            WHERE ui.company_id = %s
+            WHERE ui.company_id = %s AND ui.status != 'deleted'
             ORDER BY ui.created_at DESC
         ''', (company_id,))
         

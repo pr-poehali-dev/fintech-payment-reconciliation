@@ -5,7 +5,12 @@ from typing import Dict, Any
 
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     '''
-    Удаление интеграции пользователя
+    Мягкое удаление интеграции пользователя: статус меняется на 'deleted',
+    сама запись и вся история (вебхуки, платежи, чеки, сделки CRM, банковские
+    операции) остаются в базе нетронутыми - события в ленте и данные сверки
+    не пропадают задним числом. Из личного кабинета (integrations-list) такая
+    интеграция скрывается, а webhook-receive перестаёт принимать по ней хуки
+    (фильтр status='active').
     '''
     
     method = event.get('httpMethod', 'DELETE')
@@ -68,59 +73,20 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 'isBase64Encoded': False
             }
         
-        # Удаляем в порядке зависимостей (дочерние таблицы раньше родительских),
-        # иначе удаление интеграции падает с foreign key constraint violation.
-        # webhook_forward_logs ссылается на webhook_payments, а не на саму
-        # интеграцию напрямую - поэтому чистим её первой через подзапрос.
+        # Мягкое удаление: статус -> 'deleted', история не трогается. Новый
+        # webhook_token не выдаём, а старый обнуляем, чтобы освободить
+        # уникальность и исключить приём хуков по старому URL в любом случае
+        # (webhook-receive и так фильтрует по status='active', это подстраховка).
         cur.execute('''
-            DELETE FROM webhook_forward_logs
-            WHERE webhook_payment_id IN (
-                SELECT id FROM webhook_payments WHERE integration_id = %s
-            )
-        ''', (integration_id,))
-
-        cur.execute('''
-            DELETE FROM webhook_payments
-            WHERE integration_id = %s
-        ''', (integration_id,))
-
-        cur.execute('''
-            DELETE FROM webhook_events
-            WHERE integration_id = %s
-        ''', (integration_id,))
-
-        cur.execute('''
-            DELETE FROM ecomkassa_receipts
-            WHERE integration_id = %s
-        ''', (integration_id,))
-
-        cur.execute('''
-            DELETE FROM ofd_receipts
-            WHERE integration_id = %s
-        ''', (integration_id,))
-
-        cur.execute('''
-            DELETE FROM bank_statement_transactions
-            WHERE integration_id = %s
-        ''', (integration_id,))
-
-        cur.execute('''
-            DELETE FROM crm_deals
-            WHERE integration_id = %s
-        ''', (integration_id,))
-
-        cur.execute('''
-            DELETE FROM bank_oauth_tokens
-            WHERE integration_id = %s
-        ''', (integration_id,))
-
-        cur.execute('''
-            DELETE FROM user_integrations
+            UPDATE user_integrations
+            SET status = 'deleted',
+                webhook_token = webhook_token || '_deleted_' || id::text,
+                updated_at = NOW()
             WHERE id = %s
         ''', (integration_id,))
-        
+
         conn.commit()
-        
+
         return {
             'statusCode': 200,
             'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
