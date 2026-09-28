@@ -68,11 +68,52 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 'isBase64Encoded': False
             }
         
+        # Удаляем в порядке зависимостей (дочерние таблицы раньше родительских),
+        # иначе удаление интеграции падает с foreign key constraint violation.
+        # webhook_forward_logs ссылается на webhook_payments, а не на саму
+        # интеграцию напрямую - поэтому чистим её первой через подзапрос.
+        cur.execute('''
+            DELETE FROM webhook_forward_logs
+            WHERE webhook_payment_id IN (
+                SELECT id FROM webhook_payments WHERE integration_id = %s
+            )
+        ''', (integration_id,))
+
         cur.execute('''
             DELETE FROM webhook_payments
             WHERE integration_id = %s
         ''', (integration_id,))
-        
+
+        cur.execute('''
+            DELETE FROM webhook_events
+            WHERE integration_id = %s
+        ''', (integration_id,))
+
+        cur.execute('''
+            DELETE FROM ecomkassa_receipts
+            WHERE integration_id = %s
+        ''', (integration_id,))
+
+        cur.execute('''
+            DELETE FROM ofd_receipts
+            WHERE integration_id = %s
+        ''', (integration_id,))
+
+        cur.execute('''
+            DELETE FROM bank_statement_transactions
+            WHERE integration_id = %s
+        ''', (integration_id,))
+
+        cur.execute('''
+            DELETE FROM crm_deals
+            WHERE integration_id = %s
+        ''', (integration_id,))
+
+        cur.execute('''
+            DELETE FROM bank_oauth_tokens
+            WHERE integration_id = %s
+        ''', (integration_id,))
+
         cur.execute('''
             DELETE FROM user_integrations
             WHERE id = %s
