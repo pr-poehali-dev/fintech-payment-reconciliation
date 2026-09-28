@@ -1,4 +1,5 @@
 {
+  "transactions-list": "https://functions.poehali.dev/d977ccf7-aaab-48a4-b418-798c34bc70ec",
   "company-settings-update": "https://functions.poehali.dev/72151df3-051d-408f-92ca-e0af9cdc0c1d",
   "ecomkassa-payment-types-list": "https://functions.poehali.dev/eea57274-9ee6-4945-810d-4e1dcd424d18",
   "ecomkassa-gateway-resync": "https://functions.poehali.dev/0b50cd7c-94bc-4be9-824a-0bb119c6adef",

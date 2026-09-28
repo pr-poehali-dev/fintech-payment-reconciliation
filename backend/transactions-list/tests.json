@@ -1,0 +1,28 @@
+{
+  "tests": [
+    {
+      "name": "Missing company_id returns 400",
+      "method": "GET",
+      "path": "/",
+      "expectedStatus": 400,
+      "expectedBody": {"error": "string"},
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "List transactions for company",
+      "method": "GET",
+      "path": "/?company_id=1",
+      "expectedStatus": 200,
+      "expectedBody": {"success": true},
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Filter by type=payment",
+      "method": "GET",
+      "path": "/?company_id=1&type=payment",
+      "expectedStatus": 200,
+      "expectedBody": {"success": true},
+      "bodyMatcher": "partial"
+    }
+  ]
+}

@@ -9,6 +9,7 @@ export const APP_MODULES: AppModule[] = [
   { id: 'receipts', name: 'Чеки', icon: 'Receipt' },
   { id: 'reconciliation', name: 'Сверка', icon: 'GitCompare' },
   { id: 'events', name: 'События', icon: 'Radio' },
+  { id: 'transactions', name: 'Транзакции', icon: 'ArrowLeftRight' },
   { id: 'integrations', name: 'Интеграции', icon: 'Plug' },
   { id: 'access', name: 'Доступ', icon: 'Users' },
   { id: 'settings', name: 'Настройки', icon: 'Settings' }
