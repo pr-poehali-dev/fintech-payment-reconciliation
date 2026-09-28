@@ -49,6 +49,23 @@ const EventsPage = () => {
   };
 
   useEffect(() => {
+    if (!companyId) return;
+
+    // В платформе нет cron-планировщика для фоновых задач, поэтому дозагрузка
+    // чеков шлюза Екомкассы (для платежей, чек которых ещё не был пробит на
+    // момент вебхука) запускается автоматически при каждом открытии страницы -
+    // без участия пользователя. Событие обновится само, если что-то довязалось.
+    fetch(functionUrls['ecomkassa-gateway-resync'], {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ company_id: companyId })
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.resolved > 0) fetchEvents();
+      })
+      .catch(() => {});
+
     fetchEvents();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [companyId]);

@@ -1,6 +1,7 @@
 import json
 import urllib.request
 import urllib.error
+from datetime import datetime
 from typing import Any, Dict, Optional, Tuple
 
 # Формат тела callback от payments.ecomkassa.ru официально не задокументирован -
@@ -22,6 +23,12 @@ UID_KEYS = ['uid', 'orderId', 'order_id', 'invoice_id', 'invoiceId', 'paymentId'
 
 ECOMKASSA_BASE_URL = 'https://app.ecomkassa.ru'
 
+# Статус пробития чека в ответе метода report - "done" значит чек фискализирован
+# и payload с фискальными данными заполнен; любой другой статус (wait/pending и т.п.)
+# значит чек ещё не готов - тогда его довяжет дозагрузка при следующем открытии
+# "Событий"/"Сверки" (см. ecomkassa-gateway-resync).
+RECEIPT_DONE_STATUS = 'done'
+
 
 def _extract_uid(webhook_data: Dict[str, Any]) -> Optional[str]:
     for key in UID_KEYS:
@@ -31,25 +38,39 @@ def _extract_uid(webhook_data: Dict[str, Any]) -> Optional[str]:
     return None
 
 
-def _find_receipt_by_legacy_no(token: str, legacy_no: str, store_id: str,
-                                protocol_version: str = 'v4') -> Optional[Dict[str, Any]]:
-    '''Поиск чека кассы Екомкасса по внешнему номеру (legacy_no = наш UUID платежа).'''
-    mobile_version = 'v2' if protocol_version == 'v5' else 'v1'
-    url = f'{ECOMKASSA_BASE_URL}/api/mobile/{mobile_version}/courier/find/{legacy_no}?storeId={store_id}'
+def fetch_report(token: str, store_id: str, uid: str, protocol_version: str = 'v4',
+                  timeout: float = 4.0) -> Optional[Dict[str, Any]]:
+    '''
+    GET /fiscalorder/{version}/{storeId}/report/{uuid} - проверка статуса пробития
+    чека Екомкассы по тому же UUID, что использовался как uid платежа в шлюзе.
+    Ответ: {"status": "done"/..., "payload": {"total": ..., "fiscal_receipt_number": ...}}.
+    payload заполнен только когда status == "done".
+    '''
+    url = f'{ECOMKASSA_BASE_URL}/fiscalorder/{protocol_version}/{store_id}/report/{uid}'
     req = urllib.request.Request(url, headers={'Token': token})
     try:
-        with urllib.request.urlopen(req, timeout=15) as response:
+        with urllib.request.urlopen(req, timeout=timeout) as response:
             return json.loads(response.read().decode('utf-8'))
-    except (urllib.error.URLError, urllib.error.HTTPError, json.JSONDecodeError):
+    except (urllib.error.URLError, urllib.error.HTTPError, json.JSONDecodeError, TimeoutError):
         return None
 
 
-def _find_cash_register_integration(cur, company_id: int) -> Optional[Tuple[int, Dict[str, Any]]]:
+def _parse_receipt_datetime(value: Any) -> Optional[str]:
+    '''Екомкасса отдаёт дату чека как "14.07.2019 15:08:25" - переводим в ISO для timestamp-колонки.'''
+    if not value:
+        return None
+    try:
+        return datetime.strptime(str(value), '%d.%m.%Y %H:%M:%S').isoformat()
+    except ValueError:
+        return None
+
+
+def find_cash_register_integration(cur, company_id: int) -> Optional[Tuple[int, Dict[str, Any]]]:
     '''
-    Кассовый чек по UUID платежа лежит в интеграции "Екомкасса" (касса, provider
-    slug=ecomkassa) - отдельной от "Екомкасса — платёжный шлюз". Компания считается
-    имеющей одну активную кассу Екомкассы, поэтому она находится автоматически
-    по company_id, без явной настройки в конфиге шлюза.
+    Фискальный чек по UUID платежа появляется в интеграции "Екомкасса" (касса,
+    provider slug=ecomkassa) - отдельной от "Екомкасса — платёжный шлюз". Компания
+    считается имеющей одну активную кассу Екомкассы, поэтому она находится
+    автоматически по company_id, без явной настройки в конфиге шлюза.
     '''
     cur.execute('''
         SELECT ui.id, ui.config
@@ -67,13 +88,13 @@ def _find_cash_register_integration(cur, company_id: int) -> Optional[Tuple[int,
     return cash_integration_id, cash_config
 
 
-def _save_receipt(cur, integration_id: int, company_id: int, legacy_no: str,
-                   data: Dict[str, Any]) -> Optional[int]:
-    status = data.get('status')
-    total_sum = data.get('total') or data.get('sum') or data.get('totalSum')
-    doc_number = data.get('docNumber') or data.get('doc_number')
-    doc_datetime = data.get('docDateTime') or data.get('doc_datetime') or data.get('createdAt')
-    order_id = data.get('orderId') or data.get('order_id') or legacy_no
+def save_receipt_from_report(cur, integration_id: int, company_id: int, uid: str,
+                              report_data: Dict[str, Any]) -> Tuple[Optional[int], float]:
+    '''Сохраняет фискальный чек по ответу report(status="done") в ecomkassa_receipts. Returns (receipt_id, total_sum).'''
+    payload = report_data.get('payload') or {}
+    total_sum = payload.get('total')
+    doc_number = payload.get('fiscal_receipt_number') or payload.get('fiscal_document_number')
+    doc_datetime = _parse_receipt_datetime(payload.get('receipt_datetime'))
 
     cur.execute('''
         INSERT INTO t_p83864310_fintech_payment_reco.ecomkassa_receipts (
@@ -88,11 +109,36 @@ def _save_receipt(cur, integration_id: int, company_id: int, legacy_no: str,
             raw_data = EXCLUDED.raw_data
         RETURNING id
     ''', (
-        integration_id, company_id, str(order_id), str(legacy_no), status,
-        total_sum, doc_number, doc_datetime, json.dumps(data)
+        integration_id, company_id, str(uid), str(uid), RECEIPT_DONE_STATUS,
+        total_sum, str(doc_number) if doc_number else None, doc_datetime, json.dumps(report_data)
     ))
     result = cur.fetchone()
-    return (result[0], total_sum) if result else (None, total_sum)
+    receipt_id = result[0] if result else None
+    return receipt_id, float(total_sum) if total_sum else 0.0
+
+
+def try_resolve_receipt(cur, company_id: int, uid: str) -> Tuple[Optional[int], float]:
+    '''
+    Пробует немедленно получить и сохранить чек по uid через report(). Если чек ещё
+    не пробит (status != "done") или касса не настроена - возвращает (None, 0.0),
+    и довязку позже завершит дозагрузка ecomkassa-gateway-resync.
+    '''
+    cash_integration = find_cash_register_integration(cur, company_id)
+    if not cash_integration:
+        return None, 0.0
+
+    cash_integration_id, cash_config = cash_integration
+    token = cash_config.get('token')
+    store_id = cash_config.get('store_id')
+    protocol_version = cash_config.get('protocol_version', 'v4')
+    if not token or not store_id:
+        return None, 0.0
+
+    report_data = fetch_report(token, store_id, uid, protocol_version)
+    if not report_data or report_data.get('status') != RECEIPT_DONE_STATUS:
+        return None, 0.0
+
+    return save_receipt_from_report(cur, cash_integration_id, company_id, uid, report_data)
 
 
 def process(cur, integration_id: int, company_id: int, config: Dict[str, Any],
@@ -101,9 +147,10 @@ def process(cur, integration_id: int, company_id: int, config: Dict[str, Any],
     Обрабатывает callback от прокси-шлюза payments.ecomkassa.ru (invoice): наш
     сервис не участвует в создании платежа (это делает внешний CMS/CRM-модуль),
     только принимает уведомления об изменении статуса. Идентификатор платежа
-    (uid, он же UUID) совпадает с legacy_no предчека кассы Екомкасса, поэтому им
-    же ищем и довязываем фискальный чек, а сумму платежа берём из чека - в самом
-    статусном колбэке суммы может не быть, так как корзина уже создана в кассе.
+    (uid, он же UUID) совпадает с внешним номером предчека кассы Екомкасса,
+    поэтому им же сразу пробуем получить пробитый чек методом report(). Чек может
+    быть ещё не пробит в момент колбэка - тогда сумма/receipt_id останутся
+    пустыми, и их довяжет дозагрузка при следующем открытии "Событий"/"Сверки".
     Returns: (accepted, webhook_payment_id, error)
     '''
     uid = _extract_uid(webhook_data)
@@ -131,21 +178,11 @@ def process(cur, integration_id: int, company_id: int, config: Dict[str, Any],
     receipt_id = None
 
     # Деньги фактически проведены только на статусах "оплачен, ожидает
-    # подтверждения" и "оплачен, подтверждён" - только тогда есть смысл идти
-    # за чеком (на CREATED чека может ещё не быть, на CANCELED/REJECTED он не нужен).
+    # подтверждения" и "оплачен, подтверждён" - только тогда есть смысл сразу
+    # пробовать получить чек (на CREATED чека ещё не может быть, на
+    # CANCELED/REJECTED он не нужен).
     if status in ('AUTHORIZED', 'CONFIRMED'):
-        cash_integration = _find_cash_register_integration(cur, company_id)
-        if cash_integration:
-            cash_integration_id, cash_config = cash_integration
-            token = cash_config.get('token')
-            store_id = cash_config.get('store_id')
-            protocol_version = cash_config.get('protocol_version', 'v4')
-            if token and store_id:
-                receipt_data = _find_receipt_by_legacy_no(token, uid, store_id, protocol_version)
-                if receipt_data:
-                    receipt_id, receipt_sum = _save_receipt(cur, cash_integration_id, company_id, uid, receipt_data)
-                    if receipt_sum:
-                        amount = float(receipt_sum)
+        receipt_id, amount = try_resolve_receipt(cur, company_id, uid)
 
     if not amount and webhook_data.get('amount'):
         try:

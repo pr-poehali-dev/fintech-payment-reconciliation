@@ -1,0 +1,150 @@
+import json
+import os
+import psycopg2
+from typing import Dict, Any
+
+from ecomkassa_report import fetch_report, save_receipt_from_report, RECEIPT_DONE_STATUS
+
+CORS_HEADERS = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Max-Age': '86400'
+}
+
+# Не тянем слишком много платежей за один вызов - функция дёргается автоматически
+# при каждом открытии "Событий"/"Сверки", а таймаут облачной функции ограничен.
+MAX_PAYMENTS_PER_RUN = 20
+
+
+def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
+    '''
+    Дозагрузка чеков для платежей шлюза Екомкассы (ecomkassa_gateway), которые
+    на момент вебхука ещё не были фискализированы (чек не успел пробиться).
+    В платформе нет cron/планировщика, поэтому вызывается автоматически с фронта
+    при каждом открытии страниц "События" и "Сверка" - проходит по платежам без
+    receipt_id, проверяет статус пробития методом report() и довязывает чек,
+    как только он готов (status == "done").
+    Args: company_id (обязателен)
+    Returns: checked (сколько платежей проверено), resolved (сколько довязано)
+    '''
+
+    method = event.get('httpMethod', 'POST')
+
+    if method == 'OPTIONS':
+        return {'statusCode': 200, 'headers': CORS_HEADERS, 'body': '', 'isBase64Encoded': False}
+
+    if method != 'POST':
+        return {
+            'statusCode': 405,
+            'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+            'body': json.dumps({'error': 'Method not allowed'}),
+            'isBase64Encoded': False
+        }
+
+    body = json.loads(event.get('body') or '{}')
+    company_id = body.get('company_id')
+
+    if not company_id:
+        return {
+            'statusCode': 400,
+            'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+            'body': json.dumps({'error': 'company_id required'}),
+            'isBase64Encoded': False
+        }
+
+    dsn = os.environ['DATABASE_URL']
+    conn = psycopg2.connect(dsn)
+    cur = conn.cursor()
+
+    try:
+        cur.execute('''
+            SELECT ui.id, ui.config
+            FROM t_p83864310_fintech_payment_reco.user_integrations ui
+            JOIN t_p83864310_fintech_payment_reco.integration_providers p ON p.id = ui.provider_id
+            WHERE ui.company_id = %s AND p.slug = 'ecomkassa' AND ui.status = 'active'
+            ORDER BY ui.id
+            LIMIT 1
+        ''', (company_id,))
+
+        cash_row = cur.fetchone()
+        if not cash_row:
+            return {
+                'statusCode': 200,
+                'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+                'body': json.dumps({'success': True, 'checked': 0, 'resolved': 0, 'note': 'Касса Екомкасса не подключена'}),
+                'isBase64Encoded': False
+            }
+
+        cash_integration_id, cash_config = cash_row
+        cash_config = json.loads(cash_config) if isinstance(cash_config, str) else (cash_config or {})
+        token = cash_config.get('token')
+        store_id = cash_config.get('store_id')
+        protocol_version = cash_config.get('protocol_version', 'v4')
+
+        if not token or not store_id:
+            return {
+                'statusCode': 200,
+                'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+                'body': json.dumps({'success': True, 'checked': 0, 'resolved': 0, 'note': 'Касса Екомкасса не настроена'}),
+                'isBase64Encoded': False
+            }
+
+        # Платежи шлюза без довязанного чека - только успешные статусы имеют смысл
+        # (CREATED ещё не оплачен, CANCELED/REJECTED чека никогда не получат).
+        cur.execute('''
+            SELECT wp.id, wp.payment_id
+            FROM t_p83864310_fintech_payment_reco.webhook_payments wp
+            JOIN t_p83864310_fintech_payment_reco.user_integrations ui ON ui.id = wp.integration_id
+            JOIN t_p83864310_fintech_payment_reco.integration_providers p ON p.id = ui.provider_id
+            WHERE wp.company_id = %s AND p.slug = 'ecomkassa_gateway'
+              AND wp.receipt_id IS NULL
+              AND wp.status IN ('AUTHORIZED', 'CONFIRMED')
+            ORDER BY wp.created_at DESC
+            LIMIT %s
+        ''', (company_id, MAX_PAYMENTS_PER_RUN))
+
+        pending_payments = cur.fetchall()
+
+        checked = 0
+        resolved = 0
+
+        for webhook_payment_id, uid in pending_payments:
+            checked += 1
+            report_data = fetch_report(token, store_id, uid, protocol_version)
+            if not report_data or report_data.get('status') != RECEIPT_DONE_STATUS:
+                continue
+
+            receipt_id, total_sum = save_receipt_from_report(cur, cash_integration_id, company_id, uid, report_data)
+            if not receipt_id:
+                continue
+
+            cur.execute('''
+                UPDATE t_p83864310_fintech_payment_reco.webhook_payments
+                SET receipt_id = %s,
+                    amount = CASE WHEN amount = 0 THEN %s ELSE amount END,
+                    updated_at = NOW()
+                WHERE id = %s
+            ''', (receipt_id, total_sum, webhook_payment_id))
+            resolved += 1
+
+        conn.commit()
+
+        return {
+            'statusCode': 200,
+            'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+            'body': json.dumps({'success': True, 'checked': checked, 'resolved': resolved}),
+            'isBase64Encoded': False
+        }
+
+    except Exception as e:
+        conn.rollback()
+        return {
+            'statusCode': 500,
+            'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+            'body': json.dumps({'error': str(e)}),
+            'isBase64Encoded': False
+        }
+    finally:
+        cur.close()
+        conn.close()

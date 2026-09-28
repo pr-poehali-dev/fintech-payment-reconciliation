@@ -1,0 +1,28 @@
+{
+  "tests": [
+    {
+      "name": "Missing company_id",
+      "method": "POST",
+      "body": {},
+      "expectedStatus": 400,
+      "expectedBody": {
+        "error": "company_id required"
+      },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "No cash register integration",
+      "method": "POST",
+      "body": {
+        "company_id": 999999
+      },
+      "expectedStatus": 200,
+      "expectedBody": {
+        "success": true,
+        "checked": 0,
+        "resolved": 0
+      },
+      "bodyMatcher": "partial"
+    }
+  ]
+}
