@@ -19,6 +19,24 @@
       "bodyMatcher": "partial"
     },
     {
+      "name": "Receive Ecomkassa direct fiscal callback (ATOL v5 format)",
+      "method": "POST",
+      "path": "/?token=test_token_12345",
+      "body": {
+        "uuid": "2ea26f17-0884-4f08-b120-306fc096a58f",
+        "error": null,
+        "status": "done",
+        "payload": {
+          "total": 1598,
+          "fiscal_receipt_number": 6,
+          "receipt_datetime": "12.04.2022 20:16:00"
+        },
+        "external_id": "TRF10601_1"
+      },
+      "expectedStatus": 404,
+      "bodyMatcher": "partial"
+    },
+    {
       "name": "Missing token",
       "method": "POST",
       "body": {},

@@ -6,13 +6,19 @@ from typing import Any, Dict, Optional, Tuple
 
 from ecomkassa_token import ensure_valid_token
 
-# Формат тела callback от payments.ecomkassa.ru официально не задокументирован -
-# описан только формат ответа метода проверки статуса по ID (GET /api/v1/payments/{ID}):
-# status: 0 - создан, ожидает оплаты; 1 - оплачен, ожидает подтверждения;
-# 2 - оплачен, подтверждён; 3 - отменён (возврат); 4 - не оплачен, истекло время.
-# Колбэк на смену статуса инвойса устроен так же (подтверждено примером реального
-# запроса - {"status": 2}). Идентификатор платежа ищем по нескольким вероятным
-# ключам, так как поле может называться по-разному у разных провайдеров под капотом.
+# У Екомкассы есть 2 разных источника колбэков, они приходят на один и тот же URL,
+# поэтому формат определяем по значению status:
+# 1) Колбэк прокси-шлюза (инвойс) - status числовой 0-4: 0 - создан, ожидает оплаты;
+#    1 - оплачен, ожидает подтверждения; 2 - оплачен, подтверждён; 3 - отменён
+#    (возврат); 4 - не оплачен, истекло время. Подтверждено примером реального
+#    запроса - {"status": 2}. Чек по такому колбэку ещё не готов, его отдельно
+#    запрашиваем через report().
+# 2) Прямой фискальный колбэк кассы (формат АТОЛ Онлайн v5, протокол общий с
+#    Екомкассой) - status строковый: "done"/"fail"/"wait", идентификатор платежа
+#    лежит в поле "uuid", а реквизиты уже пробитого чека - сразу в "payload"
+#    (то же тело, что возвращает report()), поэтому за отчётом ходить не нужно.
+# Идентификатор платежа в обоих случаях ищем по нескольким вероятным ключам, так
+# как поле может называться по-разному у разных провайдеров под капотом.
 STATUS_MAP = {
     0: 'CREATED',
     1: 'AUTHORIZED',
@@ -21,7 +27,18 @@ STATUS_MAP = {
     4: 'REJECTED'
 }
 
-UID_KEYS = ['uid', 'orderId', 'order_id', 'invoice_id', 'invoiceId', 'paymentId', 'payment_id', 'id']
+# Статусы прямого фискального колбэка приводим к тем же внутренним статусам,
+# что и у шлюза (AUTHORIZED/CONFIRMED/REJECTED) - на них завязаны уведомления,
+# дозагрузка чеков, сверка и дашборд, поэтому оба формата должны давать
+# одинаковый результат на выходе.
+DIRECT_STATUS_VALUES = ('done', 'fail', 'wait')
+DIRECT_STATUS_MAP = {
+    'done': 'CONFIRMED',
+    'wait': 'AUTHORIZED',
+    'fail': 'REJECTED'
+}
+
+UID_KEYS = ['uuid', 'uid', 'orderId', 'order_id', 'invoice_id', 'invoiceId', 'paymentId', 'payment_id', 'id']
 
 ECOMKASSA_BASE_URL = 'https://app.ecomkassa.ru'
 
@@ -174,11 +191,20 @@ def process(cur, integration_id: int, company_id: int, config: Dict[str, Any],
         return True, None, 'uid not found in webhook payload'
 
     raw_status = webhook_data.get('status')
-    try:
-        status_code = int(raw_status)
-    except (TypeError, ValueError):
+    is_direct_callback = isinstance(raw_status, str) and raw_status.lower() in DIRECT_STATUS_VALUES
+
+    if is_direct_callback:
+        # Формат 2: прямой фискальный колбэк кассы - status уже строковый
+        # ("done"/"wait"/"fail"), приводим к тем же внутренним статусам, что
+        # и у шлюза, чтобы уведомления/сверка/дашборд работали одинаково.
         status_code = None
-    status = STATUS_MAP.get(status_code, str(raw_status) if raw_status is not None else 'UNKNOWN')
+        status = DIRECT_STATUS_MAP[raw_status.lower()]
+    else:
+        try:
+            status_code = int(raw_status)
+        except (TypeError, ValueError):
+            status_code = None
+        status = STATUS_MAP.get(status_code, str(raw_status) if raw_status is not None else 'UNKNOWN')
 
     notify_map = {
         'AUTHORIZED': 'notify_on_authorized',
@@ -194,11 +220,23 @@ def process(cur, integration_id: int, company_id: int, config: Dict[str, Any],
     receipt_id = None
     payment_provider = None
 
+    if is_direct_callback:
+        # Реквизиты чека уже в payload колбэка - сохраняем сразу, без похода
+        # за report() (чек и так уже пробит, раз status="done"). Чек привязываем
+        # к интеграции кассы (slug=ecomkassa), а не шлюза - так же, как это
+        # делает try_resolve_receipt, чтобы обе ветки писали чек в одно место.
+        if raw_status.lower() == 'done':
+            cash_integration = find_cash_register_integration(cur, company_id)
+            if cash_integration:
+                cash_integration_id, _ = cash_integration
+                receipt_id, amount, payment_provider = save_receipt_from_report(
+                    cur, cash_integration_id, company_id, uid, webhook_data
+                )
     # Деньги фактически проведены только на статусах "оплачен, ожидает
     # подтверждения" и "оплачен, подтверждён" - только тогда есть смысл сразу
     # пробовать получить чек (на CREATED чека ещё не может быть, на
     # CANCELED/REJECTED он не нужен).
-    if status in ('AUTHORIZED', 'CONFIRMED'):
+    elif status in ('AUTHORIZED', 'CONFIRMED'):
         receipt_id, amount, payment_provider = try_resolve_receipt(cur, company_id, uid)
 
     if not amount and webhook_data.get('amount'):
