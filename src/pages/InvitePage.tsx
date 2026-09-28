@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -60,8 +60,16 @@ const InvitePage = () => {
     loadInvite();
   }, [token]);
 
+  // Приём приглашения запускается из двух мест: явно после ввода кода
+  // (handleVerifyCode) и автоматически эффектом ниже, когда user уже
+  // авторизован при заходе по ссылке. Без этого флага оба пути стреляют
+  // почти одновременно - первый запрос принимает приглашение, второй
+  // прилетает на уже использованный токен и показывает ложную ошибку.
+  const acceptRequestedRef = useRef(false);
+
   const acceptInvite = async (userId: number, userPhone: string) => {
-    if (!token) return;
+    if (!token || acceptRequestedRef.current) return;
+    acceptRequestedRef.current = true;
     setIsAccepting(true);
     try {
       const res = await fetch(functionUrls['invite-accept'], {

@@ -131,6 +131,21 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             invite_id, company_id, role_id, invite_phone, status, expires_at = row
 
             if status != 'pending':
+                # Приглашение уже принято ровно этим пользователем (например,
+                # страница отправила запрос дважды подряд) - не ошибка,
+                # отдаём успех повторно вместо "приглашение уже использовано".
+                if status == 'accepted':
+                    cur.execute(
+                        'SELECT id FROM company_users WHERE company_id = %s AND user_id = %s AND status = %s',
+                        (company_id, user_id, 'active')
+                    )
+                    if cur.fetchone():
+                        return {
+                            'statusCode': 200,
+                            'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+                            'body': json.dumps({'success': True, 'company_id': company_id}),
+                            'isBase64Encoded': False
+                        }
                 return {
                     'statusCode': 410,
                     'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
