@@ -50,7 +50,10 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     cur = conn.cursor()
     
     try:
-        where_clause = 'WHERE wp.company_id = %s'
+        # Платежи от мягко удалённых интеграций (status='deleted') исключаем -
+        # это тестовые/отключённые подключения, их история не должна попадать
+        # в статистику дашборда и списки платежей действующих интеграций.
+        where_clause = "WHERE wp.company_id = %s AND ui.status != 'deleted'"
         query_params = [company_id]
         
         if integration_id:
@@ -111,6 +114,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         cur.execute(f'''
             SELECT COUNT(*) 
             FROM webhook_payments wp
+            JOIN user_integrations ui ON ui.id = wp.integration_id
             {where_clause}
         ''', query_params)
         

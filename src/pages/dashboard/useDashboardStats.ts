@@ -40,9 +40,22 @@ export const useDashboardStats = (companyId: number | undefined) => {
         integrationsRes.json()
       ]);
 
-      const payments = paymentsData.payments || [];
+      const rawPayments = paymentsData.payments || [];
       const receipts = receiptsData.receipts || [];
       const integrations = integrationsData.user_integrations || [];
+
+      // По одному платежу может прийти несколько вебхуков подряд (например,
+      // "Авторизован" -> "Подтверждён" -> "Возврат") - каждый сохраняется
+      // отдельной строкой в webhook_payments. Чтобы не засчитать один и тот же
+      // платёж несколько раз, берём только последнее по времени состояние
+      // каждого payment_id (список отсортирован от новых к старым).
+      const latestByPaymentId = new Map<string, any>();
+      for (const p of rawPayments) {
+        if (!latestByPaymentId.has(p.payment_id)) {
+          latestByPaymentId.set(p.payment_id, p);
+        }
+      }
+      const payments = Array.from(latestByPaymentId.values());
 
       const successfulPayments = payments.filter((p: any) =>
         p.status === 'AUTHORIZED' || p.status === 'CONFIRMED'
