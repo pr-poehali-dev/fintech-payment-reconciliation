@@ -21,11 +21,17 @@ import Icon from '@/components/ui/icon';
 import { useAuth } from '@/contexts/AuthContext';
 import functionUrls from '../../../backend/func2url.json';
 
+interface BankIntegration {
+  id: number;
+  name: string;
+}
+
 interface BackfillDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   hasEcomkassa: boolean;
   hasOfd: boolean;
+  bankIntegrations: BankIntegration[];
   onFinished: () => void;
 }
 
@@ -55,7 +61,7 @@ const monthAgo = () => {
 
 type Phase = 'idle' | 'running' | 'done';
 
-const BackfillDialog = ({ open, onOpenChange, hasEcomkassa, hasOfd, onFinished }: BackfillDialogProps) => {
+const BackfillDialog = ({ open, onOpenChange, hasEcomkassa, hasOfd, bankIntegrations, onFinished }: BackfillDialogProps) => {
   const { currentCompany } = useAuth();
   const companyId = currentCompany?.id;
 
@@ -68,6 +74,7 @@ const BackfillDialog = ({ open, onOpenChange, hasEcomkassa, hasOfd, onFinished }
   const [phase, setPhase] = useState<Phase>('idle');
   const [ecomkassaProgress, setEcomkassaProgress] = useState({ processed: 0, total: 0, inserted: 0 });
   const [ofdResult, setOfdResult] = useState<{ inserted: number; total: number } | null>(null);
+  const [bankResults, setBankResults] = useState<Record<number, { inserted: number; total: number }>>({});
   const [errors, setErrors] = useState<string[]>([]);
 
   const toggleOrderType = (id: string) => {
@@ -82,6 +89,7 @@ const BackfillDialog = ({ open, onOpenChange, hasEcomkassa, hasOfd, onFinished }
     setPhase('idle');
     setEcomkassaProgress({ processed: 0, total: 0, inserted: 0 });
     setOfdResult(null);
+    setBankResults({});
     setErrors([]);
   };
 
@@ -145,6 +153,31 @@ const BackfillDialog = ({ open, onOpenChange, hasEcomkassa, hasOfd, onFinished }
     setOfdResult({ inserted: data.inserted ?? 0, total: data.total_receipts ?? 0 });
   };
 
+  const runBankBackfill = async (integration: BankIntegration) => {
+    if (!companyId) return;
+
+    const res = await fetch(functionUrls['bank-statement-sync'], {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        integration_id: integration.id,
+        date_from: dateFrom.toISOString(),
+        date_to: dateTo.toISOString()
+      })
+    });
+    const data = await res.json();
+
+    if (!res.ok || !data.success) {
+      setErrors((prev) => [...prev, `${integration.name}: ${data.error || 'не удалось загрузить выписку'}`]);
+      return;
+    }
+
+    setBankResults((prev) => ({
+      ...prev,
+      [integration.id]: { inserted: data.inserted ?? 0, total: data.total_transactions ?? data.inserted ?? 0 }
+    }));
+  };
+
   const handleStart = async () => {
     resetState();
     setPhase('running');
@@ -152,6 +185,7 @@ const BackfillDialog = ({ open, onOpenChange, hasEcomkassa, hasOfd, onFinished }
     const tasks: Promise<void>[] = [];
     if (hasEcomkassa) tasks.push(runEcomkassaBackfill());
     if (hasOfd) tasks.push(runOfdBackfill());
+    bankIntegrations.forEach((bi) => tasks.push(runBankBackfill(bi)));
 
     await Promise.all(tasks);
 
@@ -165,7 +199,8 @@ const BackfillDialog = ({ open, onOpenChange, hasEcomkassa, hasOfd, onFinished }
     if (!nextOpen) resetState();
   };
 
-  const canStart = (hasEcomkassa || hasOfd) && (!hasEcomkassa || (orderTypes.length > 0 && statuses.length > 0));
+  const hasAnySource = hasEcomkassa || hasOfd || bankIntegrations.length > 0;
+  const canStart = hasAnySource && (!hasEcomkassa || (orderTypes.length > 0 && statuses.length > 0));
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
@@ -176,16 +211,17 @@ const BackfillDialog = ({ open, onOpenChange, hasEcomkassa, hasOfd, onFinished }
             Дозагрузка исторических данных
           </DialogTitle>
           <DialogDescription>
-            Подтянем чеки и счета за выбранный период из подключённых касс и ОФД —
-            пригодится, если часть данных не пришла вебхуком
+            Подтянем чеки, счета и операции по счёту за выбранный период из всех
+            подключённых интеграций — пригодится, если часть данных не пришла вебхуком
           </DialogDescription>
         </DialogHeader>
 
-        {!hasEcomkassa && !hasOfd ? (
+        {!hasAnySource ? (
           <div className="flex items-center gap-3 bg-muted/50 border border-border rounded-lg p-4">
             <Icon name="AlertTriangle" size={20} className="text-muted-foreground shrink-0" />
             <div className="text-sm text-muted-foreground">
-              У компании нет активной кассы Екомкасса или интеграции ОФД — сначала подключите их в разделе «Интеграции»
+              У компании нет активных интеграций с поддержкой дозагрузки (касса Екомкасса, ОФД
+              или расчётный счёт) — сначала подключите их в разделе «Интеграции»
             </div>
           </div>
         ) : (
@@ -271,6 +307,16 @@ const BackfillDialog = ({ open, onOpenChange, hasEcomkassa, hasOfd, onFinished }
               </>
             )}
 
+            {bankIntegrations.length > 0 && (
+              <>
+                <Separator />
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Icon name="Landmark" size={14} />
+                  Расчётный счёт ({bankIntegrations.map((b) => b.name).join(', ')}): загрузятся все операции за период
+                </div>
+              </>
+            )}
+
             {phase !== 'idle' && (
               <>
                 <Separator />
@@ -306,6 +352,25 @@ const BackfillDialog = ({ open, onOpenChange, hasEcomkassa, hasOfd, onFinished }
                       </span>
                     </div>
                   )}
+
+                  {bankIntegrations.map((bi) => {
+                    const result = bankResults[bi.id];
+                    return (
+                      <div key={bi.id} className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground flex items-center gap-2">
+                          {phase === 'running' && !result ? (
+                            <Icon name="Loader2" size={13} className="animate-spin" />
+                          ) : (
+                            <Icon name="CheckCircle2" size={13} className="text-success" />
+                          )}
+                          {bi.name}
+                        </span>
+                        <span className="font-medium">
+                          {result ? `загружено ${result.inserted} из ${result.total}` : phase === 'running' ? 'Загрузка…' : ''}
+                        </span>
+                      </div>
+                    );
+                  })}
 
                   {errors.length > 0 && (
                     <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-3 space-y-1">

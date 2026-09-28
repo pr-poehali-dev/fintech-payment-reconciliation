@@ -24,6 +24,7 @@ const TransactionsPage = () => {
   const [showBackfillDialog, setShowBackfillDialog] = useState(false);
   const [hasEcomkassa, setHasEcomkassa] = useState(false);
   const [hasOfd, setHasOfd] = useState(false);
+  const [bankIntegrations, setBankIntegrations] = useState<{ id: number; name: string }[]>([]);
   const { toast } = useToast();
   const { currentCompany } = useAuth();
   const companyId = currentCompany?.id;
@@ -88,6 +89,11 @@ const TransactionsPage = () => {
         const integrations = data.user_integrations || [];
         setHasEcomkassa(integrations.some((i: any) => i.provider_slug === 'ecomkassa' && i.status === 'active'));
         setHasOfd(integrations.some((i: any) => i.provider_slug === 'ofdru' && i.status === 'active'));
+        setBankIntegrations(
+          integrations
+            .filter((i: any) => (i.provider_slug === 'tbank_account' || i.provider_slug === 'tochka_account') && i.status === 'active')
+            .map((i: any) => ({ id: i.id, name: i.integration_name }))
+        );
       })
       .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -265,6 +271,7 @@ const TransactionsPage = () => {
         onOpenChange={setShowBackfillDialog}
         hasEcomkassa={hasEcomkassa}
         hasOfd={hasOfd}
+        bankIntegrations={bankIntegrations}
         onFinished={fetchTransactions}
       />
     </div>
