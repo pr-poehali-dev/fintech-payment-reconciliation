@@ -8,6 +8,7 @@ import Icon from '@/components/ui/icon';
 import { useToast } from '@/hooks/use-toast';
 import ReceiptDetailsDialog from '@/components/receipts/ReceiptDetailsDialog';
 import { useAuth } from '@/contexts/AuthContext';
+import { formatDateTime as formatDateTimeTz, DEFAULT_TIMEZONE } from '@/lib/formatDate';
 import functionUrls from '../../backend/func2url.json';
 
 interface Receipt {
@@ -37,6 +38,7 @@ const ReceiptsPage = () => {
   const [showDetails, setShowDetails] = useState(false);
   const { currentCompany } = useAuth();
   const companyId = currentCompany?.id;
+  const timezone = currentCompany?.timezone || DEFAULT_TIMEZONE;
 
   const loadReceipts = async () => {
     if (!companyId) return;
@@ -92,17 +94,7 @@ const ReceiptsPage = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [companyId]);
 
-  const formatDateTime = (isoString: string) => {
-    if (!isoString) return '—';
-    const date = new Date(isoString);
-    return date.toLocaleString('ru-RU', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  };
+  const formatDateTime = (isoString: string) => formatDateTimeTz(isoString, timezone);
 
   const formatAmount = (amount: number) => {
     return new Intl.NumberFormat('ru-RU', {

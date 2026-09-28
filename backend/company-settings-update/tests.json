@@ -1,0 +1,39 @@
+{
+  "tests": [
+    {
+      "name": "Missing company_id",
+      "method": "PUT",
+      "body": {
+        "timezone": "Europe/Moscow"
+      },
+      "expectedStatus": 400,
+      "expectedBody": {
+        "error": "company_id required"
+      }
+    },
+    {
+      "name": "Invalid timezone",
+      "method": "PUT",
+      "body": {
+        "company_id": 1,
+        "timezone": "Not/AZone"
+      },
+      "expectedStatus": 400,
+      "expectedBody": {
+        "error": "Invalid timezone"
+      }
+    },
+    {
+      "name": "Company not found",
+      "method": "PUT",
+      "body": {
+        "company_id": 999999,
+        "timezone": "Europe/Moscow"
+      },
+      "expectedStatus": 404,
+      "expectedBody": {
+        "error": "Company not found"
+      }
+    }
+  ]
+}

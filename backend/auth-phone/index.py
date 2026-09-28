@@ -75,7 +75,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         conn.commit()
 
         cur.execute('''
-            SELECT c.id, c.name, c.status, r.slug, r.name, r.color, c.is_platform_admin
+            SELECT c.id, c.name, c.status, r.slug, r.name, r.color, c.is_platform_admin, c.timezone
             FROM company_users cu
             JOIN companies c ON c.id = cu.company_id
             JOIN roles r ON r.id = cu.role_id
@@ -92,7 +92,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 'status': c_row[2],
                 'role_slug': c_row[3],
                 'role_name': c_row[4],
-                'role_color': c_row[5]
+                'role_color': c_row[5],
+                'timezone': c_row[7] or 'Europe/Moscow'
             })
             if c_row[6]:
                 is_platform_admin = True

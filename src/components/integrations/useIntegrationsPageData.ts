@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
+import { formatDateOnly, DEFAULT_TIMEZONE } from '@/lib/formatDate';
 import functionUrls from '../../../backend/func2url.json';
 import { Category, Provider, UserIntegration } from './integrationsPageTypes';
 
@@ -127,6 +128,8 @@ export const useIntegrationsPageData = () => {
     });
   };
 
+  const timezone = currentCompany?.timezone || DEFAULT_TIMEZONE;
+
   const formatDate = (dateStr: string | null) => {
     if (!dateStr) return 'Никогда';
     const date = new Date(dateStr);
@@ -140,7 +143,7 @@ export const useIntegrationsPageData = () => {
     if (minutes < 60) return `${minutes} мин назад`;
     if (hours < 24) return `${hours} ч назад`;
     if (days < 7) return `${days} дн назад`;
-    return date.toLocaleDateString('ru-RU');
+    return formatDateOnly(dateStr, timezone);
   };
 
   const handleFetchReceipts = async (integrationId: number, days: number) => {

@@ -3,6 +3,8 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import Icon from '@/components/ui/icon';
 import { AppEvent } from './eventsTypes';
+import { useAuth } from '@/contexts/AuthContext';
+import { formatDateTime, DEFAULT_TIMEZONE } from '@/lib/formatDate';
 
 interface EventDetailsDialogProps {
   open: boolean;
@@ -30,19 +32,11 @@ const getStatusColor = (status: string | null) => {
   }
 };
 
-const formatDate = (dateStr: string | null) => {
-  if (!dateStr) return '—';
-  return new Date(dateStr).toLocaleString('ru-RU', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit'
-  });
-};
-
 const EventDetailsDialog = ({ open, onOpenChange, event }: EventDetailsDialogProps) => {
+  const { currentCompany } = useAuth();
+  const timezone = currentCompany?.timezone || DEFAULT_TIMEZONE;
+  const formatDate = (dateStr: string | null) => formatDateTime(dateStr, timezone, true);
+
   if (!event) return null;
 
   return (

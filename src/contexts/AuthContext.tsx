@@ -14,6 +14,7 @@ export interface Company {
   current_period_end?: string | null;
   tariff_name?: string | null;
   max_users?: number | null;
+  timezone?: string;
 }
 
 interface AuthUser {

@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import Icon from '@/components/ui/icon';
 import { useAuth } from '@/contexts/AuthContext';
+import { formatDateTime, DEFAULT_TIMEZONE } from '@/lib/formatDate';
 import functionUrls from '../../backend/func2url.json';
 
 interface WebhookLog {
@@ -24,6 +25,7 @@ export default function WebhookLogsPage() {
   const { integrationId } = useParams();
   const { currentCompany } = useAuth();
   const companyId = currentCompany?.id;
+  const timezone = currentCompany?.timezone || DEFAULT_TIMEZONE;
   const [logs, setLogs] = useState<WebhookLog[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -98,7 +100,7 @@ export default function WebhookLogsPage() {
                       <div className="flex items-center gap-2">
                         <Icon name="Clock" size={14} className="text-muted-foreground" />
                         <span className="text-muted-foreground">
-                          {new Date(log.created_at).toLocaleString('ru-RU')}
+                          {formatDateTime(log.created_at, timezone)}
                         </span>
                       </div>
                     </div>

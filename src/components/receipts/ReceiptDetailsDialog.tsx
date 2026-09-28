@@ -1,6 +1,8 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import { useAuth } from '@/contexts/AuthContext';
+import { formatDateTime as formatDateTimeTz, DEFAULT_TIMEZONE } from '@/lib/formatDate';
 
 interface Receipt {
   source: 'ofd' | 'cash_register';
@@ -26,6 +28,8 @@ interface ReceiptDetailsDialogProps {
 }
 
 const ReceiptDetailsDialog = ({ receipt, open, onOpenChange }: ReceiptDetailsDialogProps) => {
+  const { currentCompany } = useAuth();
+  const timezone = currentCompany?.timezone || DEFAULT_TIMEZONE;
 
   const formatAmount = (amount: number) => {
     return new Intl.NumberFormat('ru-RU', {
@@ -35,18 +39,7 @@ const ReceiptDetailsDialog = ({ receipt, open, onOpenChange }: ReceiptDetailsDia
     }).format(amount);
   };
 
-  const formatDateTime = (isoString: string) => {
-    if (!isoString) return '—';
-    const date = new Date(isoString);
-    return date.toLocaleString('ru-RU', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit'
-    });
-  };
+  const formatDateTime = (isoString: string) => formatDateTimeTz(isoString, timezone, true);
 
   const getOperationTypeLabel = (type: string) => {
     const typeMap: Record<string, string> = {

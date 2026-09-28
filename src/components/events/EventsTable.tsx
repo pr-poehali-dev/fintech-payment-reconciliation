@@ -11,6 +11,8 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { AppEvent, EventWebhookHistoryItem } from './eventsTypes';
+import { useAuth } from '@/contexts/AuthContext';
+import { formatDateTime, DEFAULT_TIMEZONE } from '@/lib/formatDate';
 
 interface EventsTableProps {
   events: AppEvent[];
@@ -37,19 +39,11 @@ const getStatusColor = (status: string | null) => {
   }
 };
 
-const formatDate = (dateStr: string | null) => {
-  if (!dateStr) return '—';
-  return new Date(dateStr).toLocaleString('ru-RU', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
-  });
-};
-
 const EventsTable = ({ events, onRowClick }: EventsTableProps) => {
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+  const { currentCompany } = useAuth();
+  const timezone = currentCompany?.timezone || DEFAULT_TIMEZONE;
+  const formatDate = (dateStr: string | null) => formatDateTime(dateStr, timezone);
 
   const toggleRowExpand = (eventId: string, e: React.MouseEvent) => {
     e.stopPropagation();
