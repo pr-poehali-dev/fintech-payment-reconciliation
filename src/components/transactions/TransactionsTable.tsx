@@ -1,4 +1,6 @@
+import { useState, Fragment } from 'react';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import Icon from '@/components/ui/icon';
 import {
   Table,
@@ -9,11 +11,12 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Transaction } from './transactionsTypes';
+import { TransactionGroup } from '@/lib/transactionGrouping';
 import { useAuth } from '@/contexts/AuthContext';
 import { formatDateTime, DEFAULT_TIMEZONE } from '@/lib/formatDate';
 
 interface TransactionsTableProps {
-  transactions: Transaction[];
+  groups: TransactionGroup[];
   onRowClick: (transaction: Transaction) => void;
 }
 
@@ -48,15 +51,11 @@ const getStatusColor = (status: string | null) => {
   }
 };
 
-const matchMethodLabels: Record<string, string> = {
-  receipt_id: 'по чеку шлюза',
-  order_id: 'по номеру заказа',
-  fiscal_triplet: 'по фискальным данным'
-};
-
-const TransactionsTable = ({ transactions, onRowClick }: TransactionsTableProps) => {
+const TransactionsTable = ({ groups, onRowClick }: TransactionsTableProps) => {
   const { currentCompany } = useAuth();
   const timezone = currentCompany?.timezone || DEFAULT_TIMEZONE;
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+
   const formatAmount = (amount: number | null) => {
     if (amount === null) return '—';
     return new Intl.NumberFormat('ru-RU', {
@@ -64,6 +63,57 @@ const TransactionsTable = ({ transactions, onRowClick }: TransactionsTableProps)
       currency: 'RUB',
       minimumFractionDigits: 0
     }).format(amount);
+  };
+
+  const toggleExpand = (groupId: string) => {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(groupId)) next.delete(groupId);
+      else next.add(groupId);
+      return next;
+    });
+  };
+
+  const renderRow = (tx: Transaction, isSecondary: boolean) => {
+    const config = typeConfig[tx.type] || typeConfig.payment;
+    return (
+      <TableRow
+        key={`${tx.type}-${tx.source}-${tx.id}`}
+        className={`cursor-pointer hover:bg-muted/50 ${isSecondary ? 'bg-muted/20' : ''}`}
+        onClick={() => onRowClick(tx)}
+      >
+        <TableCell className={isSecondary ? 'pl-10' : ''}>
+          {isSecondary && <Icon name="CornerDownRight" size={13} className="inline mr-1.5 text-muted-foreground" />}
+          <Badge variant="outline" className={`gap-1.5 ${config.className}`}>
+            <Icon name={config.icon as any} size={12} />
+            {config.label}
+          </Badge>
+        </TableCell>
+        <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+          {formatDateTime(tx.occurred_at, timezone)}
+        </TableCell>
+        <TableCell>
+          <div className="text-sm font-medium">{tx.title}</div>
+          {tx.subtitle && (
+            <div className="text-xs text-muted-foreground">{tx.subtitle}</div>
+          )}
+        </TableCell>
+        <TableCell className="text-sm">
+          {tx.integration_name || '—'}
+        </TableCell>
+        <TableCell>
+          {tx.status && (
+            <Badge className={`${getStatusColor(tx.status)} text-white`}>
+              {tx.status}
+            </Badge>
+          )}
+        </TableCell>
+        <TableCell />
+        <TableCell className="text-right font-semibold">
+          {formatAmount(tx.amount)}
+        </TableCell>
+      </TableRow>
+    );
   };
 
   return (
@@ -81,67 +131,78 @@ const TransactionsTable = ({ transactions, onRowClick }: TransactionsTableProps)
           </TableRow>
         </TableHeader>
         <TableBody>
-          {transactions.length === 0 ? (
+          {groups.length === 0 ? (
             <TableRow>
               <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                 Транзакции не найдены
               </TableCell>
             </TableRow>
           ) : (
-            transactions.map((tx) => {
-              const config = typeConfig[tx.type] || typeConfig.payment;
+            groups.map((group) => {
+              const [primary, ...rest] = group.items;
+              const isMatched = group.items.length > 1;
+              const isExpanded = expanded.has(group.id);
+              const config = typeConfig[primary.type] || typeConfig.payment;
+
               return (
-                <TableRow
-                  key={`${tx.type}-${tx.id}`}
-                  className="cursor-pointer hover:bg-muted/50"
-                  onClick={() => onRowClick(tx)}
-                >
-                  <TableCell>
-                    <Badge variant="outline" className={`gap-1.5 ${config.className}`}>
-                      <Icon name={config.icon as any} size={12} />
-                      {config.label}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-                    {formatDateTime(tx.occurred_at, timezone)}
-                  </TableCell>
-                  <TableCell>
-                    <div className="text-sm font-medium">{tx.title}</div>
-                    {tx.subtitle && (
-                      <div className="text-xs text-muted-foreground">{tx.subtitle}</div>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-sm">
-                    {tx.integration_name || '—'}
-                  </TableCell>
-                  <TableCell>
-                    {tx.status && (
-                      <Badge className={`${getStatusColor(tx.status)} text-white`}>
-                        {tx.status}
+                <Fragment key={group.id}>
+                  <TableRow
+                    className="cursor-pointer hover:bg-muted/50"
+                    onClick={() => onRowClick(primary)}
+                  >
+                    <TableCell>
+                      <Badge variant="outline" className={`gap-1.5 ${config.className}`}>
+                        <Icon name={config.icon as any} size={12} />
+                        {config.label}
                       </Badge>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    {tx.linked_id ? (
-                      <Badge
-                        variant="outline"
-                        className="gap-1.5 bg-success/10 text-success border-success/30"
-                        title={matchMethodLabels[tx.match_method || ''] || ''}
-                      >
-                        <Icon name="Link2" size={12} />
-                        Связано
-                      </Badge>
-                    ) : (
-                      <Badge variant="outline" className="gap-1.5 text-muted-foreground">
-                        <Icon name="Unlink" size={12} />
-                        Нет пары
-                      </Badge>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-right font-semibold">
-                    {formatAmount(tx.amount)}
-                  </TableCell>
-                </TableRow>
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+                      {formatDateTime(primary.occurred_at, timezone)}
+                    </TableCell>
+                    <TableCell>
+                      <div className="text-sm font-medium">{primary.title}</div>
+                      {primary.subtitle && (
+                        <div className="text-xs text-muted-foreground">{primary.subtitle}</div>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-sm">
+                      {primary.integration_name || '—'}
+                    </TableCell>
+                    <TableCell>
+                      {primary.status && (
+                        <Badge className={`${getStatusColor(primary.status)} text-white`}>
+                          {primary.status}
+                        </Badge>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {isMatched ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 gap-1.5 bg-success/10 text-success border-success/30 hover:bg-success/20 hover:text-success"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleExpand(group.id);
+                          }}
+                        >
+                          <Icon name="Link2" size={12} />
+                          Связано ({group.items.length})
+                          <Icon name={isExpanded ? 'ChevronUp' : 'ChevronDown'} size={12} />
+                        </Button>
+                      ) : (
+                        <Badge variant="outline" className="gap-1.5 text-muted-foreground">
+                          <Icon name="Unlink" size={12} />
+                          Нет пары
+                        </Badge>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right font-semibold">
+                      {formatAmount(primary.amount)}
+                    </TableCell>
+                  </TableRow>
+                  {isMatched && isExpanded && rest.map((tx) => renderRow(tx, true))}
+                </Fragment>
               );
             })
           )}

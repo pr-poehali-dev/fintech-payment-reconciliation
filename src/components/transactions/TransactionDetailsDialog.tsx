@@ -8,6 +8,7 @@ import { formatDateTime as formatDateTimeTz, DEFAULT_TIMEZONE } from '@/lib/form
 
 interface TransactionDetailsDialogProps {
   transaction: Transaction | null;
+  relatedItems: Transaction[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
@@ -24,7 +25,7 @@ const matchMethodLabels: Record<string, string> = {
   fiscal_triplet: 'Совпали фискальные реквизиты: ФН + номер ФД + ФПД'
 };
 
-const TransactionDetailsDialog = ({ transaction, open, onOpenChange }: TransactionDetailsDialogProps) => {
+const TransactionDetailsDialog = ({ transaction, relatedItems, open, onOpenChange }: TransactionDetailsDialogProps) => {
   const { currentCompany } = useAuth();
   const timezone = currentCompany?.timezone || DEFAULT_TIMEZONE;
 
@@ -99,18 +100,25 @@ const TransactionDetailsDialog = ({ transaction, open, onOpenChange }: Transacti
           <Separator />
 
           <div>
-            <div className="text-sm text-muted-foreground mb-2">Связанная запись для сверки</div>
-            {transaction.linked_id ? (
-              <div className="flex items-center gap-3 bg-success/10 border border-success/30 rounded-lg p-4">
-                <Icon name="Link2" size={20} className="text-success shrink-0" />
-                <div>
-                  <div className="font-medium">
-                    {typeConfig[transaction.linked_type || '']?.label || transaction.linked_type} · {transaction.linked_source}
-                  </div>
-                  <div className="text-sm text-muted-foreground">
-                    {matchMethodLabels[transaction.match_method || ''] || 'Связано'}
-                  </div>
-                </div>
+            <div className="text-sm text-muted-foreground mb-2">Связанные записи для сверки</div>
+            {relatedItems.length > 0 ? (
+              <div className="space-y-2">
+                {relatedItems.map((item) => {
+                  const itemConfig = typeConfig[item.type] || typeConfig.payment;
+                  const reason = matchMethodLabels[transaction.match_method || item.match_method || ''] || 'Связано';
+                  return (
+                    <div
+                      key={`${item.type}-${item.source}-${item.id}`}
+                      className="flex items-center gap-3 bg-success/10 border border-success/30 rounded-lg p-4"
+                    >
+                      <Icon name={itemConfig.icon as any} size={20} className="text-success shrink-0" />
+                      <div>
+                        <div className="font-medium">{item.title}</div>
+                        <div className="text-sm text-muted-foreground">{reason}</div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             ) : (
               <div className="flex items-center gap-3 bg-muted/50 border border-border rounded-lg p-4">

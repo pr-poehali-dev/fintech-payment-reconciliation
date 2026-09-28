@@ -8,6 +8,7 @@ import TransactionsTable from '@/components/transactions/TransactionsTable';
 import TransactionsFilters from '@/components/transactions/TransactionsFilters';
 import TransactionDetailsDialog from '@/components/transactions/TransactionDetailsDialog';
 import { Transaction, TransactionType, TransactionTotalsByType } from '@/components/transactions/transactionsTypes';
+import { groupTransactions, computeMatchedKeys, nodeKey } from '@/lib/transactionGrouping';
 import functionUrls from '../../backend/func2url.json';
 
 const TransactionsPage = () => {
@@ -82,9 +83,14 @@ const TransactionsPage = () => {
     setShowDetails(true);
   };
 
+  // Связь считается по группе (union-find по всему списку), а не по
+  // одностороннему полю linked_id одной записи - иначе чек, на который
+  // ссылается платёж, сам не узнаёт о своей паре и показывает "Нет пары".
+  const matchedKeys = computeMatchedKeys(transactions);
+
   const filteredTransactions = transactions.filter((tx) => {
     if (typeFilter !== 'all' && tx.type !== typeFilter) return false;
-    if (showUnmatchedOnly && tx.linked_id) return false;
+    if (showUnmatchedOnly && matchedKeys.has(nodeKey(tx))) return false;
 
     if (!searchQuery) return true;
     const query = searchQuery.toLowerCase();
@@ -100,6 +106,15 @@ const TransactionsPage = () => {
       .toLowerCase();
 
     return haystack.includes(query);
+  });
+
+  const groups = groupTransactions(filteredTransactions);
+
+  const matchedCountByType: Partial<Record<TransactionType, number>> = {};
+  transactions.forEach((tx) => {
+    if (matchedKeys.has(nodeKey(tx))) {
+      matchedCountByType[tx.type] = (matchedCountByType[tx.type] || 0) + 1;
+    }
   });
 
   if (isLoading) {
@@ -145,7 +160,7 @@ const TransactionsPage = () => {
             </div>
             <div className="text-xs text-muted-foreground mt-2 flex items-center gap-1">
               <Icon name="Link2" size={11} />
-              Связано {totalsByType.payment?.matched_count ?? 0} из {totalsByType.payment?.count ?? 0}
+              Связано {matchedCountByType.payment ?? 0} из {totalsByType.payment?.count ?? 0}
             </div>
           </CardContent>
         </Card>
@@ -166,7 +181,7 @@ const TransactionsPage = () => {
             </div>
             <div className="text-xs text-muted-foreground mt-2 flex items-center gap-1">
               <Icon name="Link2" size={11} />
-              Связано {totalsByType.receipt?.matched_count ?? 0} из {totalsByType.receipt?.count ?? 0}
+              Связано {matchedCountByType.receipt ?? 0} из {totalsByType.receipt?.count ?? 0}
             </div>
           </CardContent>
         </Card>
@@ -208,12 +223,19 @@ const TransactionsPage = () => {
             setShowUnmatchedOnly={setShowUnmatchedOnly}
           />
 
-          <TransactionsTable transactions={filteredTransactions} onRowClick={handleRowClick} />
+          <TransactionsTable groups={groups} onRowClick={handleRowClick} />
         </CardContent>
       </Card>
 
       <TransactionDetailsDialog
         transaction={selectedTx}
+        relatedItems={
+          selectedTx
+            ? groupTransactions(transactions)
+                .find((g) => g.items.some((i) => nodeKey(i) === nodeKey(selectedTx)))
+                ?.items.filter((i) => nodeKey(i) !== nodeKey(selectedTx)) || []
+            : []
+        }
         open={showDetails}
         onOpenChange={setShowDetails}
       />
