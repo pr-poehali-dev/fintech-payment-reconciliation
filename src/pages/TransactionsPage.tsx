@@ -8,7 +8,7 @@ import TransactionsTable from '@/components/transactions/TransactionsTable';
 import TransactionsFilters from '@/components/transactions/TransactionsFilters';
 import TransactionDetailsDialog from '@/components/transactions/TransactionDetailsDialog';
 import BackfillDialog from '@/components/transactions/BackfillDialog';
-import { Transaction, TransactionType, TransactionTotalsByType } from '@/components/transactions/transactionsTypes';
+import { Transaction, TransactionTotalsByType } from '@/components/transactions/transactionsTypes';
 import { groupTransactions, computeMatchedKeys, nodeKey } from '@/lib/transactionGrouping';
 import functionUrls from '../../backend/func2url.json';
 
@@ -19,7 +19,6 @@ const TransactionsPage = () => {
   const [selectedTx, setSelectedTx] = useState<Transaction | null>(null);
   const [showDetails, setShowDetails] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [typeFilter, setTypeFilter] = useState<TransactionType | 'all'>('all');
   const [showUnmatchedOnly, setShowUnmatchedOnly] = useState(false);
   const [showBackfillDialog, setShowBackfillDialog] = useState(false);
   const [hasEcomkassa, setHasEcomkassa] = useState(false);
@@ -110,7 +109,6 @@ const TransactionsPage = () => {
   const matchedKeys = computeMatchedKeys(transactions);
 
   const filteredTransactions = transactions.filter((tx) => {
-    if (typeFilter !== 'all' && tx.type !== typeFilter) return false;
     if (showUnmatchedOnly && matchedKeys.has(nodeKey(tx))) return false;
 
     if (!searchQuery) return true;
@@ -131,7 +129,7 @@ const TransactionsPage = () => {
 
   const groups = groupTransactions(filteredTransactions);
 
-  const matchedCountByType: Partial<Record<TransactionType, number>> = {};
+  const matchedCountByType: Partial<Record<string, number>> = {};
   transactions.forEach((tx) => {
     if (matchedKeys.has(nodeKey(tx))) {
       matchedCountByType[tx.type] = (matchedCountByType[tx.type] || 0) + 1;
@@ -169,7 +167,7 @@ const TransactionsPage = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <Card className="border-border bg-card">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
@@ -195,19 +193,40 @@ const TransactionsPage = () => {
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
               <Icon name="Receipt" size={14} />
-              Чеки
+              Чеки кассы
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-display font-bold text-foreground">
-              {totalsByType.receipt?.count ?? 0}
+              {totalsByType.receipt_kassa?.count ?? 0}
             </div>
             <div className="text-sm text-muted-foreground mt-1">
-              {new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB', minimumFractionDigits: 0 }).format(totalsByType.receipt?.amount ?? 0)}
+              {new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB', minimumFractionDigits: 0 }).format(totalsByType.receipt_kassa?.amount ?? 0)}
             </div>
             <div className="text-xs text-muted-foreground mt-2 flex items-center gap-1">
               <Icon name="Link2" size={11} />
-              Связано {matchedCountByType.receipt ?? 0} из {totalsByType.receipt?.count ?? 0}
+              Связано {matchedCountByType.receipt_kassa ?? 0} из {totalsByType.receipt_kassa?.count ?? 0}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border-border bg-card">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+              <Icon name="FileCheck" size={14} />
+              Чеки ОФД
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-display font-bold text-foreground">
+              {totalsByType.receipt_ofd?.count ?? 0}
+            </div>
+            <div className="text-sm text-muted-foreground mt-1">
+              {new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB', minimumFractionDigits: 0 }).format(totalsByType.receipt_ofd?.amount ?? 0)}
+            </div>
+            <div className="text-xs text-muted-foreground mt-2 flex items-center gap-1">
+              <Icon name="Link2" size={11} />
+              Связано {matchedCountByType.receipt_ofd ?? 0} из {totalsByType.receipt_ofd?.count ?? 0}
             </div>
           </CardContent>
         </Card>
@@ -241,10 +260,6 @@ const TransactionsPage = () => {
           <TransactionsFilters
             searchQuery={searchQuery}
             setSearchQuery={setSearchQuery}
-            typeFilter={typeFilter}
-            setTypeFilter={setTypeFilter}
-            totalsByType={totalsByType}
-            totalCount={transactions.length}
             showUnmatchedOnly={showUnmatchedOnly}
             setShowUnmatchedOnly={setShowUnmatchedOnly}
           />

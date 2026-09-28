@@ -23,30 +23,57 @@ def to_json_value(val):
     return val
 
 
+def wants(type_filter, t):
+    '''type=receipt - алиас "любой чек" (используется дашбордом), остальные значения - точное совпадение.'''
+    if not type_filter:
+        return True
+    if type_filter == t:
+        return True
+    if type_filter == 'receipt' and t in ('receipt_ofd', 'receipt_kassa'):
+        return True
+    return False
+
+
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     '''
     Единый реестр готовых для сверки транзакций: объединяет уже насыщенные
     данные из платежей (webhook_payments), чеков кассы (ecomkassa_receipts),
     чеков ОФД (ofd_receipts) и операций по расчётному счёту
-    (bank_statement_transactions) в один список с меткой type (payment/
-    receipt/money). Каждая исходная запись - это одна транзакция.
+    (bank_statement_transactions) в один список.
 
-    Дополнительно каждая транзакция снабжается ссылкой на связанную запись
-    (linked_type/linked_source/linked_id/match_method), вычисленной по двум
-    разным правилам:
-    - платёж -> чек кассы: по прямой связке webhook_payments.receipt_id
-      (проставляется при обработке вебхука шлюза Екомкассы), а если её нет -
-      по совпадению order_id/payment_id с order_id/legacy_no/external_id/uuid
-      чека кассы (запасной вариант для случаев без готового receipt_id).
-    - чек кассы <-> чек ОФД: по триплету фискальных реквизитов ФН+ФД+ФПД
-      (fn_number + fiscal_document_number + fiscal_document_attribute) -
-      это то, что однозначно идентифицирует физический фискальный документ
-      независимо от того, каким API он был получен (ОФД.РУ или сама касса).
-    Args: company_id (обязателен), type (payment/receipt/money, опционально),
-    limit, offset (опционально)
-    Returns: transactions[] с общими полями type, source, id, occurred_at,
-    amount, status, title, subtitle, integration_name, reference, raw_data,
-    linked_type, linked_source, linked_id, match_method
+    Типы транзакций (поле type): payment, receipt_ofd, receipt_kassa, money -
+    чеки кассы и ОФД разведены на два разных типа намеренно: это два разных
+    физических источника данных об одном и том же чеке (касса пробивает и
+    пересылает результат сама, ОФД получает копию от налоговой), и их нужно
+    сверять МЕЖДУ СОБОЙ - если касса случайно пробила чек дважды, в чеках
+    кассы будет 2 записи, а в ОФД может быть только 1 подтверждённая - без
+    разделения типов такую аномалию не увидеть.
+
+    Платёж - особый случай: один и тот же платёж (payment_id/order_id) обычно
+    прилетает НЕСКОЛЬКИМИ вебхуками по мере смены статуса (AUTHORIZED ->
+    CONFIRMED -> REFUNDED и т.п.), и в БД это разные строки webhook_payments.
+    Чтобы не показывать один платёж как N разных "транзакций без пары",
+    все вебхуки одного payment_id/order_id схлопываются в ОДНУ транзакцию
+    с последним статусом и полем webhook_history (список всех промежуточных
+    статусов) - платёж считается связанным, если связь нашлась хотя бы у
+    одного из вебхуков в группе.
+
+    Связывание (linked_type/linked_source/linked_id/match_method):
+    - платёж -> чек кассы: webhook_payments.receipt_id, а если его нет -
+      совпадение order_id/payment_id с order_id/legacy_no/external_id/uuid
+      чека кассы.
+    - чек кассы <-> чек ОФД: по триплету фискальных реквизитов ФН+ФД+ФПД -
+      однозначно идентифицирует физический фискальный документ независимо
+      от того, каким API он был получен.
+    - деньги на р/с намеренно НЕ связываются автоматически - в банковской
+      выписке нет номера заказа, только сумма/дата/назначение платежа,
+      слишком велик риск ложных совпадений.
+    Args: company_id (обязателен), type (payment/receipt_ofd/receipt_kassa/
+    money/receipt-алиас, опционально), limit, offset (опционально)
+    Returns: transactions[] с полями type, source, id, occurred_at, amount,
+    status, title, subtitle, integration_name, reference, raw_data,
+    linked_type, linked_source, linked_id, match_method,
+    webhook_history (только для payment с несколькими вебхуками)
     '''
 
     method = event.get('httpMethod', 'GET')
@@ -83,7 +110,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     try:
         parts = []
 
-        if not type_filter or type_filter == 'payment':
+        if wants(type_filter, 'payment'):
             parts.append(f'''
                 SELECT
                     'payment' AS type,
@@ -97,13 +124,14 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     ui.integration_name AS integration_name,
                     wp.order_id AS reference,
                     wp.raw_data AS raw_data,
-                    CASE WHEN COALESCE(wp.receipt_id, km.id) IS NOT NULL THEN 'receipt' END AS linked_type,
+                    CASE WHEN COALESCE(wp.receipt_id, km.id) IS NOT NULL THEN 'receipt_kassa' END AS linked_type,
                     CASE WHEN COALESCE(wp.receipt_id, km.id) IS NOT NULL THEN 'ecomkassa' END AS linked_source,
                     COALESCE(wp.receipt_id, km.id) AS linked_id,
                     CASE
                         WHEN wp.receipt_id IS NOT NULL THEN 'receipt_id'
                         WHEN km.id IS NOT NULL THEN 'order_id'
-                    END AS match_method
+                    END AS match_method,
+                    COALESCE(wp.order_id, wp.payment_id) AS group_key
                 FROM {SCHEMA}.webhook_payments wp
                 JOIN {SCHEMA}.user_integrations ui ON ui.id = wp.integration_id
                 JOIN {SCHEMA}.integration_providers p ON p.id = ui.provider_id
@@ -125,10 +153,10 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 WHERE wp.company_id = %(company_id)s AND ui.status != 'deleted'
             ''')
 
-        if not type_filter or type_filter == 'receipt':
+        if wants(type_filter, 'receipt_ofd'):
             parts.append(f'''
                 SELECT
-                    'receipt' AS type,
+                    'receipt_ofd' AS type,
                     'ofd' AS source,
                     ofd.id AS id,
                     ofd.doc_datetime AS occurred_at,
@@ -139,10 +167,11 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     ui.integration_name AS integration_name,
                     ofd.receipt_id AS reference,
                     ofd.raw_data AS raw_data,
-                    CASE WHEN km.id IS NOT NULL THEN 'receipt' END AS linked_type,
+                    CASE WHEN km.id IS NOT NULL THEN 'receipt_kassa' END AS linked_type,
                     CASE WHEN km.id IS NOT NULL THEN 'ecomkassa' END AS linked_source,
                     km.id AS linked_id,
-                    CASE WHEN km.id IS NOT NULL THEN 'fiscal_triplet' END AS match_method
+                    CASE WHEN km.id IS NOT NULL THEN 'fiscal_triplet' END AS match_method,
+                    NULL::text AS group_key
                 FROM {SCHEMA}.ofd_receipts ofd
                 JOIN {SCHEMA}.user_integrations ui ON ui.id = ofd.integration_id
                 LEFT JOIN LATERAL (
@@ -159,9 +188,11 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 ) km ON true
                 WHERE ofd.company_id = %(company_id)s
             ''')
+
+        if wants(type_filter, 'receipt_kassa'):
             parts.append(f'''
                 SELECT
-                    'receipt' AS type,
+                    'receipt_kassa' AS type,
                     'ecomkassa' AS source,
                     ekr.id AS id,
                     ekr.doc_datetime AS occurred_at,
@@ -172,10 +203,11 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     ui.integration_name AS integration_name,
                     ekr.order_id AS reference,
                     ekr.raw_data AS raw_data,
-                    CASE WHEN om.id IS NOT NULL THEN 'receipt' END AS linked_type,
+                    CASE WHEN om.id IS NOT NULL THEN 'receipt_ofd' END AS linked_type,
                     CASE WHEN om.id IS NOT NULL THEN 'ofd' END AS linked_source,
                     om.id AS linked_id,
-                    CASE WHEN om.id IS NOT NULL THEN 'fiscal_triplet' END AS match_method
+                    CASE WHEN om.id IS NOT NULL THEN 'fiscal_triplet' END AS match_method,
+                    NULL::text AS group_key
                 FROM {SCHEMA}.ecomkassa_receipts ekr
                 JOIN {SCHEMA}.user_integrations ui ON ui.id = ekr.integration_id
                 LEFT JOIN LATERAL (
@@ -193,7 +225,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 WHERE ekr.company_id = %(company_id)s
             ''')
 
-        if not type_filter or type_filter == 'money':
+        if wants(type_filter, 'money'):
             parts.append(f'''
                 SELECT
                     'money' AS type,
@@ -210,55 +242,94 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     NULL::text AS linked_type,
                     NULL::text AS linked_source,
                     NULL::integer AS linked_id,
-                    NULL::text AS match_method
+                    NULL::text AS match_method,
+                    NULL::text AS group_key
                 FROM {SCHEMA}.bank_statement_transactions bst
                 JOIN {SCHEMA}.user_integrations ui ON ui.id = bst.integration_id
                 WHERE bst.company_id = %(company_id)s
             ''')
 
+        if not parts:
+            return {
+                'statusCode': 200,
+                'headers': {**CORS_HEADERS, 'Content-Type': 'application/json'},
+                'body': json.dumps({'success': True, 'transactions': [], 'totals_by_type': {}, 'limit': limit, 'offset': offset}),
+                'isBase64Encoded': False
+            }
+
+        # LIMIT/OFFSET намеренно не применяется в SQL: платежи с одним и тем же
+        # номером схлопываются в одну транзакцию уже в Python (ниже), а обрезать
+        # строки до этого схлопывания means could split одну группу пополам
+        # между страницами. При типичных объёмах теста/демо это не проблема -
+        # компания вряд ли накопит десятки тысяч транзакций.
         union_query = ' UNION ALL '.join(parts)
         full_query = f'''
             WITH all_tx AS ({union_query})
             SELECT * FROM all_tx
             ORDER BY occurred_at DESC NULLS LAST
-            LIMIT %(limit)s OFFSET %(offset)s
         '''
 
-        cur.execute(full_query, {'company_id': company_id, 'limit': limit, 'offset': offset})
+        cur.execute(full_query, {'company_id': company_id})
         rows = cur.fetchall()
         columns = [desc[0] for desc in cur.description]
 
-        transactions = []
+        # Схлопывание вебхуков одного платежа (payment_id/order_id) в одну
+        # транзакцию. Строки уже отсортированы occurred_at DESC на уровне SQL,
+        # поэтому первая встреченная строка группы - самая свежая (её статус,
+        # сумма и raw_data берём как представление всей группы), а остальные
+        # уходят в webhook_history. Порядок появления групп в final_rows
+        # совпадает с глобальным порядком occurred_at DESC - пересортировка
+        # после схлопывания не нужна.
+        payment_groups: Dict[Any, Dict[str, Any]] = {}
+        final_rows = []
+
         for row in rows:
             tx = {}
             for col, val in zip(columns, row):
                 tx[col] = to_json_value(val)
-            transactions.append(tx)
 
-        count_query = f'''
-            WITH all_tx AS ({union_query})
-            SELECT
-                type,
-                COUNT(*),
-                COALESCE(SUM(amount), 0),
-                COUNT(*) FILTER (WHERE linked_id IS NOT NULL)
-            FROM all_tx GROUP BY type
-        '''
-        cur.execute(count_query, {'company_id': company_id, 'limit': limit, 'offset': offset})
-        totals_by_type = {}
-        for t_type, cnt, total, matched_cnt in cur.fetchall():
-            totals_by_type[t_type] = {
-                'count': cnt,
-                'amount': float(total),
-                'matched_count': matched_cnt
-            }
+            group_key = tx.pop('group_key', None)
+
+            if tx['type'] == 'payment':
+                gkey = (tx['source'], group_key or f"id:{tx['id']}")
+                group = payment_groups.get(gkey)
+                if group is None:
+                    group = tx
+                    group['webhook_history'] = [{'status': tx['status'], 'occurred_at': tx['occurred_at']}]
+                    payment_groups[gkey] = group
+                    final_rows.append(group)
+                else:
+                    group['webhook_history'].append({'status': tx['status'], 'occurred_at': tx['occurred_at']})
+                    if tx.get('linked_id') and not group.get('linked_id'):
+                        group['linked_type'] = tx['linked_type']
+                        group['linked_source'] = tx['linked_source']
+                        group['linked_id'] = tx['linked_id']
+                        group['match_method'] = tx['match_method']
+            else:
+                final_rows.append(tx)
+
+        for group in payment_groups.values():
+            group['webhook_history'].reverse()
+            if len(group['webhook_history']) <= 1:
+                del group['webhook_history']
+
+        totals_by_type: Dict[str, Dict[str, Any]] = {}
+        for row in final_rows:
+            t = row['type']
+            bucket = totals_by_type.setdefault(t, {'count': 0, 'amount': 0.0, 'matched_count': 0})
+            bucket['count'] += 1
+            bucket['amount'] += float(row['amount'] or 0)
+            if row.get('linked_id'):
+                bucket['matched_count'] += 1
+
+        paginated = final_rows[offset:offset + limit]
 
         return {
             'statusCode': 200,
             'headers': {**CORS_HEADERS, 'Content-Type': 'application/json'},
             'body': json.dumps({
                 'success': True,
-                'transactions': transactions,
+                'transactions': paginated,
                 'totals_by_type': totals_by_type,
                 'limit': limit,
                 'offset': offset

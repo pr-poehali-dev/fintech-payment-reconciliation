@@ -22,7 +22,8 @@ interface TransactionsTableProps {
 
 const typeConfig: Record<string, { icon: string; label: string; className: string }> = {
   payment: { icon: 'CreditCard', label: 'Платёж', className: 'bg-primary/10 text-primary border-primary/30' },
-  receipt: { icon: 'Receipt', label: 'Чек', className: 'bg-info/10 text-info border-info/30' },
+  receipt_kassa: { icon: 'Receipt', label: 'Чек кассы', className: 'bg-info/10 text-info border-info/30' },
+  receipt_ofd: { icon: 'FileCheck', label: 'Чек ОФД', className: 'bg-violet-500/10 text-violet-400 border-violet-500/30' },
   money: { icon: 'Landmark', label: 'Деньги', className: 'bg-success/10 text-success border-success/30' },
 };
 
@@ -173,6 +174,12 @@ const TransactionsTable = ({ groups, onRowClick }: TransactionsTableProps) => {
                         <Badge className={`${getStatusColor(primary.status)} text-white`}>
                           {primary.status}
                         </Badge>
+                      )}
+                      {primary.webhook_history && primary.webhook_history.length > 1 && (
+                        <div className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
+                          <Icon name="History" size={11} />
+                          {primary.webhook_history.length} статусов
+                        </div>
                       )}
                     </TableCell>
                     <TableCell>

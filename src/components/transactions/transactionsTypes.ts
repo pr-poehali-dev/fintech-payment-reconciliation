@@ -1,6 +1,11 @@
-export type TransactionType = 'payment' | 'receipt' | 'money';
+export type TransactionType = 'payment' | 'receipt_ofd' | 'receipt_kassa' | 'money';
 
 export type MatchMethod = 'receipt_id' | 'order_id' | 'fiscal_triplet' | null;
+
+export interface WebhookHistoryItem {
+  status: string | null;
+  occurred_at: string | null;
+}
 
 export interface Transaction {
   type: TransactionType;
@@ -18,6 +23,7 @@ export interface Transaction {
   linked_source: string | null;
   linked_id: number | null;
   match_method: MatchMethod;
+  webhook_history?: WebhookHistoryItem[];
 }
 
 export interface TransactionTypeTotal {

@@ -58,7 +58,7 @@ export const groupTransactions = (transactions: Transaction[]): TransactionGroup
     (groupsMap.get(root) as Transaction[]).push(t);
   });
 
-  const typeOrder: Record<string, number> = { payment: 0, receipt: 1, money: 2 };
+  const typeOrder: Record<string, number> = { payment: 0, receipt_kassa: 1, receipt_ofd: 2, money: 3 };
 
   return Array.from(groupsMap.entries())
     .map(([id, items]) => ({

@@ -15,7 +15,8 @@ interface TransactionDetailsDialogProps {
 
 const typeConfig: Record<string, { icon: string; label: string; className: string }> = {
   payment: { icon: 'CreditCard', label: 'Платёж', className: 'bg-primary/10 text-primary border-primary/30' },
-  receipt: { icon: 'Receipt', label: 'Чек', className: 'bg-info/10 text-info border-info/30' },
+  receipt_kassa: { icon: 'Receipt', label: 'Чек кассы', className: 'bg-info/10 text-info border-info/30' },
+  receipt_ofd: { icon: 'FileCheck', label: 'Чек ОФД', className: 'bg-violet-500/10 text-violet-400 border-violet-500/30' },
   money: { icon: 'Landmark', label: 'Деньги', className: 'bg-success/10 text-success border-success/30' },
 };
 
@@ -96,6 +97,26 @@ const TransactionDetailsDialog = ({ transaction, relatedItems, open, onOpenChang
               {formatAmount(transaction.amount)}
             </div>
           </div>
+
+          {transaction.webhook_history && transaction.webhook_history.length > 1 && (
+            <>
+              <Separator />
+              <div>
+                <div className="text-sm text-muted-foreground mb-2 flex items-center gap-1.5">
+                  <Icon name="History" size={14} />
+                  История статусов ({transaction.webhook_history.length} вебхуков)
+                </div>
+                <div className="space-y-1.5">
+                  {transaction.webhook_history.map((h, i) => (
+                    <div key={i} className="flex items-center justify-between text-sm bg-muted/30 rounded-md px-3 py-1.5">
+                      <span className="font-medium">{h.status}</span>
+                      <span className="text-muted-foreground text-xs">{formatDateTimeTz(h.occurred_at, timezone, true)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
 
           <Separator />
 
