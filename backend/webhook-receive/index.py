@@ -11,6 +11,7 @@ from inbox import save_event, mark_processed
 import tbank_handler
 import bitrix24_handler
 import amocrm_handler
+import ecomkassa_gateway_handler
 
 CORS_HEADERS = {
     'Access-Control-Allow-Origin': '*',
@@ -25,7 +26,8 @@ CORS_HEADERS = {
 EVENT_TYPE_BY_PROVIDER = {
     'tbank': 'payment_status_changed',
     'bitrix24': 'deal_updated',
-    'amocrm': 'lead_updated'
+    'amocrm': 'lead_updated',
+    'ecomkassa_gateway': 'payment_status_changed'
 }
 
 
@@ -145,6 +147,10 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             _, external_deal_id, handler_error = bitrix24_handler.process(cur, integration_id, company_id, config, webhook_data)
         elif provider_slug == 'amocrm':
             _, external_deal_id, handler_error = amocrm_handler.process(cur, integration_id, company_id, config, webhook_data)
+        elif provider_slug == 'ecomkassa_gateway':
+            _, webhook_payment_id, handler_error = ecomkassa_gateway_handler.process(
+                cur, integration_id, company_id, config, webhook_settings, webhook_data
+            )
 
         if external_deal_id:
             cur.execute('''

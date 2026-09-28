@@ -11,6 +11,7 @@ import {
   PROVIDER_FIELDS,
   Provider,
   TBANK_NOTIFY_OPTIONS,
+  ECOMKASSA_GATEWAY_NOTIFY_OPTIONS,
   acceptsIncomingWebhook
 } from './providerFieldsConfig';
 
@@ -221,11 +222,11 @@ const IntegrationConfigStep = ({
 
       {currentFields.map(renderField)}
 
-      {selectedProvider.slug === 'tbank' && (
+      {(selectedProvider.slug === 'tbank' || selectedProvider.slug === 'ecomkassa_gateway') && (
         <div className="space-y-2">
           <Label>Уведомления о статусах платежей</Label>
           <div className="space-y-2">
-            {TBANK_NOTIFY_OPTIONS.map(({ key, label }) => (
+            {(selectedProvider.slug === 'tbank' ? TBANK_NOTIFY_OPTIONS : ECOMKASSA_GATEWAY_NOTIFY_OPTIONS).map(({ key, label }) => (
               <label key={key} className="flex items-center gap-2">
                 <input
                   type="checkbox"

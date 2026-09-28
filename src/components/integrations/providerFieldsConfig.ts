@@ -71,6 +71,15 @@ export const TBANK_NOTIFY_OPTIONS = [
   { key: 'notify_on_canceled', label: 'Отменён (CANCELED)' }
 ];
 
+// Шлюз Екомкассы отдаёт статусы 0-4 (создан/оплачен/подтверждён/отменён/просрочен),
+// без отдельного события возврата - поэтому REFUNDED здесь не показываем.
+export const ECOMKASSA_GATEWAY_NOTIFY_OPTIONS = [
+  { key: 'notify_on_authorized', label: 'Оплачен, ожидает подтверждения' },
+  { key: 'notify_on_confirmed', label: 'Оплачен, подтверждён' },
+  { key: 'notify_on_rejected', label: 'Не оплачен (истекло время)' },
+  { key: 'notify_on_canceled', label: 'Отменён' }
+];
+
 const BANK_ACCOUNT_FIELDS: FieldConfig[] = [
   { key: 'account_number', label: 'Номер расчётного счёта', type: 'text', placeholder: '40702810000000000000' },
   { key: 'inn', label: 'ИНН организации', type: 'text', placeholder: '1234567890' },
@@ -135,12 +144,17 @@ export const PROVIDER_FIELDS: Record<string, FieldConfig[]> = {
       required: false,
       hint: 'Уточните у Екомкассы, если не уверены — по умолчанию v4'
     }
-  ]
+  ],
+  // Платёжный шлюз (payments.ecomkassa.ru) не требует токенов - у нас нет
+  // прямого доступа к банку, шлюз лишь присылает статус платежа по callback_url.
+  // Чек по UUID платежа он находит сам в активной кассе "Екомкасса" той же
+  // компании - отдельно указывать магазин здесь не нужно.
+  ecomkassa_gateway: []
 };
 
 // Провайдеры, для которых наш сервис принимает входящие вебхуки.
 // Только для них имеет смысл показывать URL для вебхука и переадресацию.
-const PROVIDERS_WITH_INCOMING_WEBHOOK = ['tbank'];
+const PROVIDERS_WITH_INCOMING_WEBHOOK = ['tbank', 'ecomkassa_gateway'];
 
 export const buildDefaultConfig = (slug: string): ConfigState => {
   const fields = PROVIDER_FIELDS[slug] || [];
