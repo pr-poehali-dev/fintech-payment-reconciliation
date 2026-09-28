@@ -26,6 +26,8 @@ interface Invite {
 interface PendingInvitesTableProps {
   invites: Invite[];
   onCancel: (inviteId: number) => void;
+  onResend: (invite: Invite) => void;
+  resendingId: number | null;
 }
 
 const channelLabels: Record<string, { icon: string; label: string }> = {
@@ -35,7 +37,7 @@ const channelLabels: Record<string, { icon: string; label: string }> = {
   email: { icon: 'Mail', label: 'Email' },
 };
 
-const PendingInvitesTable = ({ invites, onCancel }: PendingInvitesTableProps) => {
+const PendingInvitesTable = ({ invites, onCancel, onResend, resendingId }: PendingInvitesTableProps) => {
   if (invites.length === 0) return null;
 
   return (
@@ -75,7 +77,20 @@ const PendingInvitesTable = ({ invites, onCancel }: PendingInvitesTableProps) =>
                 </span>
               </TableCell>
               <TableCell className="text-right">
-                <Button variant="ghost" size="icon" onClick={() => onCancel(invite.id)}>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  title="Отправить приглашение повторно"
+                  disabled={resendingId === invite.id}
+                  onClick={() => onResend(invite)}
+                >
+                  <Icon
+                    name="RefreshCw"
+                    size={16}
+                    className={resendingId === invite.id ? 'animate-spin text-muted-foreground' : 'text-muted-foreground'}
+                  />
+                </Button>
+                <Button variant="ghost" size="icon" title="Отменить приглашение" onClick={() => onCancel(invite.id)}>
                   <Icon name="X" size={16} className="text-destructive" />
                 </Button>
               </TableCell>

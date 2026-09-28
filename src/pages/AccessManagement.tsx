@@ -210,6 +210,76 @@ const AccessManagement = () => {
     toast({ title: 'Ссылка скопирована' });
   };
 
+  const [resendingId, setResendingId] = useState<number | null>(null);
+
+  const resendInvite = async (invite: Invite) => {
+    if (!companyId) return;
+    setResendingId(invite.id);
+
+    try {
+      const inviteRes = await fetch(functionUrls['company-users-invite'], {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          company_id: companyId,
+          phone: invite.phone,
+          full_name: invite.full_name,
+          email: invite.email,
+          role_slug: invite.role_slug,
+          channel: invite.channel,
+          invited_by: user?.user_id
+        })
+      });
+
+      const inviteData = await inviteRes.json();
+
+      if (!inviteRes.ok || !inviteData.success) {
+        toast({
+          title: 'Ошибка приглашения',
+          description: inviteData.error || 'Не удалось создать новую ссылку',
+          variant: 'destructive'
+        });
+        return;
+      }
+
+      const link = `${window.location.origin}/invite/${inviteData.token}`;
+      const messageText = `Привет, ${invite.full_name || ''}! Вас пригласили в команду «${currentCompany?.name}» на портале Сверка.\n\nПерейдите по ссылке, чтобы принять приглашение: ${link}\n\nРоль: ${invite.role_name}\nСсылка действует 7 дней.`;
+
+      const recipient = invite.channel === 'email' ? invite.email || '' : invite.phone;
+
+      const sendRes = await fetch(functionUrls['send-message'], {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provider: channelProviderMap[invite.channel] || 'ek_tg',
+          recipient,
+          message: messageText
+        })
+      });
+
+      const sendData = await sendRes.json();
+
+      if (sendRes.ok && sendData.success) {
+        toast({
+          title: 'Приглашение отправлено повторно',
+          description: `Новая ссылка ушла через ${channelLabelMap[invite.channel] || 'Telegram'}`
+        });
+      } else {
+        toast({
+          title: 'Ссылка обновлена, но не доставлена',
+          description: 'Скопируйте ссылку и отправьте её вручную',
+          variant: 'destructive'
+        });
+      }
+
+      loadData();
+    } catch {
+      toast({ title: 'Ошибка подключения', variant: 'destructive' });
+    } finally {
+      setResendingId(null);
+    }
+  };
+
   const cancelInvite = async (inviteId: number) => {
     if (!companyId) return;
     try {
@@ -372,7 +442,12 @@ const AccessManagement = () => {
             <CardDescription>Приглашения, которые ещё не были приняты</CardDescription>
           </CardHeader>
           <CardContent>
-            <PendingInvitesTable invites={invites} onCancel={cancelInvite} />
+            <PendingInvitesTable
+              invites={invites}
+              onCancel={cancelInvite}
+              onResend={resendInvite}
+              resendingId={resendingId}
+            />
           </CardContent>
         </Card>
       )}
