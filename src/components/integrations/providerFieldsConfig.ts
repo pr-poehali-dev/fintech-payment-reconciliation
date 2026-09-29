@@ -90,10 +90,10 @@ const BANK_ACCOUNT_FIELDS: FieldConfig[] = [
 // список полей - выбор способа авторизации (JWT/OAuth 2.0), сам токен и счёт
 // вводятся в TochkaAuthMethodPicker: по JWT-токену запрашивается список счетов
 // компании (Get Accounts List), номер счёта выбирается из него, а не вводится
-// руками, как раньше.
-const TOCHKA_ACCOUNT_FIELDS: FieldConfig[] = [
-  { key: 'inn', label: 'ИНН организации', type: 'text', placeholder: '1234567890' }
-];
+// руками. ИНН отдельно не спрашиваем - он уже есть в карточке компании и в
+// синхронизации выписки нигде не используется (Точка идентифицирует счёт по
+// accountId из самого токена, а не по ИНН из формы).
+const TOCHKA_ACCOUNT_FIELDS: FieldConfig[] = [];
 
 export const PROVIDER_FIELDS: Record<string, FieldConfig[]> = {
   tbank: [
