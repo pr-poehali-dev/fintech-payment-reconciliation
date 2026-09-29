@@ -55,7 +55,7 @@ const TochkaAuthMethodPicker = ({
   const apiToken = String(config.api_token ?? '');
   const accountNumber = config.account_number ? String(config.account_number) : '';
   const purposeKeywords = String(config.purpose_keywords ?? '');
-  const autoFetchedRef = useRef(false);
+  const isFirstRenderRef = useRef(true);
 
   const fetchAccounts = async (token: string, silent = false) => {
     if (!token.trim()) {
@@ -97,19 +97,23 @@ const TochkaAuthMethodPicker = ({
     onConfigChange({ ...config, purpose_keywords: next });
   };
 
-  // Если форма открыта для редактирования уже существующей интеграции - токен
-  // в config есть сразу при монтировании, счета подгружаем автоматически, без
-  // клика по кнопке. silent=true - если токен вдруг истёк, не пугаем ошибкой
-  // сразу при открытии формы, просто оставляем ранее сохранённый account_number.
+  // Счета и терминалы подгружаются автоматически, без отдельной кнопки:
+  // - при открытии формы редактирования существующей интеграции (токен в
+  //   config уже есть при монтировании) - сразу, без задержки, silent (если
+  //   токен вдруг истёк, не пугаем ошибкой сразу при открытии формы);
+  // - при вводе/вставке токена (в т.ч. в новой интеграции, где поле изначально
+  //   пустое) - с debounce 600мс, чтобы не слать запрос на каждый символ.
   useEffect(() => {
-    if (apiToken.trim() && !autoFetchedRef.current) {
-      autoFetchedRef.current = true;
-      fetchAccounts(apiToken, true);
+    if (isFirstRenderRef.current) {
+      isFirstRenderRef.current = false;
+      if (apiToken.trim()) fetchAccounts(apiToken, true);
+      return;
     }
+    if (!apiToken.trim()) return;
+    const timer = setTimeout(() => fetchAccounts(apiToken, true), 600);
+    return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const handleFetchAccounts = () => fetchAccounts(apiToken);
+  }, [apiToken]);
 
   return (
     <div className="space-y-3">
@@ -168,16 +172,13 @@ const TochkaAuthMethodPicker = ({
         <p className="text-xs text-muted-foreground mt-1">
           Сгенерируйте в интернет-банке Точки: Настройки → API → Токены — задайте срок действия и права доступа «Счета» (чтение выписки), а также «Эквайринг» — чтобы мы могли сразу подсказать TID ваших терминалов
         </p>
-      </div>
-
-      <Button type="button" variant="outline" size="sm" onClick={handleFetchAccounts} disabled={isLoading}>
-        {isLoading ? (
-          <Icon name="Loader2" size={14} className="animate-spin mr-2" />
-        ) : (
-          <Icon name="Search" size={14} className="mr-2" />
+        {isLoading && (
+          <p className="text-xs text-muted-foreground mt-1.5 flex items-center gap-1.5">
+            <Icon name="Loader2" size={12} className="animate-spin" />
+            Ищем счета и терминалы по токену…
+          </p>
         )}
-        {accounts.length > 0 ? 'Обновить список счетов' : 'Найти счета по токену'}
-      </Button>
+      </div>
 
       {error && <p className="text-xs text-destructive">{error}</p>}
 
