@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -47,10 +47,11 @@ const TochkaAuthMethodPicker = ({
 
   const apiToken = String(config.api_token ?? '');
   const accountNumber = config.account_number ? String(config.account_number) : '';
+  const autoFetchedRef = useRef(false);
 
-  const handleFetchAccounts = async () => {
-    if (!apiToken.trim()) {
-      setError('Вставьте JWT-токен');
+  const fetchAccounts = async (token: string, silent = false) => {
+    if (!token.trim()) {
+      if (!silent) setError('Вставьте JWT-токен');
       return;
     }
 
@@ -61,21 +62,35 @@ const TochkaAuthMethodPicker = ({
       const response = await fetch(functionUrls['tochka-accounts-list'], {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ api_token: apiToken })
+        body: JSON.stringify({ api_token: token })
       });
       const data = await response.json();
 
       if (response.ok && data.success) {
         setAccounts(data.accounts || []);
-      } else {
+      } else if (!silent) {
         setError(data.error || 'Не удалось получить список счетов');
       }
     } catch {
-      setError('Проблема с подключением к серверу');
+      if (!silent) setError('Проблема с подключением к серверу');
     } finally {
       setIsLoading(false);
     }
   };
+
+  // Если форма открыта для редактирования уже существующей интеграции - токен
+  // в config есть сразу при монтировании, счета подгружаем автоматически, без
+  // клика по кнопке. silent=true - если токен вдруг истёк, не пугаем ошибкой
+  // сразу при открытии формы, просто оставляем ранее сохранённый account_number.
+  useEffect(() => {
+    if (apiToken.trim() && !autoFetchedRef.current) {
+      autoFetchedRef.current = true;
+      fetchAccounts(apiToken, true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleFetchAccounts = () => fetchAccounts(apiToken);
 
   return (
     <div className="space-y-3">
