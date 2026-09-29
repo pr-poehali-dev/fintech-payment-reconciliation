@@ -105,18 +105,23 @@ const TransactionsTable = ({ groups, onRowClick, selectedKeys, onToggleSelect }:
 
   const renderRow = (tx: Transaction, isSecondary: boolean) => {
     const config = typeConfig[tx.type] || typeConfig.payment;
+    const isSelected = selectedKeys.has(nodeKey(tx));
     return (
       <TableRow
         key={`${tx.type}-${tx.source}-${tx.id}`}
-        className={`cursor-pointer hover:bg-muted/50 ${isSecondary ? 'bg-muted/20' : ''}`}
+        className={`group cursor-pointer transition-colors ${isSelected ? 'bg-primary/5 hover:bg-primary/10' : 'hover:bg-muted/50'} ${isSecondary ? 'bg-muted/20' : ''}`}
         onClick={() => onRowClick(tx)}
       >
         <TableCell className="w-10" onClick={(e) => e.stopPropagation()}>
-          <Checkbox
-            checked={selectedKeys.has(nodeKey(tx))}
-            onCheckedChange={() => onToggleSelect(tx)}
-            aria-label="Выбрать транзакцию"
-          />
+          <div
+            className={`transition-all duration-150 ${isSelected ? 'opacity-100 scale-100' : 'opacity-0 scale-75 group-hover:opacity-100 group-hover:scale-100'}`}
+          >
+            <Checkbox
+              checked={isSelected}
+              onCheckedChange={() => onToggleSelect(tx)}
+              aria-label="Выбрать транзакцию"
+            />
+          </div>
         </TableCell>
         <TableCell className={isSecondary ? 'pl-10' : ''}>
           {isSecondary && <Icon name="CornerDownRight" size={13} className="inline mr-1.5 text-muted-foreground" />}
@@ -182,19 +187,24 @@ const TransactionsTable = ({ groups, onRowClick, selectedKeys, onToggleSelect }:
               const isManual = group.status === 'manual';
               const isExpanded = expanded.has(group.id);
               const config = typeConfig[primary.type] || typeConfig.payment;
+              const isPrimarySelected = selectedKeys.has(nodeKey(primary));
 
               return (
                 <Fragment key={group.id}>
                   <TableRow
-                    className="cursor-pointer hover:bg-muted/50"
+                    className={`group cursor-pointer transition-colors ${isPrimarySelected ? 'bg-primary/5 hover:bg-primary/10' : 'hover:bg-muted/50'}`}
                     onClick={() => onRowClick(primary)}
                   >
                     <TableCell className="w-10" onClick={(e) => e.stopPropagation()}>
-                      <Checkbox
-                        checked={selectedKeys.has(nodeKey(primary))}
-                        onCheckedChange={() => onToggleSelect(primary)}
-                        aria-label="Выбрать транзакцию"
-                      />
+                      <div
+                        className={`transition-all duration-150 ${isPrimarySelected ? 'opacity-100 scale-100' : 'opacity-0 scale-75 group-hover:opacity-100 group-hover:scale-100'}`}
+                      >
+                        <Checkbox
+                          checked={isPrimarySelected}
+                          onCheckedChange={() => onToggleSelect(primary)}
+                          aria-label="Выбрать транзакцию"
+                        />
+                      </div>
                     </TableCell>
                     <TableCell>
                       <Badge variant="outline" className={`gap-1.5 ${config.className}`}>
