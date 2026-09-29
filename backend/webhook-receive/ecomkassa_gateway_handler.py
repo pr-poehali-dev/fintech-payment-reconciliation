@@ -212,6 +212,19 @@ def process(cur, integration_id: int, company_id: int, config: Dict[str, Any],
     поэтому им же сразу пробуем получить пробитый чек методом report(). Чек может
     быть ещё не пробит в момент колбэка - тогда сумма/receipt_id останутся
     пустыми, и их довяжет дозагрузка при следующем открытии "Событий"/"Сверки".
+
+    СКОЛЬКО ТРАНЗАКЦИЙ РОЖДАЕТСЯ ИЗ ОДНОГО ДОКУМЕНТА (симметрично дозагрузке,
+    см. ecomkassa-fetch-orders/save_synthetic_payment):
+    - VCHR (обычный чек кассы) - только чек. У чека нет отдельного "платежа" -
+      деньги и фискализация это одно и то же событие, платёж никогда не
+      создаётся, даже если это формат прямого фискального колбэка.
+    - INVC (счёт на оплату) - чек + платёж, ЕСЛИ report()/колбэк содержит
+      invoice_payload с полем provider (напр. TOCHKA_SBP) - это и есть сам
+      факт оплаты через конкретную платёжную систему шлюза.
+    - CORD (курьерский заказ) - как и счёт: чек + платёж, если invoice_payload
+      есть (оплата картой/СБП через провайдера); если invoice_payload нет
+      (оплата курьеру наличными) - только чек, без платежа, платить было
+      физически, а не через шлюз.
     Returns: (accepted, webhook_payment_id, error)
     '''
     uid = _extract_uid(webhook_data)
@@ -247,8 +260,13 @@ def process(cur, integration_id: int, company_id: int, config: Dict[str, Any],
     amount = 0.0
     receipt_id = None
     payment_provider = None
+    # Платёж создаётся не для каждого документа - см. правило в докстринге
+    # выше. По умолчанию считаем, что платежа нет (это верно для VCHR и для
+    # формата 1/шлюза, где решение принимается ниже отдельно).
+    skip_payment = False
 
     if is_direct_callback:
+        order_type = _order_type_from_kind(webhook_data.get('kind'))
         # Реквизиты чека уже в payload колбэка - сохраняем сразу, без похода
         # за report() (чек и так уже пробит, раз status="done"). Чек привязываем
         # к интеграции кассы (slug=ecomkassa), а не шлюза - так же, как это
@@ -260,12 +278,21 @@ def process(cur, integration_id: int, company_id: int, config: Dict[str, Any],
                 receipt_id, amount, payment_provider = save_receipt_from_report(
                     cur, cash_integration_id, company_id, uid, webhook_data
                 )
+        # VCHR - платежа не бывает никогда. INVC/CORD - платёж создаём только
+        # если payment_provider реально пришёл (invoice_payload.provider) -
+        # иначе это чек без электронной оплаты (например, заказ, оплаченный
+        # курьеру наличными), платить как отдельная транзакция ему нечем.
+        if order_type == 'VCHR' or not payment_provider:
+            skip_payment = True
     # Деньги фактически проведены только на статусах "оплачен, ожидает
     # подтверждения" и "оплачен, подтверждён" - только тогда есть смысл сразу
     # пробовать получить чек (на CREATED чека ещё не может быть, на
     # CANCELED/REJECTED он не нужен).
     elif status in ('AUTHORIZED', 'CONFIRMED'):
         receipt_id, amount, payment_provider = try_resolve_receipt(cur, company_id, uid)
+
+    if skip_payment:
+        return True, None, None
 
     if not amount and webhook_data.get('amount'):
         try:
