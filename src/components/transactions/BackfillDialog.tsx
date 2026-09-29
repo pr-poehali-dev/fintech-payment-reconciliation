@@ -19,20 +19,12 @@ import { Progress } from '@/components/ui/progress';
 import { Separator } from '@/components/ui/separator';
 import Icon from '@/components/ui/icon';
 import { useAuth } from '@/contexts/AuthContext';
-import functionUrls from '../../../backend/func2url.json';
-
-interface BankIntegration {
-  id: number;
-  name: string;
-}
+import { useBackfill, BankIntegration } from '@/contexts/BackfillContext';
 
 interface BackfillDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
   hasEcomkassa: boolean;
   hasOfd: boolean;
   bankIntegrations: BankIntegration[];
-  onFinished: () => void;
 }
 
 const ORDER_TYPES: { id: string; label: string }[] = [
@@ -59,23 +51,24 @@ const monthAgo = () => {
   return d;
 };
 
-type Phase = 'idle' | 'running' | 'done';
-
-const BackfillDialog = ({ open, onOpenChange, hasEcomkassa, hasOfd, bankIntegrations, onFinished }: BackfillDialogProps) => {
+// Диалог - только "витрина" для процесса, который живёт в BackfillContext
+// (смонтирован на уровне App.tsx, выше страниц). Свернуть окно (крестик/клик
+// вне) больше не останавливает загрузку - она продолжается в фоне и просто
+// не отображается, пока диалог снова не откроют кнопкой "Загрузить".
+const BackfillDialog = ({ hasEcomkassa, hasOfd, bankIntegrations }: BackfillDialogProps) => {
   const { currentCompany } = useAuth();
   const companyId = currentCompany?.id;
+  const {
+    isDialogOpen, closeDialog, reset,
+    phase, ecomkassaProgress, ofdResult, bankResults, errors,
+    start
+  } = useBackfill();
 
   const [dateFrom, setDateFrom] = useState<Date>(monthAgo());
   const [dateTo, setDateTo] = useState<Date>(yesterday());
   const [orderTypes, setOrderTypes] = useState<string[]>(['VCHR']);
   const [statuses, setStatuses] = useState<string[]>(['COMPLETED']);
   const [calendarOpen, setCalendarOpen] = useState(false);
-
-  const [phase, setPhase] = useState<Phase>('idle');
-  const [ecomkassaProgress, setEcomkassaProgress] = useState({ processed: 0, total: 0, inserted: 0 });
-  const [ofdResult, setOfdResult] = useState<{ inserted: number; total: number } | null>(null);
-  const [bankResults, setBankResults] = useState<Record<number, { inserted: number; total: number }>>({});
-  const [errors, setErrors] = useState<string[]>([]);
 
   const toggleOrderType = (id: string) => {
     setOrderTypes((prev) => (prev.includes(id) ? prev.filter((t) => t !== id) : [...prev, id]));
@@ -85,139 +78,35 @@ const BackfillDialog = ({ open, onOpenChange, hasEcomkassa, hasOfd, bankIntegrat
     setStatuses((prev) => (prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]));
   };
 
-  const resetState = () => {
-    setPhase('idle');
-    setEcomkassaProgress({ processed: 0, total: 0, inserted: 0 });
-    setOfdResult(null);
-    setBankResults({});
-    setErrors([]);
-  };
-
-  const runEcomkassaBackfill = async () => {
-    if (!companyId || orderTypes.length === 0 || statuses.length === 0) return;
-
-    let offset = 0;
-    let done = false;
-    let totalInserted = 0;
-    let matchedTotal = 0;
-
-    try {
-      while (!done) {
-        const res = await fetch(functionUrls['ecomkassa-fetch-orders'], {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            company_id: companyId,
-            date_from: dateFrom.toISOString(),
-            date_to: dateTo.toISOString(),
-            order_types: orderTypes,
-            statuses,
-            offset,
-            batch_size: 8
-          })
-        });
-        const data = await res.json();
-
-        if (!res.ok || !data.success) {
-          setErrors((prev) => [...prev, data.error || 'Не удалось загрузить данные из Екомкассы']);
-          return;
-        }
-
-        matchedTotal = data.matched_total;
-        totalInserted += data.inserted;
-        offset = data.next_offset ?? offset + data.processed;
-        done = data.done;
-
-        setEcomkassaProgress({ processed: offset, total: matchedTotal, inserted: totalInserted });
-      }
-    } catch {
-      // Сетевой сбой (не HTTP-ошибка) - ловим здесь, чтобы Promise.all в
-      // handleStart не завис навсегда и диалог не заблокировался в 'running'.
-      setErrors((prev) => [...prev, 'Екомкасса: сбой сети, попробуйте ещё раз']);
-    }
-  };
-
-  const runOfdBackfill = async () => {
+  const handleStart = () => {
     if (!companyId) return;
+    start({
+      companyId,
+      dateFrom,
+      dateTo,
+      hasEcomkassa,
+      orderTypes,
+      statuses,
+      hasOfd,
+      bankIntegrations
+    });
+  };
 
-    try {
-      const res = await fetch(functionUrls['ofd-fetch-receipts'], {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          company_id: companyId,
-          date_from: dateFrom.toISOString(),
-          date_to: dateTo.toISOString()
-        })
-      });
-      const data = await res.json();
-
-      if (!res.ok || !data.success) {
-        setErrors((prev) => [...prev, data.error || 'Не удалось загрузить чеки ОФД']);
-        return;
-      }
-
-      setOfdResult({ inserted: data.inserted ?? 0, total: data.total_receipts ?? 0 });
-    } catch {
-      setErrors((prev) => [...prev, 'ОФД: сбой сети, попробуйте ещё раз']);
+  // Закрытие окна (в т.ч. крестиком) во время работы - это просто "свернуть",
+  // процесс продолжается в контексте. Сбрасывать прогресс можно только когда
+  // всё завершено (или ничего не запускалось).
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (!nextOpen) {
+      closeDialog();
+      if (phase === 'done') reset();
     }
-  };
-
-  const runBankBackfill = async (integration: BankIntegration) => {
-    if (!companyId) return;
-
-    try {
-      const res = await fetch(functionUrls['bank-statement-sync'], {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          integration_id: integration.id,
-          date_from: dateFrom.toISOString(),
-          date_to: dateTo.toISOString()
-        })
-      });
-      const data = await res.json();
-
-      if (!res.ok || !data.success) {
-        setErrors((prev) => [...prev, `${integration.name}: ${data.error || 'не удалось загрузить выписку'}`]);
-        return;
-      }
-
-      setBankResults((prev) => ({
-        ...prev,
-        [integration.id]: { inserted: data.inserted ?? 0, total: data.total_transactions ?? data.inserted ?? 0 }
-      }));
-    } catch {
-      setErrors((prev) => [...prev, `${integration.name}: сбой сети, попробуйте ещё раз`]);
-    }
-  };
-
-  const handleStart = async () => {
-    resetState();
-    setPhase('running');
-
-    const tasks: Promise<void>[] = [];
-    if (hasEcomkassa) tasks.push(runEcomkassaBackfill());
-    if (hasOfd) tasks.push(runOfdBackfill());
-    bankIntegrations.forEach((bi) => tasks.push(runBankBackfill(bi)));
-
-    await Promise.all(tasks);
-
-    setPhase('done');
-    onFinished();
-  };
-
-  const handleClose = (nextOpen: boolean) => {
-    if (phase === 'running') return;
-    onOpenChange(nextOpen);
-    if (!nextOpen) resetState();
   };
 
   const hasAnySource = hasEcomkassa || hasOfd || bankIntegrations.length > 0;
   const canStart = hasAnySource && (!hasEcomkassa || (orderTypes.length > 0 && statuses.length > 0));
 
   return (
-    <Dialog open={open} onOpenChange={handleClose}>
+    <Dialog open={isDialogOpen} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -226,7 +115,8 @@ const BackfillDialog = ({ open, onOpenChange, hasEcomkassa, hasOfd, bankIntegrat
           </DialogTitle>
           <DialogDescription>
             Подтянем чеки, счета и операции по счёту за выбранный период из всех
-            подключённых интеграций — пригодится, если часть данных не пришла вебхуком
+            подключённых интеграций — пригодится, если часть данных не пришла вебхуком.
+            Окно можно закрыть — загрузка продолжится в фоне
           </DialogDescription>
         </DialogHeader>
 
@@ -409,28 +299,30 @@ const BackfillDialog = ({ open, onOpenChange, hasEcomkassa, hasOfd, bankIntegrat
           </div>
         )}
 
-        <DialogFooter>
-          {phase === 'done' ? (
-            <Button onClick={() => handleClose(false)} className="w-full">
+        <DialogFooter className="flex-col sm:flex-row gap-2">
+          {phase === 'running' ? (
+            <>
+              <Button variant="outline" onClick={() => closeDialog()} className="w-full sm:w-auto gap-2">
+                <Icon name="Minimize2" size={14} />
+                Свернуть
+              </Button>
+              <Button disabled className="w-full sm:flex-1 gap-2">
+                <Icon name="Loader2" size={16} className="animate-spin" />
+                Загружаем…
+              </Button>
+            </>
+          ) : phase === 'done' ? (
+            <Button onClick={() => handleOpenChange(false)} className="w-full">
               Готово
             </Button>
           ) : (
             <Button
               onClick={handleStart}
-              disabled={!canStart || phase === 'running'}
+              disabled={!canStart}
               className="w-full gap-2"
             >
-              {phase === 'running' ? (
-                <>
-                  <Icon name="Loader2" size={16} className="animate-spin" />
-                  Загружаем…
-                </>
-              ) : (
-                <>
-                  <Icon name="Download" size={16} />
-                  Начать загрузку
-                </>
-              )}
+              <Icon name="Download" size={16} />
+              Начать загрузку
             </Button>
           )}
         </DialogFooter>

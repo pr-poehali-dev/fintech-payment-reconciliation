@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import Icon from '@/components/ui/icon';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
+import { useBackfill } from '@/contexts/BackfillContext';
 import TransactionsTable from '@/components/transactions/TransactionsTable';
 import TransactionsFilters from '@/components/transactions/TransactionsFilters';
 import TransactionDetailsDialog from '@/components/transactions/TransactionDetailsDialog';
@@ -22,13 +23,13 @@ const TransactionsPage = () => {
   const [showDetails, setShowDetails] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [showUnmatchedOnly, setShowUnmatchedOnly] = useState(false);
-  const [showBackfillDialog, setShowBackfillDialog] = useState(false);
   const [hasEcomkassa, setHasEcomkassa] = useState(false);
   const [hasOfd, setHasOfd] = useState(false);
   const [bankIntegrations, setBankIntegrations] = useState<{ id: number; name: string }[]>([]);
   const { toast } = useToast();
   const { currentCompany } = useAuth();
   const companyId = currentCompany?.id;
+  const { openDialog, completedTick, phase: backfillPhase } = useBackfill();
 
   const fetchTransactions = async () => {
     if (!companyId) return;
@@ -110,6 +111,17 @@ const TransactionsPage = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [companyId]);
 
+  // completedTick растёт в BackfillContext каждый раз, когда фоновая дозагрузка
+  // (запущенная из BackfillDialog) завершается - в т.ч. если пользователь в
+  // этот момент ушёл со страницы «Транзакции» и вернулся позже. Список должен
+  // подхватить новые данные при каждом таком завершении.
+  const isFirstCompletedTick = completedTick === 0;
+  useEffect(() => {
+    if (isFirstCompletedTick) return;
+    fetchTransactions();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [completedTick]);
+
   const handleRowClick = (tx: Transaction) => {
     setSelectedTx(tx);
     setShowDetails(true);
@@ -169,9 +181,9 @@ const TransactionsPage = () => {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button onClick={() => setShowBackfillDialog(true)} variant="outline" className="gap-2">
-            <Icon name="Download" size={16} />
-            Загрузить
+          <Button onClick={openDialog} variant="outline" className="gap-2">
+            <Icon name={backfillPhase === 'running' ? 'Loader2' : 'Download'} size={16} className={backfillPhase === 'running' ? 'animate-spin' : ''} />
+            {backfillPhase === 'running' ? 'Загрузка идёт…' : 'Загрузить'}
           </Button>
           <Button onClick={fetchTransactions} variant="outline" size="icon" title="Обновить" disabled={isRefreshing}>
             <Icon name="RefreshCw" size={16} className={isRefreshing ? 'animate-spin' : ''} />
@@ -294,12 +306,9 @@ const TransactionsPage = () => {
       />
 
       <BackfillDialog
-        open={showBackfillDialog}
-        onOpenChange={setShowBackfillDialog}
         hasEcomkassa={hasEcomkassa}
         hasOfd={hasOfd}
         bankIntegrations={bankIntegrations}
-        onFinished={fetchTransactions}
       />
     </div>
   );
