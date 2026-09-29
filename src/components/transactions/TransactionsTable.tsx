@@ -94,6 +94,22 @@ const TransactionsTable = ({ groups, onRowClick, selectedKeys, onToggleSelect }:
     );
   };
 
+  // Итог по группе - считается на уровне группы (по каждой реальной сделке
+  // один раз, см. transactionGrouping.ts/computeTotal), а не берётся от
+  // одной "главной" строки - иначе, например, ручная склейка продажи и
+  // отдельного возврата в одну группу показала бы сумму только продажи.
+  const renderGroupAmountCell = (group: TransactionGroup) => {
+    const total = group.totalAmount;
+    const isNegative = total < 0;
+    const isZero = total === 0 && group.items.length > 1;
+    return (
+      <div className={isNegative ? 'text-destructive' : isZero ? 'text-muted-foreground' : ''}>
+        {formatAmount(total)}
+        {isZero && <div className="text-xs font-normal text-muted-foreground">взаимно погашено</div>}
+      </div>
+    );
+  };
+
   const toggleExpand = (groupId: string) => {
     setExpanded((prev) => {
       const next = new Set(prev);
@@ -266,7 +282,7 @@ const TransactionsTable = ({ groups, onRowClick, selectedKeys, onToggleSelect }:
                       )}
                     </TableCell>
                     <TableCell className="text-right font-semibold">
-                      {renderAmountCell(primary)}
+                      {isMatched ? renderGroupAmountCell(group) : renderAmountCell(primary)}
                     </TableCell>
                   </TableRow>
                   {isMatched && isExpanded && rest.map((tx) => renderRow(tx, true))}

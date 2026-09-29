@@ -17,6 +17,12 @@ export interface TransactionGroup {
   items: Transaction[];
   status: GroupStatus;
   isManual: boolean;
+  // Итоговая сумма группы - НЕ простая сумма signed_amount всех строк (это
+  // утроило бы счёт: платёж, его чек кассы и чек ОФД - это один и тот же
+  // факт движения денег, показанный трижды тремя источниками). Вместо этого
+  // сумма считается по каждой РЕАЛЬНОЙ сделке внутри группы один раз - см.
+  // computeGroupTotal ниже.
+  totalAmount: number;
 }
 
 // Уникальный ключ записи: связи типа "чек ОФД" -> "чек кассы" и "чек кассы" ->
@@ -33,8 +39,7 @@ export const nodeKey = (t: Pick<Transaction, 'type' | 'source' | 'id'>) => `${t.
  * записей объявляет связь, они попадают в одну группу, а транзитивность
  * union-find сама достраивает цепочку из 3 документов.
  */
-export const groupTransactions = (transactions: Transaction[]): TransactionGroup[] => {
-  const byKey = new Map(transactions.map((t) => [nodeKey(t), t]));
+const makeUnionFind = () => {
   const parent = new Map<string, string>();
 
   const find = (x: string): string => {
@@ -56,21 +61,57 @@ export const groupTransactions = (transactions: Transaction[]): TransactionGroup
     if (ra !== rb) parent.set(ra, rb);
   };
 
-  // Автоматическая связь (по linked_id, размечается бэкендом при совпадении
-  // фискальных реквизитов/receipt_id).
+  return { find, union };
+};
+
+// Порядок предпочтения при выборе "представителя" сделки для суммы группы:
+// платёж - самый авторитетный источник факта движения денег, затем чек
+// кассы/заказ, затем чек ОФД, затем банковская операция.
+const typeOrder: Record<string, number> = { payment: 0, receipt_kassa: 1, receipt_order: 1, receipt_ofd: 2, money: 3 };
+
+/**
+ * Группирует плоский список транзакций в связанные цепочки (платёж -> чек
+ * кассы -> чек ОФД) через систему непересекающихся множеств (union-find).
+ * Бэкенд размечает связь только в одну сторону от каждой записи (платёж
+ * знает про свой чек, чек ОФД и чек кассы знают друг про друга по
+ * фискальным реквизитам) - этого достаточно: если хотя бы одна из двух
+ * записей объявляет связь, они попадают в одну группу, а транзитивность
+ * union-find сама достраивает цепочку из 3 документов.
+ */
+export const groupTransactions = (transactions: Transaction[]): TransactionGroup[] => {
+  const byKey = new Map(transactions.map((t) => [nodeKey(t), t]));
+
+  // Первый (авто-only) union-find - только по linked_id, БЕЗ ручных связей.
+  // Каждый его корень - это одна физическая "сделка" (платёж + его чек кассы
+  // + его чек ОФД - все три источника про ОДНО и то же движение денег).
+  // Нужен отдельно от финального группирования, чтобы при ручной склейке
+  // (см. ниже) не просуммировать одну и ту же сделку несколько раз и не
+  // потерять вторую сделку, если пользователь вручную соединил, например,
+  // продажу с отдельным возвратом.
+  const autoUF = makeUnionFind();
   transactions.forEach((t) => {
     const a = nodeKey(t);
-    find(a);
+    autoUF.find(a);
     if (t.linked_id && t.linked_type && t.linked_source) {
       const b = `${t.linked_type}:${t.linked_source}:${t.linked_id}`;
-      if (byKey.has(b)) union(a, b);
+      if (byKey.has(b)) autoUF.union(a, b);
     }
   });
 
-  // Ручная связь пользователя (кнопка "Связать") - все транзакции с
-  // одинаковым manual_group_id объединяются в ту же группу, что и
-  // автоматические связи, транзитивность union-find сама достроит цепочку,
-  // если ручная и автоматическая связи пересекаются.
+  // Финальный union-find - начинается от тех же авто-связей, затем поверх
+  // накладывается ручная связка пользователя (кнопка "Связать"): все
+  // транзакции с одинаковым manual_group_id объединяются в одну группу,
+  // транзитивность union-find сама достроит цепочку, если ручная и
+  // автоматическая связи пересекаются.
+  const finalUF = makeUnionFind();
+  transactions.forEach((t) => {
+    const a = nodeKey(t);
+    finalUF.find(a);
+    if (t.linked_id && t.linked_type && t.linked_source) {
+      const b = `${t.linked_type}:${t.linked_source}:${t.linked_id}`;
+      if (byKey.has(b)) finalUF.union(a, b);
+    }
+  });
   const byManualGroup = new Map<string, string[]>();
   transactions.forEach((t) => {
     if (!t.manual_group_id) return;
@@ -79,17 +120,15 @@ export const groupTransactions = (transactions: Transaction[]): TransactionGroup
     byManualGroup.set(t.manual_group_id, list);
   });
   byManualGroup.forEach((keys) => {
-    for (let i = 1; i < keys.length; i++) union(keys[0], keys[i]);
+    for (let i = 1; i < keys.length; i++) finalUF.union(keys[0], keys[i]);
   });
 
   const groupsMap = new Map<string, Transaction[]>();
   transactions.forEach((t) => {
-    const root = find(nodeKey(t));
+    const root = finalUF.find(nodeKey(t));
     if (!groupsMap.has(root)) groupsMap.set(root, []);
     (groupsMap.get(root) as Transaction[]).push(t);
   });
-
-  const typeOrder: Record<string, number> = { payment: 0, receipt_kassa: 1, receipt_order: 1, receipt_ofd: 2, money: 3 };
 
   const computeStatus = (items: Transaction[]): { status: GroupStatus; isManual: boolean } => {
     const isManual = items.some((i) => i.manual_group_id);
@@ -101,6 +140,28 @@ export const groupTransactions = (transactions: Transaction[]): TransactionGroup
     return { status: 'matched', isManual: false };
   };
 
+  // Сумма группы = сумма ПО КАЖДОЙ РЕАЛЬНОЙ СДЕЛКЕ внутри группы один раз,
+  // а не сумма всех строк. Иначе один и тот же факт движения денег,
+  // отражённый в 2-3 источниках (платёж + чек кассы + чек ОФД), утроил бы
+  // итог. Сделки внутри группы различаются по корню авто-union-find -
+  // для каждой такой подгруппы берём signed_amount одного представителя
+  // (по typeOrder) и суммируем представителей.
+  const computeTotal = (items: Transaction[]): number => {
+    const byDeal = new Map<string, Transaction[]>();
+    items.forEach((t) => {
+      const dealRoot = autoUF.find(nodeKey(t));
+      const list = byDeal.get(dealRoot) ?? [];
+      list.push(t);
+      byDeal.set(dealRoot, list);
+    });
+    let total = 0;
+    byDeal.forEach((dealItems) => {
+      const representative = [...dealItems].sort((a, b) => (typeOrder[a.type] ?? 9) - (typeOrder[b.type] ?? 9))[0];
+      total += representative.signed_amount ?? representative.amount ?? 0;
+    });
+    return total;
+  };
+
   return Array.from(groupsMap.entries())
     .map(([id, items]) => {
       const { status, isManual } = computeStatus(items);
@@ -108,7 +169,8 @@ export const groupTransactions = (transactions: Transaction[]): TransactionGroup
         id,
         items: [...items].sort((a, b) => (typeOrder[a.type] ?? 9) - (typeOrder[b.type] ?? 9)),
         status,
-        isManual
+        isManual,
+        totalAmount: computeTotal(items)
       };
     })
     .sort((a, b) => {
