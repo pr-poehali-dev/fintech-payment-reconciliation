@@ -6,6 +6,7 @@ import psycopg2
 import psycopg2.extras
 import urllib.request
 import urllib.error
+from concurrent.futures import ThreadPoolExecutor
 from typing import Dict, Any, List, Optional
 from datetime import datetime, timedelta
 
@@ -116,34 +117,14 @@ def fetch_tbank_account_statement(cur, integration_id: int, company_id: int, con
     return all_operations
 
 
-def fetch_tochka_account_statement(cur, integration_id: int, company_id: int, config: Dict[str, Any],
-                                    date_from: str, date_to: str) -> Optional[List[Dict[str, Any]]]:
+def fetch_tochka_statement_window(api_token: str, account_id: str, base_url: str,
+                                   start_date: str, end_date: str, deadline: float) -> Optional[List[Dict[str, Any]]]:
     '''
-    Точка Банк отдаёт выписку асинхронно: сначала Init Statement (заказ выписки),
-    затем поллинг Get Statement пока статус не станет Ready.
-    https://developers.tochka.com/docs/tochka-api/opisanie-metodov/vypiski
-
-    Особенности реального API (отличаются от типичного Open Banking, проверено
-    прямыми запросами к enter.tochka.com):
-    - тело Init Statement должно быть обёрнуто в {"Data": {"Statement": {...}}},
-      а не плоским объектом - иначе 400 "Field Data : Field required";
-    - startDateTime/endDateTime обязаны быть датами с нулевым временем
-      (полночь UTC) - "23:59:59" в конце дня Точка отклоняет как невалидную
-      дату ("Datetimes provided to dates should have zero time");
-    - Get Statement оборачивает результат в Data.Statement как МАССИВ из
-      одного элемента (не объект), внутри - статус и список Transaction.
+    Одно окно Init Statement -> поллинг Get Statement для периода [start_date, end_date]
+    (обе даты 'YYYY-MM-DD'). deadline - time.monotonic(), после которого поллинг
+    прекращается независимо от статуса (используется, чтобы уложиться в таймаут
+    Cloud Function при нескольких окнах подряд - см. fetch_tochka_account_statement).
     '''
-    # Чистим невидимые символы (BOM, zero-width space), которые иногда
-    # попадают при копировании токена - иначе latin-1 кодировка HTTP-заголовков
-    # падает с UnicodeEncodeError до отправки запроса. См. tochka-accounts-list.
-    api_token = re.sub(r'[^\x21-\x7e]', '', config.get('api_token', ''))
-    account_id = config.get('account_number', '')
-    keywords = get_purpose_keywords(config)
-    base_url = 'https://enter.tochka.com/uapi/open-banking/v1.0'
-
-    start_date = date_from[:10]
-    end_date = date_to[:10]
-
     init_req = urllib.request.Request(
         f'{base_url}/statements',
         data=json.dumps({
@@ -180,12 +161,8 @@ def fetch_tochka_account_statement(cur, integration_id: int, company_id: int, co
     get_url = f'{base_url}/accounts/{account_id}/statements/{statement_id}'
     get_req = urllib.request.Request(get_url, headers={'Authorization': f'Bearer {api_token}'})
 
-    # Формирование выписки у Точки обычно укладывается в 1-2 секунды (проверено
-    # прямыми запросами - Ready приходит уже на 2-3 попытке) - опрашиваем часто
-    # (0.5 сек) и недолго, чтобы уложиться в таймаут Cloud Function (5 сек)
-    # вместе с Init Statement и batch-вставкой транзакций в БД.
     raw_transactions = None
-    for _ in range(6):
+    while time.monotonic() < deadline:
         try:
             with urllib.request.urlopen(get_req, timeout=15, context=TOCHKA_SSL_CONTEXT) as response:
                 statement_data = json.loads(response.read().decode('utf-8'))
@@ -205,7 +182,76 @@ def fetch_tochka_account_statement(cur, integration_id: int, company_id: int, co
         time.sleep(0.5)
 
     if raw_transactions is None:
-        print('[DEBUG] Tochka statement never became Ready in time')
+        print(f'[DEBUG] Tochka statement {start_date}..{end_date} never became Ready before deadline')
+
+    return raw_transactions
+
+
+def fetch_tochka_account_statement(cur, integration_id: int, company_id: int, config: Dict[str, Any],
+                                    date_from: str, date_to: str) -> Optional[List[Dict[str, Any]]]:
+    '''
+    Точка Банк отдаёт выписку асинхронно: сначала Init Statement (заказ выписки),
+    затем поллинг Get Statement пока статус не станет Ready.
+    https://developers.tochka.com/docs/tochka-api/opisanie-metodov/vypiski
+
+    Особенности реального API (отличаются от типичного Open Banking, проверено
+    прямыми запросами к enter.tochka.com):
+    - тело Init Statement должно быть обёрнуто в {"Data": {"Statement": {...}}},
+      а не плоским объектом - иначе 400 "Field Data : Field required";
+    - startDateTime/endDateTime обязаны быть датами с нулевым временем
+      (полночь UTC) - "23:59:59" в конце дня Точка отклоняет как невалидную
+      дату ("Datetimes provided to dates should have zero time");
+    - Get Statement оборачивает результат в Data.Statement как МАССИВ из
+      одного элемента (не объект), внутри - статус и список Transaction;
+    - КЛЮЧЕВОЕ: время формирования выписки у Точки растёт нелинейно с длиной
+      периода - окно в 7 дней готово за ~1-2 сек, а окно в 30 дней может
+      идти 15-20+ сек (проверено прямыми запросами), что не укладывается в
+      таймаут Cloud Function. При этом кнопка "Синхронизировать сейчас" и
+      диалог дозагрузки по умолчанию запрашивают именно последние 30 дней -
+      без разбивки на части выписка просто не успевала стать Ready, функция
+      возвращала "Не удалось получить выписку от банка", и НИ ОДНА операция
+      (ни приходы, ни расходы) за весь период не сохранялась. Поэтому период
+      здесь режется на недельные окна и запрашивается ПАРАЛЛЕЛЬНО (свой
+      statementId на каждое окно, запросы независимы) - иначе даже недельные
+      окна одно за другим на месячном периоде не укладываются в таймаут.
+    '''
+    # Чистим невидимые символы (BOM, zero-width space), которые иногда
+    # попадают при копировании токена - иначе latin-1 кодировка HTTP-заголовков
+    # падает с UnicodeEncodeError до отправки запроса. См. tochka-accounts-list.
+    api_token = re.sub(r'[^\x21-\x7e]', '', config.get('api_token', ''))
+    account_id = config.get('account_number', '')
+    keywords = get_purpose_keywords(config)
+    base_url = 'https://enter.tochka.com/uapi/open-banking/v1.0'
+
+    start_date = datetime.fromisoformat(date_from[:10])
+    end_date = datetime.fromisoformat(date_to[:10])
+
+    WINDOW_DAYS = 7
+    # Общий бюджет на все окна с запасом под остаток работы функции (batch-вставка
+    # в БД, разбор JSON) - таймаут Cloud Function 5 сек по умолчанию, оставляем запас.
+    deadline = time.monotonic() + 4.0
+
+    windows: List[tuple] = []
+    cursor = start_date
+    while cursor < end_date:
+        window_end = min(cursor + timedelta(days=WINDOW_DAYS), end_date)
+        windows.append((cursor.strftime('%Y-%m-%d'), window_end.strftime('%Y-%m-%d')))
+        cursor = window_end
+
+    raw_transactions: List[Dict[str, Any]] = []
+    any_window_succeeded = False
+    with ThreadPoolExecutor(max_workers=min(8, len(windows) or 1)) as executor:
+        futures = [
+            executor.submit(fetch_tochka_statement_window, api_token, account_id, base_url, win_start, win_end, deadline)
+            for win_start, win_end in windows
+        ]
+        for future in futures:
+            window_tx = future.result()
+            if window_tx is not None:
+                raw_transactions.extend(window_tx)
+                any_window_succeeded = True
+
+    if not any_window_succeeded:
         return None
 
     result = []
