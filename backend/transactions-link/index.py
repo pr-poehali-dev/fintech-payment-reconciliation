@@ -1,0 +1,150 @@
+import json
+import os
+import uuid
+
+import psycopg2
+from typing import Any, Dict, List
+
+SCHEMA = 't_p83864310_fintech_payment_reco'
+
+CORS_HEADERS = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'POST, DELETE, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Max-Age': '86400'
+}
+
+ALLOWED_TYPES = {'payment', 'receipt_ofd', 'receipt_kassa', 'receipt_order', 'money'}
+
+
+def response(status: int, body: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        'statusCode': status,
+        'headers': {**CORS_HEADERS, 'Content-Type': 'application/json'},
+        'body': json.dumps(body, ensure_ascii=False),
+        'isBase64Encoded': False
+    }
+
+
+def validate_items(items: Any) -> List[Dict[str, Any]]:
+    '''Проверяет и нормализует список {type, source, id} из тела запроса.'''
+    if not isinstance(items, list):
+        raise ValueError('items must be a list')
+    result = []
+    for item in items:
+        if not isinstance(item, dict):
+            raise ValueError('each item must be an object')
+        t = item.get('type')
+        s = item.get('source')
+        i = item.get('id')
+        if t not in ALLOWED_TYPES:
+            raise ValueError(f'invalid type: {t}')
+        if not s or not isinstance(s, str):
+            raise ValueError('source is required')
+        try:
+            i = int(i)
+        except (TypeError, ValueError):
+            raise ValueError('id must be an integer')
+        result.append({'type': t, 'source': s, 'id': i})
+    return result
+
+
+def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
+    '''
+    Ручная связка транзакций пользователем в реестре "Транзакции" - кнопка
+    "Связать", появляется когда выбрано 2+ транзакций галочками.
+    POST: создаёт новую группу связи (manual_transaction_links) - каждая
+    переданная транзакция (type/source/id) становится членом одной группы
+    с новым link_group_id (UUID). Если транзакция уже состоит в другой
+    ручной группе - её старая привязка молча заменяется новой (UNIQUE на
+    company_id+tx_type+tx_source+tx_id, ON CONFLICT DO UPDATE), т.к. у
+    одной транзакции может быть только одна ручная группа одновременно.
+    DELETE: разрывает ручную связь - удаляет ВСЮ группу (все транзакции с
+    тем же link_group_id), которой принадлежит указанная транзакция. Это
+    осознанное решение - "разорвать связь" для пользователя означает разбить
+    группу целиком, а не выкинуть из неё одну запись (для этого есть кнопка
+    "Удалить" самой транзакции).
+    Args (POST body): company_id (обязателен), items[] ([{type, source, id}],
+    минимум 2 элемента)
+    Args (DELETE body): company_id (обязателен), item ({type, source, id}) -
+    любая транзакция из группы, которую нужно разорвать
+    Returns: POST - {success, link_group_id}; DELETE - {success, removed_count}
+    '''
+
+    method = event.get('httpMethod', 'POST')
+
+    if method == 'OPTIONS':
+        return {'statusCode': 200, 'headers': CORS_HEADERS, 'body': '', 'isBase64Encoded': False}
+
+    if method not in ('POST', 'DELETE'):
+        return response(405, {'error': 'Method not allowed'})
+
+    body = json.loads(event.get('body', '{}') or '{}')
+    company_id = body.get('company_id')
+
+    if not company_id:
+        return response(400, {'error': 'company_id required'})
+
+    dsn = os.environ['DATABASE_URL']
+    conn = psycopg2.connect(dsn)
+    cur = conn.cursor()
+
+    try:
+        if method == 'POST':
+            try:
+                items = validate_items(body.get('items'))
+            except ValueError as e:
+                return response(400, {'error': str(e)})
+
+            if len(items) < 2:
+                return response(400, {'error': 'Нужно выбрать минимум 2 транзакции для связи'})
+
+            group_id = str(uuid.uuid4())
+            for item in items:
+                cur.execute(f'''
+                    INSERT INTO {SCHEMA}.manual_transaction_links
+                        (company_id, link_group_id, tx_type, tx_source, tx_id)
+                    VALUES (%s, %s, %s, %s, %s)
+                    ON CONFLICT (company_id, tx_type, tx_source, tx_id) DO UPDATE SET
+                        link_group_id = EXCLUDED.link_group_id,
+                        created_at = NOW()
+                ''', (company_id, group_id, item['type'], item['source'], item['id']))
+
+            conn.commit()
+            return response(200, {'success': True, 'link_group_id': group_id})
+
+        # DELETE - разорвать группу, которой принадлежит указанная транзакция
+        item = body.get('item')
+        if not isinstance(item, dict):
+            return response(400, {'error': 'item required'})
+        try:
+            items = validate_items([item])
+        except ValueError as e:
+            return response(400, {'error': str(e)})
+        target = items[0]
+
+        cur.execute(f'''
+            SELECT link_group_id FROM {SCHEMA}.manual_transaction_links
+            WHERE company_id = %s AND tx_type = %s AND tx_source = %s AND tx_id = %s
+        ''', (company_id, target['type'], target['source'], target['id']))
+        row = cur.fetchone()
+
+        if not row:
+            return response(404, {'error': 'Ручная связь для этой транзакции не найдена'})
+
+        group_id = row[0]
+        cur.execute(f'''
+            DELETE FROM {SCHEMA}.manual_transaction_links
+            WHERE company_id = %s AND link_group_id = %s
+        ''', (company_id, group_id))
+        removed_count = cur.rowcount
+
+        conn.commit()
+        return response(200, {'success': True, 'removed_count': removed_count})
+
+    except Exception as e:
+        conn.rollback()
+        return response(500, {'error': str(e)})
+    finally:
+        cur.close()
+        conn.close()

@@ -1,0 +1,1 @@
+UPDATE t_p83864310_fintech_payment_reco.webhook_payments SET removed_at = NULL WHERE id = 2;

@@ -150,13 +150,23 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     - деньги на р/с намеренно НЕ связываются автоматически - в банковской
       выписке нет номера заказа, только сумма/дата/назначение платежа,
       слишком велик риск ложных совпадений.
+    УДАЛЁННЫЕ (removed_at) транзакции полностью исключены из всех 5 запросов
+    и из LATERAL-подзапросов связывания - "мягко удалённая" запись не
+    участвует ни в списке, ни как чужая пара для связывания.
+
+    РУЧНЫЕ СВЯЗИ (manual_transaction_links, кнопка "Связать" в реестре):
+    каждой строке проставляется manual_group_id, если она входит в группу,
+    связанную пользователем вручную - фронтенд объединяет такие записи в
+    одну группу наравне с автоматическими (linked_id), см.
+    transactionGrouping.ts.
     Args: company_id (обязателен), type (payment/receipt_ofd/receipt_kassa/
     receipt_order/money/receipt-алиас на все 3 вида чеков, опционально),
     limit, offset (опционально)
     Returns: transactions[] с полями type, source, id, occurred_at, amount,
     signed_amount, status, title, subtitle, integration_name, reference,
     raw_data, linked_type, linked_source, linked_id, match_method,
-    webhook_history (только для payment с несколькими вебхуками).
+    manual_group_id, webhook_history (только для payment с несколькими
+    вебхуками).
     totals_by_type[].amount - это сумма signed_amount (нетто, с учётом
     возвратов), totals_by_type[].count - число документов без вычетов.
     '''
@@ -224,11 +234,12 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 FROM {SCHEMA}.webhook_payments wp
                 JOIN {SCHEMA}.user_integrations ui ON ui.id = wp.integration_id
                 JOIN {SCHEMA}.integration_providers p ON p.id = ui.provider_id
-                LEFT JOIN {SCHEMA}.ecomkassa_receipts rid_ekr ON rid_ekr.id = wp.receipt_id
+                LEFT JOIN {SCHEMA}.ecomkassa_receipts rid_ekr ON rid_ekr.id = wp.receipt_id AND rid_ekr.removed_at IS NULL
                 LEFT JOIN LATERAL (
                     SELECT ekr.id, ekr.order_type
                     FROM {SCHEMA}.ecomkassa_receipts ekr
                     WHERE ekr.company_id = wp.company_id
+                      AND ekr.removed_at IS NULL
                       AND wp.receipt_id IS NULL
                       AND (
                         ekr.order_id = wp.order_id OR ekr.order_id = wp.payment_id OR
@@ -240,7 +251,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                       )
                     LIMIT 1
                 ) km ON true
-                WHERE wp.company_id = %(company_id)s AND ui.status != 'deleted'
+                WHERE wp.company_id = %(company_id)s AND ui.status != 'deleted' AND wp.removed_at IS NULL
             ''')
 
         if wants(type_filter, 'receipt_ofd'):
@@ -269,6 +280,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     SELECT ekr.id
                     FROM {SCHEMA}.ecomkassa_receipts ekr
                     WHERE ekr.company_id = ofd.company_id
+                      AND ekr.removed_at IS NULL
                       AND ofd.fn_number IS NOT NULL
                       AND ofd.doc_number IS NOT NULL
                       AND (ofd.raw_data->>'DecimalFiscalSign') IS NOT NULL
@@ -277,7 +289,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                       AND (ekr.raw_data->'payload'->>'fiscal_document_attribute') = (ofd.raw_data->>'DecimalFiscalSign')
                     LIMIT 1
                 ) km ON true
-                WHERE ofd.company_id = %(company_id)s
+                WHERE ofd.company_id = %(company_id)s AND ofd.removed_at IS NULL
             ''')
 
         if wants(type_filter, 'receipt_kassa'):
@@ -306,6 +318,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     SELECT ofd.id, ofd.operation_type
                     FROM {SCHEMA}.ofd_receipts ofd
                     WHERE ofd.company_id = ekr.company_id
+                      AND ofd.removed_at IS NULL
                       AND (ekr.raw_data->'payload'->>'fn_number') IS NOT NULL
                       AND (ekr.raw_data->'payload'->>'fiscal_document_number') IS NOT NULL
                       AND (ekr.raw_data->'payload'->>'fiscal_document_attribute') IS NOT NULL
@@ -314,7 +327,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                       AND (ofd.raw_data->>'DecimalFiscalSign') = (ekr.raw_data->'payload'->>'fiscal_document_attribute')
                     LIMIT 1
                 ) om ON true
-                WHERE ekr.company_id = %(company_id)s
+                WHERE ekr.company_id = %(company_id)s AND ekr.removed_at IS NULL
                   AND (ekr.order_type IS NULL OR ekr.order_type IN ('VCHR', 'INVC'))
             ''')
 
@@ -344,6 +357,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     SELECT ofd.id, ofd.operation_type
                     FROM {SCHEMA}.ofd_receipts ofd
                     WHERE ofd.company_id = ekr.company_id
+                      AND ofd.removed_at IS NULL
                       AND (ekr.raw_data->'payload'->>'fn_number') IS NOT NULL
                       AND (ekr.raw_data->'payload'->>'fiscal_document_number') IS NOT NULL
                       AND (ekr.raw_data->'payload'->>'fiscal_document_attribute') IS NOT NULL
@@ -352,7 +366,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                       AND (ofd.raw_data->>'DecimalFiscalSign') = (ekr.raw_data->'payload'->>'fiscal_document_attribute')
                     LIMIT 1
                 ) om ON true
-                WHERE ekr.company_id = %(company_id)s
+                WHERE ekr.company_id = %(company_id)s AND ekr.removed_at IS NULL
                   AND ekr.order_type = 'CORD'
             ''')
 
@@ -378,7 +392,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     NULL::text AS linked_ofd_status
                 FROM {SCHEMA}.bank_statement_transactions bst
                 JOIN {SCHEMA}.user_integrations ui ON ui.id = bst.integration_id
-                WHERE bst.company_id = %(company_id)s
+                WHERE bst.company_id = %(company_id)s AND bst.removed_at IS NULL
             ''')
 
         if not parts:
@@ -404,6 +418,18 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         cur.execute(full_query, {'company_id': company_id})
         rows = cur.fetchall()
         columns = [desc[0] for desc in cur.description]
+
+        # Ручные связи (кнопка "Связать" в реестре) - раскладываем в словарь
+        # (type, source, id) -> link_group_id, чтобы приклеить каждой
+        # транзакции её manual_group_id ниже. Группировка по этому полю
+        # выполняется уже на фронте (transactionGrouping.ts), тем же
+        # union-find, что и для автоматических связей.
+        cur.execute(f'''
+            SELECT tx_type, tx_source, tx_id, link_group_id::text
+            FROM {SCHEMA}.manual_transaction_links
+            WHERE company_id = %(company_id)s
+        ''', {'company_id': company_id})
+        manual_links = {(t, s, i): g for t, s, i, g in cur.fetchall()}
 
         # Схлопывание вебхуков одного платежа (payment_id/order_id) в одну
         # транзакцию. Строки уже отсортированы occurred_at DESC на уровне SQL,
@@ -450,6 +476,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             signed = compute_signed_amount(row)
             row['signed_amount'] = signed
             row.pop('linked_ofd_status', None)
+            row['manual_group_id'] = manual_links.get((row['type'], row['source'], row['id']))
 
             t = row['type']
             bucket = totals_by_type.setdefault(t, {'count': 0, 'amount': 0.0, 'matched_count': 0})

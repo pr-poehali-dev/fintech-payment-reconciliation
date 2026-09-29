@@ -3,15 +3,20 @@ import { Transaction, TransactionType } from '@/components/transactions/transact
 // Статус группы для отображения в реестре:
 // - 'reconciled' ("Сверено") - в группе есть и платёж, и хотя бы один чек
 //   (кассы/ОФД/заказ) - это и есть база 54-ФЗ: деньги оплачены и чек пробит;
-// - 'matched' ("Связано") - есть связь, но платежа в группе нет (например,
-//   пара "чек кассы + чек ОФД" без платежа);
+// - 'matched' ("Связано") - есть автоматическая связь, но платежа в группе
+//   нет (например, пара "чек кассы + чек ОФД" без платежа);
+// - 'manual' ("Связано вручную") - группа существует только благодаря явной
+//   связке пользователем (кнопка "Связать"), без единой автоматической
+//   пары внутри - т.е. хотя бы одна пара в группе соединена ТОЛЬКО общим
+//   manual_group_id, а не linked_id;
 // - 'unmatched' ("Нет пары") - запись одна, без связей.
-export type GroupStatus = 'reconciled' | 'matched' | 'unmatched';
+export type GroupStatus = 'reconciled' | 'matched' | 'manual' | 'unmatched';
 
 export interface TransactionGroup {
   id: string;
   items: Transaction[];
   status: GroupStatus;
+  isManual: boolean;
 }
 
 // Уникальный ключ записи: связи типа "чек ОФД" -> "чек кассы" и "чек кассы" ->
@@ -51,6 +56,8 @@ export const groupTransactions = (transactions: Transaction[]): TransactionGroup
     if (ra !== rb) parent.set(ra, rb);
   };
 
+  // Автоматическая связь (по linked_id, размечается бэкендом при совпадении
+  // фискальных реквизитов/receipt_id).
   transactions.forEach((t) => {
     const a = nodeKey(t);
     find(a);
@@ -58,6 +65,21 @@ export const groupTransactions = (transactions: Transaction[]): TransactionGroup
       const b = `${t.linked_type}:${t.linked_source}:${t.linked_id}`;
       if (byKey.has(b)) union(a, b);
     }
+  });
+
+  // Ручная связь пользователя (кнопка "Связать") - все транзакции с
+  // одинаковым manual_group_id объединяются в ту же группу, что и
+  // автоматические связи, транзитивность union-find сама достроит цепочку,
+  // если ручная и автоматическая связи пересекаются.
+  const byManualGroup = new Map<string, string[]>();
+  transactions.forEach((t) => {
+    if (!t.manual_group_id) return;
+    const list = byManualGroup.get(t.manual_group_id) ?? [];
+    list.push(nodeKey(t));
+    byManualGroup.set(t.manual_group_id, list);
+  });
+  byManualGroup.forEach((keys) => {
+    for (let i = 1; i < keys.length; i++) union(keys[0], keys[i]);
   });
 
   const groupsMap = new Map<string, Transaction[]>();
@@ -69,19 +91,26 @@ export const groupTransactions = (transactions: Transaction[]): TransactionGroup
 
   const typeOrder: Record<string, number> = { payment: 0, receipt_kassa: 1, receipt_order: 1, receipt_ofd: 2, money: 3 };
 
-  const computeStatus = (items: Transaction[]): GroupStatus => {
-    if (items.length <= 1) return 'unmatched';
+  const computeStatus = (items: Transaction[]): { status: GroupStatus; isManual: boolean } => {
+    const isManual = items.some((i) => i.manual_group_id);
+    if (items.length <= 1) return { status: 'unmatched', isManual: false };
     const hasPayment = items.some((i) => i.type === 'payment');
     const hasReceipt = items.some((i) => i.type === 'receipt_kassa' || i.type === 'receipt_ofd' || i.type === 'receipt_order');
-    return hasPayment && hasReceipt ? 'reconciled' : 'matched';
+    if (hasPayment && hasReceipt) return { status: 'reconciled', isManual };
+    if (isManual) return { status: 'manual', isManual: true };
+    return { status: 'matched', isManual: false };
   };
 
   return Array.from(groupsMap.entries())
-    .map(([id, items]) => ({
-      id,
-      items: [...items].sort((a, b) => (typeOrder[a.type] ?? 9) - (typeOrder[b.type] ?? 9)),
-      status: computeStatus(items)
-    }))
+    .map(([id, items]) => {
+      const { status, isManual } = computeStatus(items);
+      return {
+        id,
+        items: [...items].sort((a, b) => (typeOrder[a.type] ?? 9) - (typeOrder[b.type] ?? 9)),
+        status,
+        isManual
+      };
+    })
     .sort((a, b) => {
       const latest = (items: Transaction[]) =>
         Math.max(...items.map((i) => (i.occurred_at ? new Date(i.occurred_at).getTime() : 0)));

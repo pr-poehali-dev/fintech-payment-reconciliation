@@ -1,4 +1,6 @@
 {
+  "transactions-remove": "https://functions.poehali.dev/c5100180-b141-4e21-8470-9c27ad0ec2a7",
+  "transactions-link": "https://functions.poehali.dev/60561bb0-88bd-45c0-babf-7902b1242bdc",
   "ecomkassa-fetch-orders": "https://functions.poehali.dev/dc01171b-cd60-4a98-b96c-5d167bc1add8",
   "transactions-list": "https://functions.poehali.dev/d977ccf7-aaab-48a4-b418-798c34bc70ec",
   "company-settings-update": "https://functions.poehali.dev/72151df3-051d-408f-92ca-e0af9cdc0c1d",

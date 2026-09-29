@@ -8,6 +8,7 @@ import { useBackfill } from '@/contexts/BackfillContext';
 import TransactionsTable from '@/components/transactions/TransactionsTable';
 import TransactionsFilters from '@/components/transactions/TransactionsFilters';
 import TransactionDetailsDialog from '@/components/transactions/TransactionDetailsDialog';
+import DeleteTransactionsDialog from '@/components/transactions/DeleteTransactionsDialog';
 import BackfillDialog from '@/components/transactions/BackfillDialog';
 import { Transaction, TransactionTotalsByType } from '@/components/transactions/transactionsTypes';
 import { groupTransactions, computeMatchedKeys, nodeKey } from '@/lib/transactionGrouping';
@@ -26,6 +27,10 @@ const TransactionsPage = () => {
   const [hasEcomkassa, setHasEcomkassa] = useState(false);
   const [hasOfd, setHasOfd] = useState(false);
   const [bankIntegrations, setBankIntegrations] = useState<{ id: number; name: string }[]>([]);
+  const [selectedTxByKey, setSelectedTxByKey] = useState<Map<string, Transaction>>(new Map());
+  const [isLinking, setIsLinking] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const { toast } = useToast();
   const { currentCompany } = useAuth();
   const companyId = currentCompany?.id;
@@ -125,6 +130,89 @@ const TransactionsPage = () => {
   const handleRowClick = (tx: Transaction) => {
     setSelectedTx(tx);
     setShowDetails(true);
+  };
+
+  const handleToggleSelect = (tx: Transaction) => {
+    setSelectedTxByKey((prev) => {
+      const next = new Map(prev);
+      const key = nodeKey(tx);
+      if (next.has(key)) next.delete(key);
+      else next.set(key, tx);
+      return next;
+    });
+  };
+
+  const clearSelection = () => setSelectedTxByKey(new Map());
+
+  const handleLink = async () => {
+    if (!companyId || selectedTxByKey.size < 2) return;
+    setIsLinking(true);
+    try {
+      const items = Array.from(selectedTxByKey.values()).map((tx) => ({
+        type: tx.type,
+        source: tx.source,
+        id: tx.id
+      }));
+      const response = await fetch(functionUrls['transactions-link'], {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ company_id: companyId, items })
+      });
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        toast({ title: 'Связано', description: `Транзакции (${items.length}) объединены в одну группу` });
+        clearSelection();
+        fetchTransactions();
+      } else {
+        toast({
+          title: 'Не удалось связать',
+          description: data.error || 'Попробуйте ещё раз',
+          variant: 'destructive'
+        });
+      }
+    } catch {
+      toast({ title: 'Ошибка подключения', description: 'Проверьте интернет-соединение', variant: 'destructive' });
+    } finally {
+      setIsLinking(false);
+    }
+  };
+
+  const handleDeleteConfirmed = async () => {
+    if (!companyId || selectedTxByKey.size === 0) return;
+    setIsDeleting(true);
+    try {
+      const items = Array.from(selectedTxByKey.values()).map((tx) => ({ type: tx.type, id: tx.id }));
+      const response = await fetch(functionUrls['transactions-remove'], {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ company_id: companyId, items })
+      });
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        const skippedCount = data.skipped?.length || 0;
+        toast({
+          title: 'Удалено',
+          description: skippedCount > 0
+            ? `Удалено ${data.removed_count} из ${items.length} — часть записей уже не найдена`
+            : `Удалено транзакций: ${data.removed_count}`
+        });
+        clearSelection();
+        setShowDeleteConfirm(false);
+        fetchTransactions();
+      } else {
+        toast({
+          title: 'Не удалось удалить',
+          description: data.error || 'Попробуйте ещё раз',
+          variant: 'destructive'
+        });
+      }
+    } catch {
+      toast({ title: 'Ошибка подключения', description: 'Проверьте интернет-соединение', variant: 'destructive' });
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   // Связь считается по группе (union-find по всему списку), а не по
@@ -281,14 +369,44 @@ const TransactionsPage = () => {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <TransactionsFilters
-            searchQuery={searchQuery}
-            setSearchQuery={setSearchQuery}
-            showUnmatchedOnly={showUnmatchedOnly}
-            setShowUnmatchedOnly={setShowUnmatchedOnly}
-          />
+          <div className="flex items-center gap-3 flex-wrap">
+            <TransactionsFilters
+              searchQuery={searchQuery}
+              setSearchQuery={setSearchQuery}
+              showUnmatchedOnly={showUnmatchedOnly}
+              setShowUnmatchedOnly={setShowUnmatchedOnly}
+            />
+            {selectedTxByKey.size > 0 && (
+              <div className="flex items-center gap-2 ml-auto">
+                <span className="text-sm text-muted-foreground">Выбрано: {selectedTxByKey.size}</span>
+                {selectedTxByKey.size >= 2 && (
+                  <Button size="sm" variant="outline" className="gap-1.5" onClick={handleLink} disabled={isLinking}>
+                    <Icon name={isLinking ? 'Loader2' : 'Link2'} size={14} className={isLinking ? 'animate-spin' : ''} />
+                    Связать
+                  </Button>
+                )}
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="gap-1.5 text-destructive border-destructive/30 hover:bg-destructive/10 hover:text-destructive"
+                  onClick={() => setShowDeleteConfirm(true)}
+                >
+                  <Icon name="Trash2" size={14} />
+                  Удалить
+                </Button>
+                <Button size="sm" variant="ghost" onClick={clearSelection}>
+                  Отменить
+                </Button>
+              </div>
+            )}
+          </div>
 
-          <TransactionsTable groups={groups} onRowClick={handleRowClick} />
+          <TransactionsTable
+            groups={groups}
+            onRowClick={handleRowClick}
+            selectedKeys={new Set(selectedTxByKey.keys())}
+            onToggleSelect={handleToggleSelect}
+          />
         </CardContent>
       </Card>
 
@@ -303,6 +421,14 @@ const TransactionsPage = () => {
         }
         open={showDetails}
         onOpenChange={setShowDetails}
+      />
+
+      <DeleteTransactionsDialog
+        open={showDeleteConfirm}
+        count={selectedTxByKey.size}
+        onOpenChange={setShowDeleteConfirm}
+        onConfirm={handleDeleteConfirmed}
+        isDeleting={isDeleting}
       />
 
       <BackfillDialog

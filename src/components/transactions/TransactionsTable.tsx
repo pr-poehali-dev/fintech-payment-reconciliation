@@ -1,6 +1,7 @@
 import { useState, Fragment } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import Icon from '@/components/ui/icon';
 import {
   Table,
@@ -11,7 +12,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Transaction } from './transactionsTypes';
-import { TransactionGroup } from '@/lib/transactionGrouping';
+import { TransactionGroup, nodeKey } from '@/lib/transactionGrouping';
 import { useAuth } from '@/contexts/AuthContext';
 import { formatDateTime, DEFAULT_TIMEZONE } from '@/lib/formatDate';
 import { ofdOperationTypeLabel, ofdOperationTypeColorClass } from '@/lib/ofdOperationType';
@@ -19,6 +20,8 @@ import { ofdOperationTypeLabel, ofdOperationTypeColorClass } from '@/lib/ofdOper
 interface TransactionsTableProps {
   groups: TransactionGroup[];
   onRowClick: (transaction: Transaction) => void;
+  selectedKeys: Set<string>;
+  onToggleSelect: (tx: Transaction) => void;
 }
 
 const typeConfig: Record<string, { icon: string; label: string; className: string }> = {
@@ -61,7 +64,7 @@ const getStatusDisplay = (tx: { type: string; status: string | null }) => {
   return { label: tx.status, color: getStatusColor(tx.status) };
 };
 
-const TransactionsTable = ({ groups, onRowClick }: TransactionsTableProps) => {
+const TransactionsTable = ({ groups, onRowClick, selectedKeys, onToggleSelect }: TransactionsTableProps) => {
   const { currentCompany } = useAuth();
   const timezone = currentCompany?.timezone || DEFAULT_TIMEZONE;
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -108,6 +111,13 @@ const TransactionsTable = ({ groups, onRowClick }: TransactionsTableProps) => {
         className={`cursor-pointer hover:bg-muted/50 ${isSecondary ? 'bg-muted/20' : ''}`}
         onClick={() => onRowClick(tx)}
       >
+        <TableCell className="w-10" onClick={(e) => e.stopPropagation()}>
+          <Checkbox
+            checked={selectedKeys.has(nodeKey(tx))}
+            onCheckedChange={() => onToggleSelect(tx)}
+            aria-label="Выбрать транзакцию"
+          />
+        </TableCell>
         <TableCell className={isSecondary ? 'pl-10' : ''}>
           {isSecondary && <Icon name="CornerDownRight" size={13} className="inline mr-1.5 text-muted-foreground" />}
           <Badge variant="outline" className={`gap-1.5 ${config.className}`}>
@@ -147,6 +157,7 @@ const TransactionsTable = ({ groups, onRowClick }: TransactionsTableProps) => {
       <Table>
         <TableHeader>
           <TableRow>
+            <TableHead className="w-10" />
             <TableHead>Тип</TableHead>
             <TableHead>Дата и время</TableHead>
             <TableHead>Описание</TableHead>
@@ -159,7 +170,7 @@ const TransactionsTable = ({ groups, onRowClick }: TransactionsTableProps) => {
         <TableBody>
           {groups.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+              <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                 Транзакции не найдены
               </TableCell>
             </TableRow>
@@ -168,6 +179,7 @@ const TransactionsTable = ({ groups, onRowClick }: TransactionsTableProps) => {
               const [primary, ...rest] = group.items;
               const isMatched = group.items.length > 1;
               const isReconciled = group.status === 'reconciled';
+              const isManual = group.status === 'manual';
               const isExpanded = expanded.has(group.id);
               const config = typeConfig[primary.type] || typeConfig.payment;
 
@@ -177,6 +189,13 @@ const TransactionsTable = ({ groups, onRowClick }: TransactionsTableProps) => {
                     className="cursor-pointer hover:bg-muted/50"
                     onClick={() => onRowClick(primary)}
                   >
+                    <TableCell className="w-10" onClick={(e) => e.stopPropagation()}>
+                      <Checkbox
+                        checked={selectedKeys.has(nodeKey(primary))}
+                        onCheckedChange={() => onToggleSelect(primary)}
+                        aria-label="Выбрать транзакцию"
+                      />
+                    </TableCell>
                     <TableCell>
                       <Badge variant="outline" className={`gap-1.5 ${config.className}`}>
                         <Icon name={config.icon as any} size={12} />
@@ -216,6 +235,8 @@ const TransactionsTable = ({ groups, onRowClick }: TransactionsTableProps) => {
                           className={
                             isReconciled
                               ? 'h-7 gap-1.5 bg-success/10 text-success border-success/30 hover:bg-success/20 hover:text-success'
+                              : isManual
+                              ? 'h-7 gap-1.5 bg-violet-500/10 text-violet-400 border-violet-500/30 hover:bg-violet-500/20'
                               : 'h-7 gap-1.5 bg-info/10 text-info border-info/30 hover:bg-info/20 hover:text-info'
                           }
                           onClick={(e) => {
@@ -223,8 +244,8 @@ const TransactionsTable = ({ groups, onRowClick }: TransactionsTableProps) => {
                             toggleExpand(group.id);
                           }}
                         >
-                          <Icon name={isReconciled ? 'ShieldCheck' : 'Link2'} size={12} />
-                          {isReconciled ? 'Сверено' : 'Связано'} ({group.items.length})
+                          <Icon name={isReconciled ? 'ShieldCheck' : isManual ? 'Hand' : 'Link2'} size={12} />
+                          {isReconciled ? 'Сверено' : isManual ? 'Связано вручную' : 'Связано'} ({group.items.length})
                           <Icon name={isExpanded ? 'ChevronUp' : 'ChevronDown'} size={12} />
                         </Button>
                       ) : (

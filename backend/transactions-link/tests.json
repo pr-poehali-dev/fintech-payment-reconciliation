@@ -1,0 +1,40 @@
+{
+  "tests": [
+    {
+      "name": "Missing company_id returns 400",
+      "method": "POST",
+      "path": "/",
+      "body": {"items": [{"type": "payment", "source": "tbank", "id": 1}, {"type": "receipt_kassa", "source": "ecomkassa", "id": 2}]},
+      "expectedStatus": 400,
+      "expectedBody": {"error": "string"},
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Less than 2 items returns 400",
+      "method": "POST",
+      "path": "/",
+      "body": {"company_id": 1, "items": [{"type": "payment", "source": "tbank", "id": 1}]},
+      "expectedStatus": 400,
+      "expectedBody": {"error": "string"},
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "DELETE missing item returns 400",
+      "method": "DELETE",
+      "path": "/",
+      "body": {"company_id": 1},
+      "expectedStatus": 400,
+      "expectedBody": {"error": "string"},
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "DELETE non-existent link returns 404",
+      "method": "DELETE",
+      "path": "/",
+      "body": {"company_id": 1, "item": {"type": "payment", "source": "tbank", "id": 999999}},
+      "expectedStatus": 404,
+      "expectedBody": {"error": "string"},
+      "bodyMatcher": "partial"
+    }
+  ]
+}
