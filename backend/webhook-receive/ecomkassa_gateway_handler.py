@@ -48,6 +48,26 @@ ECOMKASSA_BASE_URL = 'https://app.ecomkassa.ru'
 # "Событий"/"Сверки" (см. ecomkassa-gateway-resync).
 RECEIPT_DONE_STATUS = 'done'
 
+# report()/прямой колбэк отдают поле "kind" - по нему надёжно определяется тип
+# документа (VCHR - обычный чек, INVC - счёт на оплату, CORD - курьерский
+# заказ), в отличие от orderType из /orders/search, который доступен только
+# при дозагрузке, а не в вебхуке. Сверяется по префиксу, т.к. Екомкасса
+# использует версии вида CASH_VOUCHER_V2/V3, INVOICE_V2, COURIER_ORDER_V2.
+KIND_TO_ORDER_TYPE = (
+    ('COURIER_ORDER', 'CORD'),
+    ('INVOICE', 'INVC'),
+    ('CASH_VOUCHER', 'VCHR'),
+)
+
+
+def _order_type_from_kind(kind: Optional[str]) -> Optional[str]:
+    if not kind:
+        return None
+    for prefix, order_type in KIND_TO_ORDER_TYPE:
+        if kind.startswith(prefix):
+            return order_type
+    return None
+
 
 def _extract_uid(webhook_data: Dict[str, Any]) -> Optional[str]:
     for key in UID_KEYS:
@@ -110,18 +130,24 @@ def find_cash_register_integration(cur, company_id: int) -> Optional[Tuple[int, 
 def save_receipt_from_report(cur, integration_id: int, company_id: int, uid: str,
                               report_data: Dict[str, Any]) -> Tuple[Optional[int], float, Optional[str]]:
     '''
-    Сохраняет фискальный чек по ответу report(status="done") в ecomkassa_receipts.
-    Для счетов на оплату (kind="INVOICE") report() дополнительно отдаёт invoice_payload
-    с полем "provider" - дискриминатором конкретной платёжной системы внутри шлюза
-    (у одной кассы Екомкассы их может быть подключено больше 10). Сохраняем его
-    отдельной колонкой, чтобы фильтровать события и детализировать сверку по
-    конкретному способу оплаты, а не только по шлюзу в целом.
+    Сохраняет фискальный чек/заказ по ответу report(status="done") в
+    ecomkassa_receipts. Тип документа (order_type) вычисляется из поля "kind"
+    (CASH_VOUCHER_* -> VCHR, INVOICE* -> INVC, COURIER_ORDER* -> CORD) - от
+    него зависит, покажется ли документ в реестре транзакций как обычный чек
+    кассы или как отдельная сущность "Заказ".
+    Для счетов на оплату (kind="INVOICE") и части заказов report() дополнительно
+    отдаёт invoice_payload с полем "provider" - дискриминатором конкретной
+    платёжной системы внутри шлюза (у одной кассы Екомкассы их может быть
+    подключено больше 10). Сохраняем его отдельной колонкой, чтобы фильтровать
+    события и детализировать сверку по конкретному способу оплаты, а не только
+    по шлюзу в целом.
     Returns: (receipt_id, total_sum, payment_provider)
     '''
     payload = report_data.get('payload') or {}
     total_sum = payload.get('total')
     doc_number = payload.get('fiscal_receipt_number') or payload.get('fiscal_document_number')
     doc_datetime = _parse_receipt_datetime(payload.get('receipt_datetime'))
+    order_type = _order_type_from_kind(report_data.get('kind'))
 
     invoice_payload = report_data.get('invoice_payload') or {}
     payment_provider = invoice_payload.get('provider') if isinstance(invoice_payload, dict) else None
@@ -129,19 +155,21 @@ def save_receipt_from_report(cur, integration_id: int, company_id: int, uid: str
     cur.execute('''
         INSERT INTO t_p83864310_fintech_payment_reco.ecomkassa_receipts (
             integration_id, company_id, order_id, legacy_no, status,
-            total_sum, doc_number, doc_datetime, raw_data, payment_provider
-        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            total_sum, doc_number, doc_datetime, raw_data, payment_provider, order_type
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         ON CONFLICT (integration_id, order_id) DO UPDATE SET
             status = EXCLUDED.status,
             total_sum = EXCLUDED.total_sum,
             doc_number = EXCLUDED.doc_number,
             doc_datetime = EXCLUDED.doc_datetime,
             raw_data = EXCLUDED.raw_data,
-            payment_provider = COALESCE(EXCLUDED.payment_provider, t_p83864310_fintech_payment_reco.ecomkassa_receipts.payment_provider)
+            payment_provider = COALESCE(EXCLUDED.payment_provider, t_p83864310_fintech_payment_reco.ecomkassa_receipts.payment_provider),
+            order_type = COALESCE(EXCLUDED.order_type, t_p83864310_fintech_payment_reco.ecomkassa_receipts.order_type)
         RETURNING id
     ''', (
         integration_id, company_id, str(uid), str(uid), RECEIPT_DONE_STATUS,
-        total_sum, str(doc_number) if doc_number else None, doc_datetime, json.dumps(report_data), payment_provider
+        total_sum, str(doc_number) if doc_number else None, doc_datetime, json.dumps(report_data),
+        payment_provider, order_type
     ))
     result = cur.fetchone()
     receipt_id = result[0] if result else None

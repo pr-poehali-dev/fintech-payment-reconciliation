@@ -24,6 +24,7 @@ interface TransactionsTableProps {
 const typeConfig: Record<string, { icon: string; label: string; className: string }> = {
   payment: { icon: 'CreditCard', label: 'Платёж', className: 'bg-primary/10 text-primary border-primary/30' },
   receipt_kassa: { icon: 'Receipt', label: 'Чек кассы', className: 'bg-info/10 text-info border-info/30' },
+  receipt_order: { icon: 'Truck', label: 'Заказ', className: 'bg-orange-500/10 text-orange-400 border-orange-500/30' },
   receipt_ofd: { icon: 'FileCheck', label: 'Чек ОФД', className: 'bg-violet-500/10 text-violet-400 border-violet-500/30' },
   money: { icon: 'Landmark', label: 'Деньги', className: 'bg-success/10 text-success border-success/30' },
 };
@@ -166,6 +167,7 @@ const TransactionsTable = ({ groups, onRowClick }: TransactionsTableProps) => {
             groups.map((group) => {
               const [primary, ...rest] = group.items;
               const isMatched = group.items.length > 1;
+              const isReconciled = group.status === 'reconciled';
               const isExpanded = expanded.has(group.id);
               const config = typeConfig[primary.type] || typeConfig.payment;
 
@@ -211,14 +213,18 @@ const TransactionsTable = ({ groups, onRowClick }: TransactionsTableProps) => {
                         <Button
                           variant="outline"
                           size="sm"
-                          className="h-7 gap-1.5 bg-success/10 text-success border-success/30 hover:bg-success/20 hover:text-success"
+                          className={
+                            isReconciled
+                              ? 'h-7 gap-1.5 bg-success/10 text-success border-success/30 hover:bg-success/20 hover:text-success'
+                              : 'h-7 gap-1.5 bg-info/10 text-info border-info/30 hover:bg-info/20 hover:text-info'
+                          }
                           onClick={(e) => {
                             e.stopPropagation();
                             toggleExpand(group.id);
                           }}
                         >
-                          <Icon name="Link2" size={12} />
-                          Связано ({group.items.length})
+                          <Icon name={isReconciled ? 'ShieldCheck' : 'Link2'} size={12} />
+                          {isReconciled ? 'Сверено' : 'Связано'} ({group.items.length})
                           <Icon name={isExpanded ? 'ChevronUp' : 'ChevronDown'} size={12} />
                         </Button>
                       ) : (

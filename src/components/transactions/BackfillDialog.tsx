@@ -30,6 +30,7 @@ interface BackfillDialogProps {
 const ORDER_TYPES: { id: string; label: string }[] = [
   { id: 'VCHR', label: 'Чеки' },
   { id: 'INVC', label: 'Счета' },
+  { id: 'CORD', label: 'Заказы' },
 ];
 
 const STATUSES: { id: string; label: string }[] = [

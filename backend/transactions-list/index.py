@@ -24,12 +24,12 @@ def to_json_value(val):
 
 
 def wants(type_filter, t):
-    '''type=receipt - алиас "любой чек" (используется дашбордом), остальные значения - точное совпадение.'''
+    '''type=receipt - алиас "любой чек/заказ" (используется дашбордом), остальные значения - точное совпадение.'''
     if not type_filter:
         return True
     if type_filter == t:
         return True
-    if type_filter == 'receipt' and t in ('receipt_ofd', 'receipt_kassa'):
+    if type_filter == 'receipt' and t in ('receipt_ofd', 'receipt_kassa', 'receipt_order'):
         return True
     return False
 
@@ -67,9 +67,9 @@ def compute_signed_amount(row: Dict[str, Any]) -> float:
       REFUNDED - деньги пришли и ушли обратно, чистый эффект 0; CANCELED/
       REJECTED - деньги вообще не двигались, тоже 0.
     - receipt_ofd: знак по operation_type самого документа (54-ФЗ).
-    - receipt_kassa: касса не хранит тип операции - берём знак из связанного
-      чека ОФД, если пара найдена по фискальным реквизитам; без пары считаем
-      продажей (+), как и есть по умолчанию сейчас.
+    - receipt_kassa/receipt_order: касса не хранит тип операции - берём знак
+      из связанного чека ОФД, если пара найдена по фискальным реквизитам;
+      без пары считаем продажей (+), как и есть по умолчанию сейчас.
     - money: банковская выписка уже отфильтрована по ключевым словам
       назначения платежа на этапе синхронизации (это все "наши" операции
       терминала/счёта) - direction='in' значит деньги пришли (+), 'out' -
@@ -84,7 +84,7 @@ def compute_signed_amount(row: Dict[str, Any]) -> float:
     if t == 'receipt_ofd':
         return amount * classify_receipt_sign(row.get('status'))
 
-    if t == 'receipt_kassa':
+    if t in ('receipt_kassa', 'receipt_order'):
         linked_status = row.get('linked_ofd_status')
         return amount * classify_receipt_sign(linked_status)
 
@@ -100,17 +100,24 @@ def compute_signed_amount(row: Dict[str, Any]) -> float:
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     '''
     Единый реестр готовых для сверки транзакций: объединяет уже насыщенные
-    данные из платежей (webhook_payments), чеков кассы (ecomkassa_receipts),
-    чеков ОФД (ofd_receipts) и операций по расчётному счёту
-    (bank_statement_transactions) в один список.
+    данные из платежей (webhook_payments), чеков и заказов кассы
+    (ecomkassa_receipts), чеков ОФД (ofd_receipts) и операций по расчётному
+    счёту (bank_statement_transactions) в один список.
 
-    Типы транзакций (поле type): payment, receipt_ofd, receipt_kassa, money -
-    чеки кассы и ОФД разведены на два разных типа намеренно: это два разных
-    физических источника данных об одном и том же чеке (касса пробивает и
-    пересылает результат сама, ОФД получает копию от налоговой), и их нужно
-    сверять МЕЖДУ СОБОЙ - если касса случайно пробила чек дважды, в чеках
-    кассы будет 2 записи, а в ОФД может быть только 1 подтверждённая - без
-    разделения типов такую аномалию не увидеть.
+    Типы транзакций (поле type): payment, receipt_ofd, receipt_kassa,
+    receipt_order, money.
+    - receipt_kassa/receipt_order - обе строки из ecomkassa_receipts,
+      разведены по order_type документа Екомкассы: VCHR/INVC (чек/счёт) ->
+      receipt_kassa, CORD (курьерский заказ) -> receipt_order - у заказа
+      деньги обычно передаются курьеру физически, это стоит явно отличать
+      от кассового/интернет-чека в реестре и в сверке.
+    - чеки кассы (receipt_kassa/receipt_order) и ОФД разведены на два разных
+      типа намеренно: это два разных физических источника данных об одном и
+      том же чеке (касса пробивает и пересылает результат сама, ОФД получает
+      копию от налоговой), и их нужно сверять МЕЖДУ СОБОЙ - если касса
+      случайно пробила чек дважды, в чеках кассы будет 2 записи, а в ОФД
+      может быть только 1 подтверждённая - без разделения типов такую
+      аномалию не увидеть.
 
     Платёж - особый случай: один и тот же платёж (payment_id/order_id) обычно
     прилетает НЕСКОЛЬКИМИ вебхуками по мере смены статуса (AUTHORIZED ->
@@ -120,6 +127,11 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     с последним статусом и полем webhook_history (список всех промежуточных
     статусов) - платёж считается связанным, если связь нашлась хотя бы у
     одного из вебхуков в группе.
+    Платежи, оплаченные через прокси-шлюз Екомкассы (invoice_payload с полем
+    provider - конкретная платёжная система вроде TOCHKA_SBP), при дозагрузке
+    исторических данных синтезируются напрямую из report() чека/заказа (см.
+    ecomkassa-fetch-orders/save_synthetic_payment) - "живого" вебхука такого
+    события к моменту дозагрузки уже нет.
 
     УЧЁТ ВОЗВРАТОВ: количество транзакций (count) считается по числу
     документов как есть, без вычетов. А суммы (amount в totals_by_type и
@@ -128,17 +140,19 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     смотри в compute_signed_amount().
 
     Связывание (linked_type/linked_source/linked_id/match_method):
-    - платёж -> чек кассы: webhook_payments.receipt_id, а если его нет -
+    - платёж -> чек/заказ кассы: webhook_payments.receipt_id, а если его нет -
       совпадение order_id/payment_id с order_id/legacy_no/external_id/uuid
-      чека кассы.
-    - чек кассы <-> чек ОФД: по триплету фискальных реквизитов ФН+ФД+ФПД -
-      однозначно идентифицирует физический фискальный документ независимо
-      от того, каким API он был получен.
+      документа кассы (linked_type зависит от order_type найденного документа -
+      receipt_kassa или receipt_order).
+    - чек/заказ кассы <-> чек ОФД: по триплету фискальных реквизитов
+      ФН+ФД+ФПД - однозначно идентифицирует физический фискальный документ
+      независимо от того, каким API он был получен.
     - деньги на р/с намеренно НЕ связываются автоматически - в банковской
       выписке нет номера заказа, только сумма/дата/назначение платежа,
       слишком велик риск ложных совпадений.
     Args: company_id (обязателен), type (payment/receipt_ofd/receipt_kassa/
-    money/receipt-алиас, опционально), limit, offset (опционально)
+    receipt_order/money/receipt-алиас на все 3 вида чеков, опционально),
+    limit, offset (опционально)
     Returns: transactions[] с полями type, source, id, occurred_at, amount,
     signed_amount, status, title, subtitle, integration_name, reference,
     raw_data, linked_type, linked_source, linked_id, match_method,
@@ -195,7 +209,10 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     ui.integration_name AS integration_name,
                     wp.order_id AS reference,
                     wp.raw_data AS raw_data,
-                    CASE WHEN COALESCE(wp.receipt_id, km.id) IS NOT NULL THEN 'receipt_kassa' END AS linked_type,
+                    CASE
+                        WHEN wp.receipt_id IS NOT NULL OR km.id IS NOT NULL THEN
+                            CASE WHEN COALESCE(km.order_type, rid_ekr.order_type) = 'CORD' THEN 'receipt_order' ELSE 'receipt_kassa' END
+                    END AS linked_type,
                     CASE WHEN COALESCE(wp.receipt_id, km.id) IS NOT NULL THEN 'ecomkassa' END AS linked_source,
                     COALESCE(wp.receipt_id, km.id) AS linked_id,
                     CASE
@@ -207,8 +224,9 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 FROM {SCHEMA}.webhook_payments wp
                 JOIN {SCHEMA}.user_integrations ui ON ui.id = wp.integration_id
                 JOIN {SCHEMA}.integration_providers p ON p.id = ui.provider_id
+                LEFT JOIN {SCHEMA}.ecomkassa_receipts rid_ekr ON rid_ekr.id = wp.receipt_id
                 LEFT JOIN LATERAL (
-                    SELECT ekr.id
+                    SELECT ekr.id, ekr.order_type
                     FROM {SCHEMA}.ecomkassa_receipts ekr
                     WHERE ekr.company_id = wp.company_id
                       AND wp.receipt_id IS NULL
@@ -297,6 +315,45 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     LIMIT 1
                 ) om ON true
                 WHERE ekr.company_id = %(company_id)s
+                  AND (ekr.order_type IS NULL OR ekr.order_type IN ('VCHR', 'INVC'))
+            ''')
+
+        if wants(type_filter, 'receipt_order'):
+            parts.append(f'''
+                SELECT
+                    'receipt_order' AS type,
+                    'ecomkassa' AS source,
+                    ekr.id AS id,
+                    ekr.doc_datetime AS occurred_at,
+                    ekr.total_sum AS amount,
+                    ekr.status AS status,
+                    ('Заказ №' || COALESCE(ekr.doc_number, ekr.order_id, ekr.id::text)) AS title,
+                    COALESCE(ekr.payment_provider, 'Курьерский заказ') AS subtitle,
+                    ui.integration_name AS integration_name,
+                    ekr.order_id AS reference,
+                    ekr.raw_data AS raw_data,
+                    CASE WHEN om.id IS NOT NULL THEN 'receipt_ofd' END AS linked_type,
+                    CASE WHEN om.id IS NOT NULL THEN 'ofd' END AS linked_source,
+                    om.id AS linked_id,
+                    CASE WHEN om.id IS NOT NULL THEN 'fiscal_triplet' END AS match_method,
+                    NULL::text AS group_key,
+                    om.operation_type AS linked_ofd_status
+                FROM {SCHEMA}.ecomkassa_receipts ekr
+                JOIN {SCHEMA}.user_integrations ui ON ui.id = ekr.integration_id
+                LEFT JOIN LATERAL (
+                    SELECT ofd.id, ofd.operation_type
+                    FROM {SCHEMA}.ofd_receipts ofd
+                    WHERE ofd.company_id = ekr.company_id
+                      AND (ekr.raw_data->'payload'->>'fn_number') IS NOT NULL
+                      AND (ekr.raw_data->'payload'->>'fiscal_document_number') IS NOT NULL
+                      AND (ekr.raw_data->'payload'->>'fiscal_document_attribute') IS NOT NULL
+                      AND ofd.fn_number = (ekr.raw_data->'payload'->>'fn_number')
+                      AND ofd.doc_number = (ekr.raw_data->'payload'->>'fiscal_document_number')
+                      AND (ofd.raw_data->>'DecimalFiscalSign') = (ekr.raw_data->'payload'->>'fiscal_document_attribute')
+                    LIMIT 1
+                ) om ON true
+                WHERE ekr.company_id = %(company_id)s
+                  AND ekr.order_type = 'CORD'
             ''')
 
         if wants(type_filter, 'money'):

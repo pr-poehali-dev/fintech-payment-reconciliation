@@ -1,8 +1,17 @@
 import { Transaction, TransactionType } from '@/components/transactions/transactionsTypes';
 
+// Статус группы для отображения в реестре:
+// - 'reconciled' ("Сверено") - в группе есть и платёж, и хотя бы один чек
+//   (кассы/ОФД/заказ) - это и есть база 54-ФЗ: деньги оплачены и чек пробит;
+// - 'matched' ("Связано") - есть связь, но платежа в группе нет (например,
+//   пара "чек кассы + чек ОФД" без платежа);
+// - 'unmatched' ("Нет пары") - запись одна, без связей.
+export type GroupStatus = 'reconciled' | 'matched' | 'unmatched';
+
 export interface TransactionGroup {
   id: string;
   items: Transaction[];
+  status: GroupStatus;
 }
 
 // Уникальный ключ записи: связи типа "чек ОФД" -> "чек кассы" и "чек кассы" ->
@@ -58,12 +67,20 @@ export const groupTransactions = (transactions: Transaction[]): TransactionGroup
     (groupsMap.get(root) as Transaction[]).push(t);
   });
 
-  const typeOrder: Record<string, number> = { payment: 0, receipt_kassa: 1, receipt_ofd: 2, money: 3 };
+  const typeOrder: Record<string, number> = { payment: 0, receipt_kassa: 1, receipt_order: 1, receipt_ofd: 2, money: 3 };
+
+  const computeStatus = (items: Transaction[]): GroupStatus => {
+    if (items.length <= 1) return 'unmatched';
+    const hasPayment = items.some((i) => i.type === 'payment');
+    const hasReceipt = items.some((i) => i.type === 'receipt_kassa' || i.type === 'receipt_ofd' || i.type === 'receipt_order');
+    return hasPayment && hasReceipt ? 'reconciled' : 'matched';
+  };
 
   return Array.from(groupsMap.entries())
     .map(([id, items]) => ({
       id,
-      items: [...items].sort((a, b) => (typeOrder[a.type] ?? 9) - (typeOrder[b.type] ?? 9))
+      items: [...items].sort((a, b) => (typeOrder[a.type] ?? 9) - (typeOrder[b.type] ?? 9)),
+      status: computeStatus(items)
     }))
     .sort((a, b) => {
       const latest = (items: Transaction[]) =>

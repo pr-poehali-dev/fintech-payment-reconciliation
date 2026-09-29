@@ -2,7 +2,7 @@ import json
 import os
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import psycopg2
 
@@ -64,13 +64,40 @@ def parse_receipt_datetime(value: Any) -> Optional[str]:
         return None
 
 
-def save_receipt(cur, integration_id: int, company_id: int, order_id: Any,
-                  legacy_no: Any, report_data: Dict[str, Any]) -> Optional[int]:
+def find_gateway_integration(cur, company_id: int) -> Optional[int]:
     '''
-    Сохраняет фискальный чек по ответу report() в ecomkassa_receipts - тот же
-    формат, что использует обработчик вебхука шлюза (см.
+    Находит активную интеграцию "Екомкасса — платёжный шлюз" (provider slug
+    ecomkassa_gateway) компании - именно её integration_id использует "живой"
+    вебхук колбэка при создании записи в webhook_payments (см.
+    webhook-receive/ecomkassa_gateway_handler.py). При дозагрузке синтетический
+    платёж должен писаться под тем же integration_id, иначе один и тот же
+    реальный платёж от live-вебхука и от дозагрузки превратится в 2 разные
+    строки (уникальность в БД - по (integration_id, payment_id, status)).
+    Если у компании шлюз не подключён вовсе - live-вебхук в принципе не может
+    существовать, тогда безопасно используем integration_id самой кассы.
+    '''
+    cur.execute(f'''
+        SELECT ui.id
+        FROM {SCHEMA}.user_integrations ui
+        JOIN {SCHEMA}.integration_providers p ON p.id = ui.provider_id
+        WHERE ui.company_id = %s AND p.slug = 'ecomkassa_gateway' AND ui.status = 'active'
+        ORDER BY ui.id
+        LIMIT 1
+    ''', (company_id,))
+    row = cur.fetchone()
+    return row[0] if row else None
+
+
+def save_receipt(cur, integration_id: int, company_id: int, order_id: Any,
+                  legacy_no: Any, order_type: Optional[str], report_data: Dict[str, Any]) -> Tuple[Optional[int], Optional[float]]:
+    '''
+    Сохраняет фискальный чек/заказ по ответу report() в ecomkassa_receipts - тот
+    же формат, что использует обработчик вебхука шлюза (см.
     webhook-receive/ecomkassa_gateway_handler.py:save_receipt_from_report), чтобы
-    дозагруженные исторические чеки участвовали в сверке наравне с "живыми".
+    дозагруженные исторические документы участвовали в сверке наравне с "живыми".
+    order_type (VCHR/INVC/CORD) сохраняется отдельной колонкой - от него зависит,
+    как документ будет представлен в реестре транзакций (чек кассы или заказ).
+    Returns: (receipt_id, total_sum)
     '''
     payload = report_data.get('payload') or {}
     total_sum = payload.get('total')
@@ -85,23 +112,69 @@ def save_receipt(cur, integration_id: int, company_id: int, order_id: Any,
     cur.execute(f'''
         INSERT INTO {SCHEMA}.ecomkassa_receipts (
             integration_id, company_id, order_id, legacy_no, status,
-            total_sum, doc_number, doc_datetime, raw_data, payment_provider
-        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            total_sum, doc_number, doc_datetime, raw_data, payment_provider, order_type
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         ON CONFLICT (integration_id, order_id) DO UPDATE SET
             status = EXCLUDED.status,
             total_sum = COALESCE(EXCLUDED.total_sum, {SCHEMA}.ecomkassa_receipts.total_sum),
             doc_number = COALESCE(EXCLUDED.doc_number, {SCHEMA}.ecomkassa_receipts.doc_number),
             doc_datetime = COALESCE(EXCLUDED.doc_datetime, {SCHEMA}.ecomkassa_receipts.doc_datetime),
             raw_data = EXCLUDED.raw_data,
-            payment_provider = COALESCE(EXCLUDED.payment_provider, {SCHEMA}.ecomkassa_receipts.payment_provider)
+            payment_provider = COALESCE(EXCLUDED.payment_provider, {SCHEMA}.ecomkassa_receipts.payment_provider),
+            order_type = COALESCE(EXCLUDED.order_type, {SCHEMA}.ecomkassa_receipts.order_type)
         RETURNING id
     ''', (
         integration_id, company_id, str(order_id), str(legacy_no) if legacy_no else str(order_id),
         status, total_sum, str(doc_number) if doc_number else None, doc_datetime,
-        json.dumps(report_data), payment_provider
+        json.dumps(report_data), payment_provider, order_type
     ))
     result = cur.fetchone()
-    return result[0] if result else None
+    receipt_id = result[0] if result else None
+    return receipt_id, float(total_sum) if total_sum else None
+
+
+def save_synthetic_payment(cur, gateway_integration_id: int, company_id: int, order_id: Any,
+                            receipt_id: Optional[int], total_sum: Optional[float], report_data: Dict[str, Any]) -> None:
+    '''
+    Счета (INVC) и часть заказов (CORD), оплаченные через прокси-шлюз Екомкассы,
+    в report() содержат invoice_payload с полем "provider" (напр. TOCHKA_SBP) -
+    это и есть сам факт платежа через конкретную платёжную систему. "Живой"
+    вебхук шлюза создаёт для него отдельную строку в webhook_payments сразу в
+    момент оплаты - при дозагрузке событие вебхука уже потеряно, поэтому
+    синтезируем ту же запись здесь по данным report(), с receipt_id проставленным
+    напрямую (та же связь, что использует live-путь), чтобы платёж сразу был
+    виден в реестре транзакций и группировался с чеком.
+    Вызывающий код уже гарантировал report_data['status'] == 'done' - раз чек
+    фискализирован, деньги точно были получены, поэтому статус платежа = CONFIRMED
+    безусловно (конкретное значение invoice_payload.status у Екомкассы не
+    документировано полностью и ненадёжно для маппинга статусов).
+    '''
+    invoice_payload = report_data.get('invoice_payload') or {}
+    if not isinstance(invoice_payload, dict):
+        return
+    payment_provider = invoice_payload.get('provider')
+    if not payment_provider:
+        return
+
+    uid = str(order_id)
+    cur.execute(f'''
+        INSERT INTO {SCHEMA}.webhook_payments (
+            integration_id, company_id, payment_id, terminal_key,
+            amount, order_id, status, payment_status, error_code,
+            customer_email, customer_phone, pan, card_type, exp_date,
+            raw_data, receipt_id, payment_provider
+        ) VALUES (%s, %s, %s, NULL, %s, %s, 'CONFIRMED', NULL, NULL, NULL, NULL, NULL, NULL, NULL, %s, %s, %s)
+        ON CONFLICT (integration_id, payment_id, status) DO UPDATE SET
+            receipt_id = COALESCE(EXCLUDED.receipt_id, {SCHEMA}.webhook_payments.receipt_id),
+            payment_provider = COALESCE(EXCLUDED.payment_provider, {SCHEMA}.webhook_payments.payment_provider),
+            amount = CASE WHEN {SCHEMA}.webhook_payments.amount = 0
+                          THEN EXCLUDED.amount
+                          ELSE {SCHEMA}.webhook_payments.amount END
+    ''', (
+        gateway_integration_id, company_id, uid,
+        total_sum or 0, uid,
+        json.dumps(report_data), receipt_id, payment_provider
+    ))
 
 
 def collect_candidates(token: str, since: Optional[str], until: Optional[str],
@@ -155,24 +228,32 @@ def collect_candidates(token: str, since: Optional[str], until: Optional[str],
 
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     '''
-    Дозагрузка исторических чеков/счетов Екомкассы за период вручную (для случаев,
-    когда часть данных не попала через вебхук - например, интеграцию подключили
-    уже после того, как в кассе накопились платежи). Работает в 2 шага:
+    Дозагрузка исторических чеков/счетов/заказов Екомкассы за период вручную
+    (для случаев, когда часть данных не попала через вебхук - например,
+    интеграцию подключили уже после того, как в кассе накопились платежи).
+    Работает в 2 шага:
     1) POST /api/mobile/v1/orders/search - находит документы за период
-       [date_from, date_to] с фильтром по типу (VCHR/INVC/CORD), листая страницы
-       по 500 записей; статус (CREATED/PAID/COMPLETED/CANCELED/WAITING/FAILED)
-       фильтруется локально, т.к. API его не поддерживает.
-    2) Для найденных кандидатов (пачками, см. offset/batch_size) вызывает
-       GET .../report/{orderId} за полными фискальными данными и сохраняет в
-       ecomkassa_receipts - в том же формате, что и обычные вебхуки, поэтому
-       дозагруженные чеки сразу участвуют в сверке и матчинге с платежами.
+       [date_from, date_to] с фильтром по типу (VCHR - чеки, INVC - счета,
+       CORD - курьерские заказы), листая страницы по 500 записей; статус
+       (CREATED/PAID/COMPLETED/CANCELED/WAITING/FAILED) фильтруется локально,
+       т.к. API его не поддерживает.
+    2) Для найденных кандидатов (пачками, см. offset/batch_size) параллельно
+       вызывает GET .../report/{orderId} за полными фискальными данными и
+       сохраняет в ecomkassa_receipts вместе с order_type - в том же формате,
+       что и обычные вебхуки, поэтому дозагруженные документы сразу участвуют
+       в сверке и матчинге с платежами.
+    Если report() содержит invoice_payload (счёт/заказ оплачен через
+    прокси-шлюз Екомкассы конкретной платёжной системой, напр. TOCHKA_SBP) -
+    дополнительно синтезируется запись платежа в webhook_payments с сразу
+    проставленным receipt_id, т.к. "живого" вебхука этого события уже не
+    было/не будет - см. save_synthetic_payment().
     Пагинация по кандидатам нужна, т.к. report() на каждый документ - это
     отдельный сетевой запрос, и сотни таких запросов не укладываются в таймаут
     одного вызова функции - фронтенд вызывает повторно с новым offset, пока
     done=false.
     Args: company_id (обязателен), date_from, date_to (ISO, обязательны),
     order_types (['VCHR','INVC','CORD'], default ['VCHR']),
-    statuses (default ['COMPLETED']), offset (default 0), batch_size (default 15, max 50)
+    statuses (default ['COMPLETED']), offset (default 0), batch_size (default 8, max 30)
     Returns: matched_total, processed, inserted, skipped, next_offset, done, capped
     '''
 
@@ -229,6 +310,10 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         if not token or not store_id:
             return response(400, {'error': 'Касса Екомкасса не авторизована (нет токена или store_id)'})
 
+        # Ищем один раз на весь вызов, а не на каждый документ - используется
+        # только если найдутся счета/заказы с invoice_payload (см. save_synthetic_payment).
+        gateway_integration_id = find_gateway_integration(cur, company_id)
+
         try:
             since = datetime.fromisoformat(date_from.replace('Z', '+00:00')).strftime('%Y-%m-%dT%H:%M:%S.000Z')
             until = datetime.fromisoformat(date_to.replace('Z', '+00:00')).strftime('%Y-%m-%dT%H:%M:%S.999Z')
@@ -263,16 +348,24 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         for item, report_data in zip(batch, reports):
             order_id = item.get('orderId')
             external_id = item.get('externalId')
+            order_type = item.get('orderType')
 
             if not report_data or report_data.get('status') != 'done':
                 skipped += 1
                 continue
 
-            receipt_id = save_receipt(cur, integration_id, company_id, order_id, external_id, report_data)
-            if receipt_id:
-                inserted += 1
-            else:
+            receipt_id, total_sum = save_receipt(
+                cur, integration_id, company_id, order_id, external_id, order_type, report_data
+            )
+            if not receipt_id:
                 skipped += 1
+                continue
+
+            inserted += 1
+
+            if report_data.get('invoice_payload'):
+                gw_id = gateway_integration_id or integration_id
+                save_synthetic_payment(cur, gw_id, company_id, order_id, receipt_id, total_sum, report_data)
 
         conn.commit()
 
