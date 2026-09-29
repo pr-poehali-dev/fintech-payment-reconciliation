@@ -6,6 +6,7 @@ import { Transaction } from './transactionsTypes';
 import { useAuth } from '@/contexts/AuthContext';
 import { formatDateTime as formatDateTimeTz, DEFAULT_TIMEZONE } from '@/lib/formatDate';
 import { ofdOperationTypeLabel } from '@/lib/ofdOperationType';
+import { transactionStatusLabel } from '@/lib/transactionStatus';
 
 interface TransactionDetailsDialogProps {
   transaction: Transaction | null;
@@ -68,7 +69,7 @@ const TransactionDetailsDialog = ({ transaction, relatedItems, open, onOpenChang
             <div>
               <div className="text-sm text-muted-foreground mb-1">Статус</div>
               <div className="font-medium">
-                {transaction.type === 'receipt_ofd' ? ofdOperationTypeLabel(transaction.status) : (transaction.status || '—')}
+                {transaction.type === 'receipt_ofd' ? ofdOperationTypeLabel(transaction.status) : transactionStatusLabel(transaction.status)}
               </div>
             </div>
 
@@ -122,7 +123,7 @@ const TransactionDetailsDialog = ({ transaction, relatedItems, open, onOpenChang
                 <div className="space-y-1.5">
                   {transaction.webhook_history.map((h, i) => (
                     <div key={i} className="flex items-center justify-between text-sm bg-muted/30 rounded-md px-3 py-1.5">
-                      <span className="font-medium">{h.status}</span>
+                      <span className="font-medium">{transactionStatusLabel(h.status)}</span>
                       <span className="text-muted-foreground text-xs">{formatDateTimeTz(h.occurred_at, timezone, true)}</span>
                     </div>
                   ))}
@@ -158,7 +159,7 @@ const TransactionDetailsDialog = ({ transaction, relatedItems, open, onOpenChang
               <div className="flex items-center gap-3 bg-muted/50 border border-border rounded-lg p-4">
                 <Icon name="Unlink" size={20} className="text-muted-foreground shrink-0" />
                 <div className="text-sm text-muted-foreground">
-                  Пара не найдена — для платежа ещё нет пробитого чека, либо для чека нет второй записи с совпадающими фискальными данными
+                  Связей не найдено — для платежа ещё нет пробитого чека, либо для чека нет второй записи с совпадающими фискальными данными
                 </div>
               </div>
             )}
