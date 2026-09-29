@@ -246,8 +246,14 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
             doc_label = ORDER_TYPE_LABELS.get(order_type, 'Документ')
             amount_str = f'{float(total_sum):.2f} ₽' if total_sum is not None else ''
-            provider_str = f' [{payment_provider_value}]' if payment_provider_value else ''
-            summary = f'{doc_label} #{order_id}{provider_str} · {status} {amount_str}'.strip()
+            # payment_provider (СБП/ЮKassa и т.п.) - атрибут ПЛАТЕЖА (каким
+            # способом оплатили), а не самого чека, поэтому здесь намеренно НЕ
+            # попадает ни в summary, ни в поле события - иначе в ленте "Чек"
+            # выглядел бы как будто это платёж со своим провайдером, хотя
+            # провайдер платежа уже отдельно виден на строке типа 'payment'
+            # (см. блок 1 выше). ekr.payment_provider как поле в БД остаётся -
+            # используется для сопоставления чек<->платёж в разделе "Транзакции".
+            summary = f'{doc_label} #{order_id} · {status} {amount_str}'.strip()
 
             events.append({
                 'id': f'ekr_{ekr_id}',
@@ -257,7 +263,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 'provider_type': PROVIDER_TYPE_LABELS.get('ecomkassa', 'Касса (Екомкасса)'),
                 'transaction_type': 'receipt_order' if order_type == 'CORD' else 'receipt',
                 'integration_name': integration_name,
-                'payment_provider': payment_provider_value,
+                'payment_provider': None,
                 'event_type': 'ecomkassa_document',
                 'status': status,
                 'error_message': None,
