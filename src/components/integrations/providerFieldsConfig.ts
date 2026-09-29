@@ -92,8 +92,30 @@ const BANK_ACCOUNT_FIELDS: FieldConfig[] = [
 // компании (Get Accounts List), номер счёта выбирается из него, а не вводится
 // руками. ИНН отдельно не спрашиваем - он уже есть в карточке компании и в
 // синхронизации выписки нигде не используется (Точка идентифицирует счёт по
-// accountId из самого токена, а не по ИНН из формы).
-const TOCHKA_ACCOUNT_FIELDS: FieldConfig[] = [];
+// accountId из самого токена, а не по ИНН из формы). purpose_keywords и
+// sync_interval_hours - те же поля, что и у tbank_account: backend
+// (bank-statement-sync/fetch_tochka_account_statement) уже фильтрует операции
+// по ключевым словам назначения платежа одинаково для обоих банков.
+const TOCHKA_ACCOUNT_FIELDS: FieldConfig[] = [
+  {
+    key: 'purpose_keywords',
+    label: 'Учитывать назначения платежа по ключевым словам',
+    type: 'keywords',
+    default: '',
+    required: false,
+    placeholder: 'эквайринг, сбп, оплата заказа',
+    hint: 'Через запятую. Операция загрузится, если назначение платежа содержит хотя бы одно из слов. Оставьте пустым, чтобы загружать все операции'
+  },
+  {
+    key: 'sync_interval_hours',
+    label: 'Периодичность синхронизации',
+    type: 'select',
+    options: SYNC_INTERVAL_OPTIONS,
+    default: '24',
+    required: false,
+    hint: 'Пока реально работает только кнопка «Синхронизировать сейчас» — настройка сохранится на будущее'
+  }
+];
 
 export const PROVIDER_FIELDS: Record<string, FieldConfig[]> = {
   tbank: [

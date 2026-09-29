@@ -236,8 +236,6 @@ const IntegrationConfigStep = ({
         />
       )}
 
-      {currentFields.map(renderField)}
-
       {isTochkaAccount && (
         <TochkaAuthMethodPicker
           config={config}
@@ -246,6 +244,8 @@ const IntegrationConfigStep = ({
           onTogglePasswordVisibility={() => onTogglePasswordVisibility('api_token')}
         />
       )}
+
+      {currentFields.map(renderField)}
 
       {(selectedProvider.slug === 'tbank' || selectedProvider.slug === 'ecomkassa_gateway') && (
         <div className="space-y-2">
