@@ -3,6 +3,7 @@ import os
 import re
 import time
 import psycopg2
+import psycopg2.extras
 import urllib.request
 import urllib.error
 from typing import Dict, Any, List, Optional
@@ -121,6 +122,16 @@ def fetch_tochka_account_statement(cur, integration_id: int, company_id: int, co
     Точка Банк отдаёт выписку асинхронно: сначала Init Statement (заказ выписки),
     затем поллинг Get Statement пока статус не станет Ready.
     https://developers.tochka.com/docs/tochka-api/opisanie-metodov/vypiski
+
+    Особенности реального API (отличаются от типичного Open Banking, проверено
+    прямыми запросами к enter.tochka.com):
+    - тело Init Statement должно быть обёрнуто в {"Data": {"Statement": {...}}},
+      а не плоским объектом - иначе 400 "Field Data : Field required";
+    - startDateTime/endDateTime обязаны быть датами с нулевым временем
+      (полночь UTC) - "23:59:59" в конце дня Точка отклоняет как невалидную
+      дату ("Datetimes provided to dates should have zero time");
+    - Get Statement оборачивает результат в Data.Statement как МАССИВ из
+      одного элемента (не объект), внутри - статус и список Transaction.
     '''
     # Чистим невидимые символы (BOM, zero-width space), которые иногда
     # попадают при копировании токена - иначе latin-1 кодировка HTTP-заголовков
@@ -130,12 +141,19 @@ def fetch_tochka_account_statement(cur, integration_id: int, company_id: int, co
     keywords = get_purpose_keywords(config)
     base_url = 'https://enter.tochka.com/uapi/open-banking/v1.0'
 
+    start_date = date_from[:10]
+    end_date = date_to[:10]
+
     init_req = urllib.request.Request(
         f'{base_url}/statements',
         data=json.dumps({
-            'accountId': account_id,
-            'startDateTime': date_from,
-            'endDateTime': date_to
+            'Data': {
+                'Statement': {
+                    'accountId': account_id,
+                    'startDateTime': f'{start_date}T00:00:00Z',
+                    'endDateTime': f'{end_date}T00:00:00Z'
+                }
+            }
         }).encode('utf-8'),
         headers={
             'Authorization': f'Bearer {api_token}',
@@ -147,48 +165,64 @@ def fetch_tochka_account_statement(cur, integration_id: int, company_id: int, co
     try:
         with urllib.request.urlopen(init_req, timeout=15, context=TOCHKA_SSL_CONTEXT) as response:
             init_data = json.loads(response.read().decode('utf-8'))
-    except (urllib.error.URLError, urllib.error.HTTPError, json.JSONDecodeError):
+    except urllib.error.HTTPError as e:
+        print(f'[DEBUG] Tochka init statement HTTP {e.code}: {(e.read().decode("utf-8") if e.fp else "")[:800]}')
+        return None
+    except (urllib.error.URLError, json.JSONDecodeError) as e:
+        print(f'[DEBUG] Tochka init statement error: {str(e)}')
         return None
 
-    statement_id = init_data.get('Data', {}).get('statementId')
+    statement_id = init_data.get('Data', {}).get('Statement', {}).get('statementId')
     if not statement_id:
+        print(f'[DEBUG] Tochka init statement: no statementId in response: {json.dumps(init_data)[:800]}')
         return None
 
     get_url = f'{base_url}/accounts/{account_id}/statements/{statement_id}'
     get_req = urllib.request.Request(get_url, headers={'Authorization': f'Bearer {api_token}'})
 
+    # Формирование выписки у Точки обычно укладывается в 1-2 секунды (проверено
+    # прямыми запросами - Ready приходит уже на 2-3 попытке) - опрашиваем часто
+    # (0.5 сек) и недолго, чтобы уложиться в таймаут Cloud Function (5 сек)
+    # вместе с Init Statement и batch-вставкой транзакций в БД.
     raw_transactions = None
-    for _ in range(5):
+    for _ in range(6):
         try:
             with urllib.request.urlopen(get_req, timeout=15, context=TOCHKA_SSL_CONTEXT) as response:
                 statement_data = json.loads(response.read().decode('utf-8'))
-        except (urllib.error.URLError, urllib.error.HTTPError, json.JSONDecodeError):
+        except urllib.error.HTTPError as e:
+            print(f'[DEBUG] Tochka get statement HTTP {e.code}: {(e.read().decode("utf-8") if e.fp else "")[:800]}')
+            return None
+        except (urllib.error.URLError, json.JSONDecodeError) as e:
+            print(f'[DEBUG] Tochka get statement error: {str(e)}')
             return None
 
-        status = statement_data.get('Data', {}).get('status')
+        statements = statement_data.get('Data', {}).get('Statement', [])
+        statement = statements[0] if isinstance(statements, list) and statements else statements
+        status = statement.get('status') if isinstance(statement, dict) else None
         if status == 'Ready':
-            raw_transactions = statement_data.get('Data', {}).get('Transaction', [])
+            raw_transactions = statement.get('Transaction', [])
             break
-        time.sleep(2)
+        time.sleep(0.5)
 
     if raw_transactions is None:
+        print('[DEBUG] Tochka statement never became Ready in time')
         return None
 
     result = []
     for tx in raw_transactions:
-        purpose = tx.get('remittanceInformationUnstructured') or tx.get('additionalInformation') or ''
+        purpose = tx.get('description') or ''
         if not matches_keywords(purpose, keywords):
             continue
 
         direction = 'in' if tx.get('creditDebitIndicator') == 'Credit' else 'out'
-        agent = tx.get('creditorAgent', {}) if direction == 'out' else tx.get('debtorAgent', {})
+        party = tx.get('DebtorParty') if direction == 'in' else tx.get('CreditorParty')
         result.append(normalize_tx(
             external_id=tx.get('transactionId') or tx.get('paymentId'),
-            operation_date=tx.get('bookingDateTime'),
-            amount=float(tx.get('Amount', {}).get('Amount', 0)),
+            operation_date=tx.get('documentProcessDate'),
+            amount=float(tx.get('Amount', {}).get('amount', 0)),
             direction=direction,
-            counterparty_name=(agent or {}).get('name'),
-            counterparty_inn=None,
+            counterparty_name=(party or {}).get('name'),
+            counterparty_inn=(party or {}).get('inn'),
             purpose=purpose,
             raw=tx
         ))
@@ -288,35 +322,36 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 'isBase64Encoded': False
             }
 
-        inserted_count = 0
-        for tx in transactions:
-            try:
-                cur.execute('''
-                    INSERT INTO t_p83864310_fintech_payment_reco.bank_statement_transactions (
-                        integration_id, company_id, provider_slug, external_transaction_id,
-                        operation_date, amount, direction, counterparty_name, counterparty_inn,
-                        purpose, raw_data
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                    ON CONFLICT (integration_id, external_transaction_id) DO NOTHING
-                    RETURNING id
-                ''', (
-                    integration_id,
-                    company_id,
-                    provider_slug,
-                    tx['external_id'],
-                    tx['operation_date'],
-                    tx['amount'],
-                    tx['direction'],
-                    tx['counterparty_name'],
-                    tx['counterparty_inn'],
-                    tx['purpose'],
-                    json.dumps(tx['raw'])
-                ))
+        # Вставляем все транзакции одним batch-запросом (execute_values), а не
+        # по одной с отдельным round-trip к БД на каждую - при выписке в
+        # сотни операций (обычное дело для Точки за 30 дней) последовательные
+        # INSERT'ы не укладывались в таймаут функции (5 сек), и вся
+        # синхронизация падала с JobExecutionTimeoutExceeded, не сохранив
+        # ничего (транзакция БД откатывалась целиком).
+        rows = [(
+            integration_id, company_id, provider_slug, tx['external_id'],
+            tx['operation_date'], tx['amount'], tx['direction'],
+            tx['counterparty_name'], tx['counterparty_inn'], tx['purpose'],
+            json.dumps(tx['raw'])
+        ) for tx in transactions]
 
-                if cur.fetchone():
-                    inserted_count += 1
-            except Exception:
-                continue
+        inserted_count = 0
+        if rows:
+            inserted_ids = psycopg2.extras.execute_values(
+                cur,
+                '''
+                INSERT INTO t_p83864310_fintech_payment_reco.bank_statement_transactions (
+                    integration_id, company_id, provider_slug, external_transaction_id,
+                    operation_date, amount, direction, counterparty_name, counterparty_inn,
+                    purpose, raw_data
+                ) VALUES %s
+                ON CONFLICT (integration_id, external_transaction_id) DO NOTHING
+                RETURNING id
+                ''',
+                rows,
+                fetch=True
+            )
+            inserted_count = len(inserted_ids)
 
         cur.execute('''
             UPDATE t_p83864310_fintech_payment_reco.user_integrations
