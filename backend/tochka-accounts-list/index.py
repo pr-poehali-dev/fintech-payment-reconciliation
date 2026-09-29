@@ -17,14 +17,19 @@ BASE_URL = 'https://enter.tochka.com/uapi/open-banking/v1.0'
 
 
 def _request(path: str, api_token: str) -> Optional[Dict[str, Any]]:
-    req = urllib.request.Request(
-        f'{BASE_URL}{path}',
-        headers={'Authorization': f'Bearer {api_token}'}
-    )
+    url = f'{BASE_URL}{path}'
+    req = urllib.request.Request(url, headers={'Authorization': f'Bearer {api_token}'})
     try:
         with urllib.request.urlopen(req, timeout=15) as response:
-            return json.loads(response.read().decode('utf-8'))
-    except (urllib.error.URLError, urllib.error.HTTPError, json.JSONDecodeError):
+            raw_body = response.read().decode('utf-8')
+            print(f'[DEBUG] GET {url} -> {response.status}: {raw_body[:1500]}')
+            return json.loads(raw_body)
+    except urllib.error.HTTPError as e:
+        error_body = e.read().decode('utf-8') if e.fp else str(e)
+        print(f'[DEBUG] GET {url} -> HTTP {e.code}: {error_body[:1500]}')
+        return None
+    except (urllib.error.URLError, json.JSONDecodeError) as e:
+        print(f'[DEBUG] GET {url} -> error: {str(e)}')
         return None
 
 
