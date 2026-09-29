@@ -119,6 +119,12 @@ const IntegrationCard = ({
               <span className="text-muted-foreground">Счёт:</span>
               <span className="font-medium font-mono">{integration.config?.account_number || '—'}</span>
             </div>
+            {integration.provider_slug === 'tochka_account' && !integration.config?.account_number && (
+              <div className="flex items-start gap-2 text-xs text-amber-600 bg-amber-500/10 rounded-md p-2">
+                <Icon name="AlertTriangle" size={14} className="mt-0.5 shrink-0" />
+                <div>Счёт ещё не выбран — откройте «Настроить» и выберите его из списка по токену</div>
+              </div>
+            )}
             {integration.provider_slug === 'tochka_account' && (
               <div className="flex items-center justify-between text-sm">
                 <span className="text-muted-foreground">Способ авторизации:</span>
