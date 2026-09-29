@@ -221,39 +221,6 @@ const BackfillDialog = ({ ecomkassaIntegrations, ofdIntegrations, bankIntegratio
                       </div>
                     ))}
                   </div>
-                  <p className="text-xs text-muted-foreground">
-                    Источник: {ecomkassaIntegrations.map((i) => i.name).join(', ')}
-                  </p>
-                </div>
-              </>
-            )}
-
-            {hasOfd && (
-              <>
-                <Separator />
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Icon name="Receipt" size={14} />
-                    ОФД: загрузятся все чеки за период (фильтров по типу/статусу у ОФД нет)
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Источник: {ofdIntegrations.map((i) => i.name).join(', ')}
-                  </p>
-                </div>
-              </>
-            )}
-
-            {bankIntegrations.length > 0 && (
-              <>
-                <Separator />
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Icon name="Landmark" size={14} />
-                    Расчётный счёт: загрузятся все операции за период
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Источник: {bankIntegrations.map((b) => b.name).join(', ')}
-                  </p>
                 </div>
               </>
             )}
@@ -265,7 +232,9 @@ const BackfillDialog = ({ ecomkassaIntegrations, ofdIntegrations, bankIntegratio
                   {hasEcomkassa && (
                     <div className="space-y-1.5">
                       <div className="flex items-center justify-between text-sm">
-                        <span className="text-muted-foreground">Екомкасса</span>
+                        <span className="text-muted-foreground">
+                          Екомкасса ({ecomkassaIntegrations.map((i) => i.name).join(', ')})
+                        </span>
                         <span className="font-medium">
                           {ecomkassaProgress.total > 0
                             ? `${Math.min(ecomkassaProgress.processed, ecomkassaProgress.total)} из ${ecomkassaProgress.total} · загружено ${ecomkassaProgress.inserted}`
@@ -286,7 +255,7 @@ const BackfillDialog = ({ ecomkassaIntegrations, ofdIntegrations, bankIntegratio
                         ) : (
                           <Icon name="CheckCircle2" size={13} className="text-success" />
                         )}
-                        ОФД
+                        ОФД ({ofdIntegrations.map((i) => i.name).join(', ')})
                       </span>
                       <span className="font-medium">
                         {ofdResult ? `загружено ${ofdResult.inserted} из ${ofdResult.total}` : phase === 'running' ? 'Загрузка…' : ''}
