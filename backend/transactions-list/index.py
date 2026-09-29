@@ -147,9 +147,17 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     - чек/заказ кассы <-> чек ОФД: по триплету фискальных реквизитов
       ФН+ФД+ФПД - однозначно идентифицирует физический фискальный документ
       независимо от того, каким API он был получен.
-    - деньги на р/с намеренно НЕ связываются автоматически - в банковской
-      выписке нет номера заказа, только сумма/дата/назначение платежа,
-      слишком велик риск ложных совпадений.
+    - деньги на р/с -> платёж: в общем случае банковская выписка не содержит
+      номер заказа, но в двух конкретных случаях назначение платежа несёт
+      достаточно специфичный идентификатор, чтобы связывать безопасно:
+      (1) СБП-платежи через шлюз Екомкассы - банк пишет "QR ID <код>" (и в
+      самой операции зачисления, и в списанной следом комиссии за перевод),
+      тот же код есть в хвосте invoice_payload.link платежа ("https://web.
+      qr.nspk.ru/<код>"); (2) эквайринг с явным external_id - банк пишет
+      "Платеж <external_id>", тот же external_id Екомкасса передавала при
+      создании платежа и он сохранён в raw_data.external_id. Оба кода
+      достаточно длинные и специфичные, случайное совпадение практически
+      исключено - в отличие от сопоставления по одной лишь сумме/дате.
     УДАЛЁННЫЕ (removed_at) транзакции полностью исключены из всех 5 запросов
     и из LATERAL-подзапросов связывания - "мягко удалённая" запись не
     участвует ни в списке, ни как чужая пара для связывания.
@@ -384,14 +392,49 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     ui.integration_name AS integration_name,
                     bst.external_transaction_id AS reference,
                     bst.raw_data AS raw_data,
-                    NULL::text AS linked_type,
-                    NULL::text AS linked_source,
-                    NULL::integer AS linked_id,
-                    NULL::text AS match_method,
+                    CASE WHEN wpm.id IS NOT NULL THEN 'payment' END AS linked_type,
+                    CASE WHEN wpm.id IS NOT NULL THEN wpm.provider_slug END AS linked_source,
+                    wpm.id AS linked_id,
+                    CASE WHEN wpm.id IS NOT NULL THEN wpm.match_method END AS match_method,
                     NULL::text AS group_key,
                     NULL::text AS linked_ofd_status
                 FROM {SCHEMA}.bank_statement_transactions bst
                 JOIN {SCHEMA}.user_integrations ui ON ui.id = bst.integration_id
+                LEFT JOIN LATERAL (
+                    -- Банковская выписка сама по себе не содержит номер заказа -
+                    -- назначение платежа (purpose) единственная зацепка. У платежей
+                    -- через СБП (Точка/QR) банк пишет "QR ID <код>" - тот же код
+                    -- есть в invoice_payload.link платежа Екомкассы (хвост ссылки
+                    -- вида https://web.qr.nspk.ru/<код>). У эквайринга Т-Банка в
+                    -- purpose приходит "Платеж <external_id>" - тот же external_id,
+                    -- что Екомкасса передавала банку при создании платежа, и он же
+                    -- сохранён в webhook_payments.raw_data->>'external_id'.
+                    -- Оба совпадения достаточно специфичны (случайное совпадение
+                    -- по 20+ символьному QR-коду или UUID/строке external_id
+                    -- практически исключено), поэтому здесь, в отличие от
+                    -- сопоставления по сумме/дате, это безопасно делать автоматически.
+                    SELECT wp.id, p.slug AS provider_slug,
+                           CASE WHEN qr_match.id IS NOT NULL THEN 'qr_id' ELSE 'external_id' END AS match_method
+                    FROM {SCHEMA}.webhook_payments wp
+                    JOIN {SCHEMA}.user_integrations wp_ui ON wp_ui.id = wp.integration_id
+                    JOIN {SCHEMA}.integration_providers p ON p.id = wp_ui.provider_id
+                    LEFT JOIN LATERAL (
+                        SELECT wp.id
+                        WHERE substring(bst.purpose FROM 'QR\\s*(?:коду\\s+)?ID\\s+([A-Za-z0-9]+)') IS NOT NULL
+                          AND regexp_replace(regexp_replace(wp.raw_data->'invoice_payload'->>'link', '\\?.*$', ''), '^.*/', '')
+                              = substring(bst.purpose FROM 'QR\\s*(?:коду\\s+)?ID\\s+([A-Za-z0-9]+)')
+                    ) qr_match ON true
+                    WHERE wp.company_id = bst.company_id AND wp.removed_at IS NULL
+                      AND (
+                        qr_match.id IS NOT NULL
+                        OR (
+                          substring(bst.purpose FROM 'Платеж\\s+(\\S+)') IS NOT NULL
+                          AND wp.raw_data->>'external_id' = substring(bst.purpose FROM 'Платеж\\s+(\\S+)')
+                        )
+                      )
+                    ORDER BY qr_match.id IS NOT NULL DESC
+                    LIMIT 1
+                ) wpm ON true
                 WHERE bst.company_id = %(company_id)s AND bst.removed_at IS NULL
             ''')
 
