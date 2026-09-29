@@ -119,6 +119,14 @@ const IntegrationCard = ({
               <span className="text-muted-foreground">Счёт:</span>
               <span className="font-medium font-mono">{integration.config?.account_number || '—'}</span>
             </div>
+            {integration.provider_slug === 'tochka_account' && (
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">Способ авторизации:</span>
+                <span className="font-medium">
+                  {(integration.config?.auth_method || 'jwt') === 'jwt' ? 'JWT-токен' : 'OAuth 2.0'}
+                </span>
+              </div>
+            )}
             <div className="flex items-center justify-between text-sm">
               <span className="text-muted-foreground">Последняя синхронизация:</span>
               <span className="font-medium">{formatDate(integration.last_synced_at ?? null)}</span>

@@ -6,6 +6,7 @@ import Icon from '@/components/ui/icon';
 import TbankAccountPicker from './TbankAccountPicker';
 import EcomkassaStorePicker from './EcomkassaStorePicker';
 import EcomkassaPaymentTypesPicker from './EcomkassaPaymentTypesPicker';
+import TochkaAuthMethodPicker from './TochkaAuthMethodPicker';
 import {
   ConfigState,
   FieldConfig,
@@ -57,11 +58,16 @@ const IntegrationConfigStep = ({
 }: IntegrationConfigStepProps) => {
   const currentFields = PROVIDER_FIELDS[selectedProvider.slug] || [];
   const isTbankAccount = selectedProvider.slug === 'tbank_account';
+  const isTochkaAccount = selectedProvider.slug === 'tochka_account';
   const isEcomkassa = selectedProvider.slug === 'ecomkassa';
   const isEcomkassaGateway = selectedProvider.slug === 'ecomkassa_gateway';
 
   const isConfigValid = () => {
     if (isTbankAccount && !String(config.account_number ?? '').trim()) {
+      return false;
+    }
+
+    if (isTochkaAccount && !String(config.api_token ?? '').trim()) {
       return false;
     }
 
@@ -231,6 +237,15 @@ const IntegrationConfigStep = ({
       )}
 
       {currentFields.map(renderField)}
+
+      {isTochkaAccount && (
+        <TochkaAuthMethodPicker
+          config={config}
+          onConfigChange={onConfigChange}
+          visiblePassword={!!visiblePasswords.api_token}
+          onTogglePasswordVisibility={() => onTogglePasswordVisibility('api_token')}
+        />
+      )}
 
       {(selectedProvider.slug === 'tbank' || selectedProvider.slug === 'ecomkassa_gateway') && (
         <div className="space-y-2">
