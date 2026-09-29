@@ -100,6 +100,16 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         # у них общий uuid документа Екомкассы. Кросс-источниковая связка -
         # смысл отдельного раздела "Транзакции" (подготовка перед сверкой),
         # а не "Событий" (сырая лента по каждому источнику как он есть).
+        # Дата события - COALESCE(receipt.doc_datetime, payment.created_at):
+        # синтетический платёж, досозданный дозагрузкой исторических заказов
+        # (ecomkassa-fetch-orders/save_synthetic_payment), получает created_at
+        # в момент, когда пользователь нажал "Дозагрузить" - это может быть
+        # много позже реальной оплаты (напр. чек за декабрь, дозагруженный
+        # сегодня, иначе показывал бы сегодняшнюю дату). У такого платежа уже
+        # есть receipt_id - берём doc_datetime его чека, это и есть настоящее
+        # время фискальной операции. У "живых" платежей (пришедших вебхуком в
+        # реальном времени) receipt_id обычно ещё нет на момент колбэка -
+        # тогда используется их собственный created_at, как и раньше.
         pay_where = 'WHERE wp.company_id = %s AND wp.removed_at IS NULL'
         pay_params = [company_id]
         if integration_id:
@@ -114,14 +124,16 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
         cur.execute(f'''
             SELECT
-                wp.id, wp.created_at, p.slug, wp.payment_id, wp.order_id,
+                wp.id, COALESCE(er.doc_datetime, wp.created_at) AS event_at,
+                p.slug, wp.payment_id, wp.order_id,
                 wp.amount, wp.status, wp.raw_data, ui.integration_name, p.name,
                 wp.payment_provider
             FROM t_p83864310_fintech_payment_reco.webhook_payments wp
             JOIN t_p83864310_fintech_payment_reco.user_integrations ui ON ui.id = wp.integration_id
             JOIN t_p83864310_fintech_payment_reco.integration_providers p ON p.id = ui.provider_id
+            LEFT JOIN t_p83864310_fintech_payment_reco.ecomkassa_receipts er ON er.id = wp.receipt_id
             {pay_where}
-            ORDER BY wp.created_at ASC
+            ORDER BY event_at ASC
         ''', pay_params)
 
         pay_groups: Dict[Any, Dict[str, Any]] = {}
