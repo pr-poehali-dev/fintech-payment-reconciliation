@@ -146,7 +146,12 @@ const BackfillDialog = ({ hasEcomkassa, hasOfd, bankIntegrations }: BackfillDial
                     onSelect={(range) => {
                       if (!range?.from) return;
                       setDateFrom(range.from);
-                      if (range.to) setDateTo(range.to);
+                      if (range.to) {
+                        setDateTo(range.to);
+                        // Обе даты выбраны - период готов, закрываем календарь
+                        // сами, не заставляя пользователя тянуться к крестику.
+                        setCalendarOpen(false);
+                      }
                     }}
                     disabled={{ after: yesterday() }}
                     numberOfMonths={2}
