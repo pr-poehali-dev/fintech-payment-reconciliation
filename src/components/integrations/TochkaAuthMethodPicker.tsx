@@ -14,6 +14,12 @@ interface TochkaAccount {
   balance: number | null;
 }
 
+interface TochkaRetailer {
+  terminal_id: string;
+  merchant_id: string | null;
+  name: string | null;
+}
+
 interface TochkaAuthMethodPickerProps {
   config: ConfigState;
   onConfigChange: (config: ConfigState) => void;
@@ -44,9 +50,11 @@ const TochkaAuthMethodPicker = ({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [accounts, setAccounts] = useState<TochkaAccount[]>([]);
+  const [retailers, setRetailers] = useState<TochkaRetailer[]>([]);
 
   const apiToken = String(config.api_token ?? '');
   const accountNumber = config.account_number ? String(config.account_number) : '';
+  const purposeKeywords = String(config.purpose_keywords ?? '');
   const autoFetchedRef = useRef(false);
 
   const fetchAccounts = async (token: string, silent = false) => {
@@ -68,6 +76,7 @@ const TochkaAuthMethodPicker = ({
 
       if (response.ok && data.success) {
         setAccounts(data.accounts || []);
+        setRetailers(data.retailers || []);
       } else if (!silent) {
         setError(data.error || 'Не удалось получить список счетов');
       }
@@ -76,6 +85,16 @@ const TochkaAuthMethodPicker = ({
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // Список ключевых слов хранится строкой через запятую - добавляем TID,
+  // только если его там ещё нет (сравнение по подстроке, т.к. слова могут
+  // быть введены пользователем в разном порядке/регистре).
+  const addTerminalToKeywords = (terminalId: string) => {
+    const existing = purposeKeywords.split(',').map((w) => w.trim()).filter(Boolean);
+    if (existing.some((w) => w.toLowerCase() === terminalId.toLowerCase())) return;
+    const next = [...existing, terminalId].join(', ');
+    onConfigChange({ ...config, purpose_keywords: next });
   };
 
   // Если форма открыта для редактирования уже существующей интеграции - токен
@@ -147,7 +166,7 @@ const TochkaAuthMethodPicker = ({
           </button>
         </div>
         <p className="text-xs text-muted-foreground mt-1">
-          Сгенерируйте в интернет-банке Точки: Настройки → API → Токены — задайте срок действия и права доступа «Счета» (чтение выписки)
+          Сгенерируйте в интернет-банке Точки: Настройки → API → Токены — задайте срок действия и права доступа «Счета» (чтение выписки), а также «Эквайринг» — чтобы мы могли сразу подсказать TID ваших терминалов
         </p>
       </div>
 
@@ -184,6 +203,51 @@ const TochkaAuthMethodPicker = ({
               )}
             </SelectContent>
           </Select>
+        </div>
+      )}
+
+      {retailers.length > 0 && (
+        <div>
+          <Label>Терминалы интернет-эквайринга</Label>
+          <p className="text-xs text-muted-foreground mb-2">
+            Найдены по вашему токену — банк подписывает ими назначение платежа
+            (например «...по терминалу TID {retailers[0].terminal_id}...»).
+            Добавьте нужный TID в ключевые слова ниже, чтобы такие операции
+            точно попадали в выгрузку
+          </p>
+          <div className="space-y-1.5">
+            {retailers.map((r) => {
+              const alreadyAdded = purposeKeywords
+                .split(',')
+                .map((w) => w.trim().toLowerCase())
+                .includes(r.terminal_id.toLowerCase());
+              return (
+                <div
+                  key={r.terminal_id}
+                  className="flex items-center justify-between gap-2 rounded-lg border border-border p-2.5"
+                >
+                  <div className="min-w-0">
+                    <div className="text-sm font-medium truncate">{r.name || 'Торговая точка'}</div>
+                    <div className="text-xs text-muted-foreground font-mono">
+                      TID {r.terminal_id}
+                      {r.merchant_id ? ` · MID ${r.merchant_id}` : ''}
+                    </div>
+                  </div>
+                  <Button
+                    type="button"
+                    variant={alreadyAdded ? 'ghost' : 'outline'}
+                    size="sm"
+                    disabled={alreadyAdded}
+                    onClick={() => addTerminalToKeywords(r.terminal_id)}
+                    className="shrink-0 gap-1.5"
+                  >
+                    <Icon name={alreadyAdded ? 'Check' : 'Plus'} size={13} />
+                    {alreadyAdded ? 'Добавлено' : 'В ключевые слова'}
+                  </Button>
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
     </div>
