@@ -392,10 +392,10 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     ui.integration_name AS integration_name,
                     bst.external_transaction_id AS reference,
                     bst.raw_data AS raw_data,
-                    CASE WHEN wpm.id IS NOT NULL THEN 'payment' END AS linked_type,
-                    CASE WHEN wpm.id IS NOT NULL THEN wpm.provider_slug END AS linked_source,
-                    wpm.id AS linked_id,
-                    CASE WHEN wpm.id IS NOT NULL THEN wpm.match_method END AS match_method,
+                    CASE WHEN wpm.id IS NOT NULL THEN 'payment' WHEN mm.id IS NOT NULL THEN 'money' END AS linked_type,
+                    CASE WHEN wpm.id IS NOT NULL THEN wpm.provider_slug WHEN mm.id IS NOT NULL THEN mm.provider_slug END AS linked_source,
+                    COALESCE(wpm.id, mm.id) AS linked_id,
+                    CASE WHEN wpm.id IS NOT NULL THEN wpm.match_method WHEN mm.id IS NOT NULL THEN 'qr_id' END AS match_method,
                     NULL::text AS group_key,
                     NULL::text AS linked_ofd_status
                 FROM {SCHEMA}.bank_statement_transactions bst
@@ -435,6 +435,28 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     ORDER BY qr_match.id IS NOT NULL DESC
                     LIMIT 1
                 ) wpm ON true
+                -- Комиссия СБП приходит ОТДЕЛЬНОЙ строкой банковской выписки
+                -- (не платежом Екомкассы), поэтому связь "приход <-> его
+                -- комиссия" - это money<->money, а не money<->payment. Ищем
+                -- вторую строку той же компании с тем же QR ID в purpose и
+                -- противоположным направлением (приход ищет свою комиссию,
+                -- комиссия ищет свой приход). Только запасной вариант - если
+                -- сам платёж уже нашёлся через wpm, эта связка не нужна: тогда
+                -- обе money-строки и так попадут в одну группу транзитивно
+                -- через union-find на фронте (обе ссылаются на один payment).
+                LEFT JOIN LATERAL (
+                    SELECT bst2.id, bst2.provider_slug
+                    FROM {SCHEMA}.bank_statement_transactions bst2
+                    WHERE wpm.id IS NULL
+                      AND bst2.id != bst.id
+                      AND bst2.company_id = bst.company_id
+                      AND bst2.removed_at IS NULL
+                      AND bst2.direction != bst.direction
+                      AND substring(bst.purpose FROM 'QR\\s*(?:коду\\s+)?ID\\s+([A-Za-z0-9]+)') IS NOT NULL
+                      AND substring(bst2.purpose FROM 'QR\\s*(?:коду\\s+)?ID\\s+([A-Za-z0-9]+)')
+                          = substring(bst.purpose FROM 'QR\\s*(?:коду\\s+)?ID\\s+([A-Za-z0-9]+)')
+                    LIMIT 1
+                ) mm ON true
                 WHERE bst.company_id = %(company_id)s AND bst.removed_at IS NULL
             ''')
 

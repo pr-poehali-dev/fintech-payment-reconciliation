@@ -74,9 +74,17 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
        (bank_statement_transactions) - эти операции уже отфильтрованы по
        ключевым словам назначения платежа на этапе синхронизации выписки
        (это все "наши" операции терминала/счёта). Количество считается по
-       числу операций, сумма - НЕТТО: direction='in' даёт +amount (плюс
-       известная комиссия эквайринга, если появится), 'out' (например,
-       возврат клиенту со счёта) вычитается.
+       числу операций, сумма - НЕТТО: direction='in' даёт +amount, 'out'
+       (например, возврат клиенту со счёта) вычитается. Комиссия эквайринга
+       возвращается обратно к сумме прихода (чтобы сравнивать с ВАЛОВОЙ
+       выручкой чеков), распознаётся тремя способами по убыванию приоритета:
+       заполненный реестр платежей терминала (commission_amount/source), текст
+       "Справочно: сумма комиссии X руб" в purpose (классический эквайринг -
+       банк платит одним зачислением за период, комиссия вычтена ДО выплаты и
+       её сумма написана прямо в назначении), либо отдельная строка "Комиссия
+       ... QR ID <код>" с тем же QR ID, что и приход (СБП - комиссия приходит
+       отдельной операцией списания сразу за приходом, это две строки одной
+       сделки, а не два независимых события).
     Дата события для платежа - дата ФАКТИЧЕСКОЙ фискальной операции (чек
     привязан - берём его doc_datetime), а не дата, когда запись физически
     появилась в нашей БД (created_at может быть сильно позже реальной оплаты
@@ -262,16 +270,41 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
         # 3. Деньги на р/с: обе стороны (in/out) - выписка уже отфильтрована по
         # ключевым словам назначения платежа на этапе синхронизации (это все
-        # "наши" операции терминала/счёта). in = +amount (плюс известная
-        # комиссия эквайринга, если появится), out = -amount (например,
-        # возврат клиенту прямо со счёта).
+        # "наши" операции терминала/счёта). in = +amount, out = -amount
+        # (например, возврат клиенту прямо со счёта или отдельная строка
+        # комиссии СБП).
+        #
+        # КОМИССИЯ ЭКВАЙРИНГА - два физически разных способа, которыми банк
+        # доносит её до выписки, и оба нужно вернуть обратно к сумме, чтобы
+        # "Деньги" сравнивались с ВАЛОВОЙ выручкой чеков (а не с суммой уже за
+        # вычетом комиссии - иначе разница на плитке всегда была бы отрицательной
+        # и не значила бы никакой реальной проблемы):
+        #   (а) классический эквайринг (карта, не СБП) - банк платит ОДНИМ
+        #       зачислением за весь отчётный период (обычно раз в 1-2 дня, с
+        #       опозданием), комиссия уже вычтена ДО зачисления и её сумма
+        #       написана прямо в назначении платежа текстом "Справочно: сумма
+        #       комиссии X руб" - извлекаем регексом прямо в SQL;
+        #   (б) СБП (QR-платежи) - комиссия приходит ОТДЕЛЬНОЙ строкой выписки
+        #       (direction='out', "Комиссия за осуществление переводов... QR ID
+        #       <код>") сразу вслед за приходом с тем же QR ID в назначении -
+        #       эта строка физически является частью той же сделки, не
+        #       самостоятельным расходом, поэтому не вычитается из суммы
+        #       "Денег", а прибавляется обратно (аналогично п. а).
+        # commission_amount/commission_source (реестр платежей эквайринга,
+        # если когда-нибудь будет подключён) остаются приоритетным источником
+        # там, где заполнены - оба текстовых способа ниже лишь запасной вариант
+        # на случай, если реестра нет (как сейчас).
         cur.execute(f'''
             SELECT
                 bst.operation_date::date AS op_date,
                 bst.amount,
                 bst.direction,
+                bst.purpose,
                 COALESCE(bst.commission_amount, 0) AS commission_amount,
-                bst.commission_source
+                bst.commission_source,
+                substring(bst.purpose FROM 'сумма комиссии\\s+([\\d.,]+)\\s*руб') AS acquiring_commission_text,
+                substring(bst.purpose FROM 'QR\\s*(?:коду\\s+)?ID\\s+([A-Za-z0-9]+)') AS qr_id,
+                (bst.purpose ILIKE 'Комиссия%%QR ID%%' OR bst.purpose ILIKE 'Комиссия%%СБП%%') AS is_sbp_commission_row
             FROM {SCHEMA}.bank_statement_transactions bst
             JOIN {SCHEMA}.user_integrations ui ON ui.id = bst.integration_id
             JOIN {SCHEMA}.integration_providers p ON p.id = ui.provider_id
@@ -288,19 +321,43 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         bank_with_known_commission = 0
         daily_bank: Dict[str, float] = {}
 
-        for op_date, amount, direction, commission_amount, commission_source in bank_rows:
+        # bank_raw_total - ЛИТЕРАЛЬНЫЙ чистый эффект на остаток счёта (как есть
+        # по выписке): каждая строка учитывается своим знаком БЕЗ исключений,
+        # включая строки комиссии СБП (они реально списываются со счёта).
+        # bank_commission_total - вся распознанная комиссия (оба способа из
+        # комментария выше), которая при этом была вычтена из raw одним из двух
+        # путей: у классического эквайринга - "невидимо", она вообще не пришла
+        # отдельной строкой (просто зачисление меньше на её размер), у СБП -
+        # "видимо", отдельной строкой -amount. В обоих случаях raw оказывается
+        # МЕНЬШЕ валовой суммы продажи ровно на размер комиссии, поэтому чтобы
+        # получить сумму, сравнимую с ВАЛОВОЙ выручкой чеков, комиссия
+        # добавляется обратно один раз: bank_total = bank_raw_total + bank_commission_total.
+        for (op_date, amount, direction, purpose, commission_amount, commission_source,
+             acquiring_commission_text, qr_id, is_sbp_commission_row) in bank_rows:
             amount_f = float(amount) if amount else 0.0
             is_in = direction == 'in'
             signed_amount = amount_f if is_in else -amount_f
-            # Комиссия учитывается только для поступлений - это удержание
-            # эквайринга при выплате, к списаниям (возвратам) отношения не имеет.
-            commission_f = float(commission_amount) if (commission_amount and is_in) else 0.0
-
             bank_raw_total += signed_amount
-            bank_commission_total += commission_f
             bank_count += 1
-            if commission_source == 'registry':
+
+            commission_f = 0.0
+            if is_in and commission_amount and float(commission_amount) > 0:
+                commission_f = float(commission_amount)
+                if commission_source == 'registry':
+                    bank_with_known_commission += 1
+            elif is_in and acquiring_commission_text:
+                # (а) классический эквайринг - сумма комиссии написана в purpose
+                # самого зачисления, банк её уже вычел до зачисления "невидимо".
+                commission_f = float(acquiring_commission_text.replace(',', '.'))
                 bank_with_known_commission += 1
+            elif direction == 'out' and is_sbp_commission_row:
+                # (б) СБП - сама строка комиссии, уже вычтена из raw выше как
+                # обычный расход (-amount) - распознаём её отдельно только для
+                # подсчёта bank_commission_total (добавить обратно) и счётчика.
+                commission_f = amount_f
+                bank_with_known_commission += 1
+
+            bank_commission_total += commission_f
             if op_date:
                 day_key = op_date.isoformat()
                 daily_bank[day_key] = daily_bank.get(day_key, 0.0) + signed_amount + commission_f
@@ -335,8 +392,9 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             'bank_transactions_with_registry_commission': bank_with_known_commission,
             'bank_commission_note': (
                 'Комиссия эквайринга неизвестна ни по одной операции - суммы банка '
-                'взяты как есть из выписки. Точная сверка станет доступна после '
-                'подключения реестра платежей терминала эквайринга.'
+                'взяты как есть из выписки, без учёта комиссии. Подключите реестр '
+                'платежей терминала эквайринга или проверьте, что банк указывает '
+                'сумму комиссии в назначении платежа.'
                 if bank_with_known_commission == 0 and bank_count > 0 else None
             )
         }
