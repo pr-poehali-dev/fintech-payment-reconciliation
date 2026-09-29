@@ -16,7 +16,7 @@ const TransactionsFilters = ({
   setShowUnmatchedOnly
 }: TransactionsFiltersProps) => {
   return (
-    <div className="flex items-center gap-3 flex-wrap">
+    <div className="flex items-center gap-3">
       <Input
         placeholder="Поиск по номеру, сумме, описанию..."
         value={searchQuery}
@@ -28,10 +28,10 @@ const TransactionsFilters = ({
         variant={showUnmatchedOnly ? 'default' : 'outline'}
         size="sm"
         onClick={() => setShowUnmatchedOnly(!showUnmatchedOnly)}
-        className="gap-2 ml-auto"
+        className="gap-2 ml-auto shrink-0"
       >
         <Icon name="Unlink" size={14} />
-        Только без пары
+        Только без связи
       </Button>
     </div>
   );
