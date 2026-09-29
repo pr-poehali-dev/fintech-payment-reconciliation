@@ -64,10 +64,21 @@ const makeUnionFind = () => {
   return { find, union };
 };
 
-// Порядок предпочтения при выборе "представителя" сделки для суммы группы:
-// платёж - самый авторитетный источник факта движения денег, затем чек
-// кассы/заказ, затем чек ОФД, затем банковская операция.
-const typeOrder: Record<string, number> = { payment: 0, receipt_kassa: 1, receipt_order: 1, receipt_ofd: 2, money: 3 };
+// Порядок отображения "главной" (верхнеуровневой) строки группы в свёрнутом
+// виде: всегда либо ЗАКАЗ (receipt_order), либо ПЛАТЁЖ (payment), если
+// заказа нет - заказ приоритетнее, т.к. внутри него уже может быть свой
+// платёж, чек кассы, чек ОФД, деньги на счёт и т.д. Чек кассы/ОФД и
+// банковская операция сами по себе никогда не показываются как верхний
+// уровень группы - они всегда вложены (под заказом либо платежом).
+const displayOrder: Record<string, number> = { receipt_order: 0, payment: 1, receipt_kassa: 2, receipt_ofd: 3, money: 4 };
+
+// Порядок предпочтения при выборе "представителя" сделки для СУММЫ группы -
+// платёж остаётся самым авторитетным источником факта движения денег
+// (это его amount реально был авторизован/подтверждён платёжной системой),
+// затем заказ/чек кассы, затем чек ОФД, затем банковская операция. Отдельно
+// от displayOrder, т.к. это про выбор суммы, а не про то, что показывается
+// свёрнутой шапкой группы.
+const sumRepresentativeOrder: Record<string, number> = { payment: 0, receipt_order: 1, receipt_kassa: 1, receipt_ofd: 2, money: 3 };
 
 /**
  * Группирует плоский список транзакций в связанные цепочки (платёж -> чек
@@ -156,7 +167,7 @@ export const groupTransactions = (transactions: Transaction[]): TransactionGroup
     });
     let total = 0;
     byDeal.forEach((dealItems) => {
-      const representative = [...dealItems].sort((a, b) => (typeOrder[a.type] ?? 9) - (typeOrder[b.type] ?? 9))[0];
+      const representative = [...dealItems].sort((a, b) => (sumRepresentativeOrder[a.type] ?? 9) - (sumRepresentativeOrder[b.type] ?? 9))[0];
       total += representative.signed_amount ?? representative.amount ?? 0;
     });
     return total;
@@ -167,7 +178,7 @@ export const groupTransactions = (transactions: Transaction[]): TransactionGroup
       const { status, isManual } = computeStatus(items);
       return {
         id,
-        items: [...items].sort((a, b) => (typeOrder[a.type] ?? 9) - (typeOrder[b.type] ?? 9)),
+        items: [...items].sort((a, b) => (displayOrder[a.type] ?? 9) - (displayOrder[b.type] ?? 9)),
         status,
         isManual,
         totalAmount: computeTotal(items)
