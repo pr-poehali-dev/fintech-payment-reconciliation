@@ -50,17 +50,26 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     Сверка трёх точек контроля выручки компании за выбранный период:
     1) платежи, пришедшие вебхуками из интеграций эквайринга (webhook_payments,
        провайдеры категории "payments") - берём последний статус по каждому
-       payment_id. Количество (payments_count) считается по числу платёжных
-       документов вне зависимости от статуса, а сумма - НЕТТО: платёж вносит
-       вклад только пока он реально "жив" деньгами (AUTHORIZED/CONFIRMED),
-       возврат (REFUNDED) или отмена дают 0 - деньги пришли и ушли обратно,
-       либо вообще не двигались.
-    2) чеки из кассы (ecomkassa_receipts) и ОФД (ofd_receipts) - количество
-       считается по числу документов, сумма - НЕТТО с учётом знака операции
-       (Income/+, Refund income/-, по 54-ФЗ). У чека кассы нет собственного
-       поля типа операции - знак берётся из связанного чека ОФД (по триплету
-       фискальных реквизитов ФН+ФД+ФПД), если пара найдена; без пары считается
-       продажей (+), как и в разделе "Транзакции".
+       payment_id. Учитываются ТОЛЬКО активные интеграции (ui.status='active') -
+       мягко удалённые/тестовые интеграции (напр. созданные при отладке
+       soft-delete сценариев) не должны попадать в сверку реальных денег.
+       Количество (payments_count) считается по числу платёжных документов
+       вне зависимости от статуса, а сумма - НЕТТО: платёж вносит вклад
+       только пока он реально "жив" деньгами (AUTHORIZED/CONFIRMED), возврат
+       (REFUNDED) или отмена дают 0 - деньги пришли и ушли обратно, либо
+       вообще не двигались.
+    2) чеки - касса (ecomkassa_receipts) и ОФД (ofd_receipts) считаются и
+       сравниваются МЕЖДУ СОБОЙ, а НЕ суммируются в одну точку - это два
+       разных физических источника данных об одном и том же чеке (касса
+       пробивает и пересылает результат сама, ОФД получает копию от
+       налоговой), сложение их сумм задвоило бы каждую продажу. Оба - НЕТТО
+       с учётом знака операции (Income/+, Refund income/-, по 54-ФЗ); у чека
+       кассы нет собственного поля типа операции - знак берётся из связанного
+       чека ОФД (по триплету фискальных реквизитов ФН+ФД+ФПД), без пары
+       считается продажей (+), как и в разделе "Транзакции". Основная сумма
+       "чеков" для сравнения с платежами и деньгами на р/с берётся из кассы
+       (это источник, который реально формирует продажу в моменте), сумма
+       ОФД идёт отдельным полем receipts_ofd для контроля кассы vs ОФД.
     3) реальные деньги, поступившие и списанные с расчётного счёта
        (bank_statement_transactions) - эти операции уже отфильтрованы по
        ключевым словам назначения платежа на этапе синхронизации выписки
@@ -68,12 +77,18 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
        числу операций, сумма - НЕТТО: direction='in' даёт +amount (плюс
        известная комиссия эквайринга, если появится), 'out' (например,
        возврат клиенту со счёта) вычитается.
+    Дата события для платежа - дата ФАКТИЧЕСКОЙ фискальной операции (чек
+    привязан - берём его doc_datetime), а не дата, когда запись физически
+    появилась в нашей БД (created_at может быть сильно позже реальной оплаты
+    при дозагрузке исторических документов) - иначе платёж "переезжает" на
+    день загрузки и ложно расходится по дате с чеком.
     Результат сохраняется снапшотом в reconciliation_snapshots (upsert по
     company_id+period), чтобы не пересчитывать и в будущем показать детализацию.
     День "сегодня" в расчёт не берётся - сверяем только полностью закрытые дни,
     поэтому period_to не может быть позже вчера.
     Args: company_id (обязателен), date_from, date_to (YYYY-MM-DD, опционально)
-    Returns: totals по трём точкам (НЕТТО-суммы, count - число документов),
+    Returns: totals по трём точкам (НЕТТО-суммы, count - число документов;
+    receipts.amount/count - касса, receipts.ofd_amount/ofd_count - ОФД),
     daily[] для графика, details для детализации
     '''
 
@@ -141,7 +156,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 JOIN {SCHEMA}.integration_providers p ON p.id = ui.provider_id
                 JOIN {SCHEMA}.integration_categories c ON c.id = p.category_id
                 LEFT JOIN {SCHEMA}.ecomkassa_receipts er ON er.id = wp.receipt_id
-                WHERE wp.company_id = %s AND c.slug = 'payments' AND wp.removed_at IS NULL
+                WHERE wp.company_id = %s AND c.slug = 'payments'
+                  AND wp.removed_at IS NULL AND ui.status = 'active'
                 GROUP BY wp.integration_id, wp.payment_id
             )
             SELECT payment_date, latest_status, amount, payment_provider
@@ -180,9 +196,15 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 payments_by_provider[provider_key]['amount'] += amount_f
                 payments_by_provider[provider_key]['count'] += 1
 
-        # 2. Чеки: касса (ecomkassa_receipts) + ОФД (ofd_receipts). Знак чека
-        # кассы берётся из связанного чека ОФД (тот же fiscal_triplet матчинг,
-        # что и в transactions-list), без пары - считается продажей.
+        # 2. Чеки кассы (ecomkassa_receipts) и чеки ОФД (ofd_receipts) - ДВА
+        # РАЗНЫХ источника данных об одном и том же физическом чеке, поэтому
+        # считаются и сравниваются МЕЖДУ СОБОЙ, а не суммируются в одну точку
+        # (сложение задвоило бы каждую продажу - касса пробивает чек и
+        # присылает его нам сама, ОФД параллельно получает копию от налоговой
+        # для того же самого чека). "receipts" (основная точка сверки с
+        # платежами и деньгами на р/с) - это касса; ОФД - контрольная точка
+        # для сравнения кассы vs ОФД, считается отдельно и возвращается как
+        # receipts_ofd_total/receipts_ofd_count.
         cur.execute(f'''
             SELECT
                 ekr.doc_datetime::date AS receipt_date,
@@ -206,16 +228,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
               AND ekr.removed_at IS NULL
               AND ekr.status IS DISTINCT FROM 'cancelled'
               AND ekr.doc_datetime::date BETWEEN %s AND %s
-            UNION ALL
-            SELECT
-                ofd.doc_datetime::date AS receipt_date,
-                ofd.total_sum,
-                ofd.operation_type AS linked_ofd_status
-            FROM {SCHEMA}.ofd_receipts ofd
-            WHERE ofd.company_id = %s
-              AND ofd.removed_at IS NULL
-              AND ofd.doc_datetime::date BETWEEN %s AND %s
-        ''', (company_id, date_from, date_to, company_id, date_from, date_to))
+        ''', (company_id, date_from, date_to))
 
         receipts_rows = cur.fetchall()
         receipts_total = 0.0
@@ -230,6 +243,22 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             if receipt_date:
                 day_key = receipt_date.isoformat()
                 daily_receipts[day_key] = daily_receipts.get(day_key, 0.0) + signed
+
+        # 2б. Чеки ОФД отдельно - контрольная точка "касса vs ОФД".
+        cur.execute(f'''
+            SELECT ofd.total_sum, ofd.operation_type
+            FROM {SCHEMA}.ofd_receipts ofd
+            WHERE ofd.company_id = %s
+              AND ofd.removed_at IS NULL
+              AND ofd.doc_datetime::date BETWEEN %s AND %s
+        ''', (company_id, date_from, date_to))
+
+        receipts_ofd_total = 0.0
+        receipts_ofd_count = 0
+        for total_sum, operation_type in cur.fetchall():
+            amount_f = float(total_sum) if total_sum else 0.0
+            receipts_ofd_total += amount_f * classify_receipt_sign(operation_type)
+            receipts_ofd_count += 1
 
         # 3. Деньги на р/с: обе стороны (in/out) - выписка уже отфильтрована по
         # ключевым словам назначения платежа на этапе синхронизации (это все
@@ -300,6 +329,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         details = {
             'payments_by_status': payments_by_status,
             'payments_by_provider': payments_by_provider_rounded,
+            'receipts_ofd_total': round(receipts_ofd_total, 2),
+            'receipts_ofd_count': receipts_ofd_count,
             'bank_transactions_total': bank_count,
             'bank_transactions_with_registry_commission': bank_with_known_commission,
             'bank_commission_note': (
@@ -352,7 +383,12 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 'period': {'date_from': date_from.isoformat(), 'date_to': date_to.isoformat()},
                 'totals': {
                     'payments': {'amount': payments_total, 'count': payments_count},
-                    'receipts': {'amount': receipts_total, 'count': receipts_count},
+                    'receipts': {
+                        'amount': receipts_total,
+                        'count': receipts_count,
+                        'ofd_amount': round(receipts_ofd_total, 2),
+                        'ofd_count': receipts_ofd_count
+                    },
                     'bank': {
                         'amount': bank_total,
                         'raw_amount': bank_raw_total,

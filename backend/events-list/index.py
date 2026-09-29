@@ -193,7 +193,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
         cur.execute(f'''
             SELECT
-                ekr.id, ekr.order_id, ekr.created_at, ekr.status, ekr.total_sum,
+                ekr.id, ekr.order_id, COALESCE(ekr.doc_datetime, ekr.created_at) AS event_at,
+                ekr.status, ekr.total_sum,
                 ekr.order_type, ekr.payment_provider, ekr.raw_data,
                 ui.integration_name,
                 wp.id AS payment_row_id, wp.status AS payment_status, wp.amount AS payment_amount,
@@ -217,7 +218,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 LIMIT 1
             ) ofd ON true
             {ekr_where}
-            ORDER BY ekr.created_at ASC
+            ORDER BY event_at ASC
         ''', ekr_params)
 
         for row in cur.fetchall():

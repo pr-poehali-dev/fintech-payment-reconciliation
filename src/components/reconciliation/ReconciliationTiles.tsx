@@ -3,7 +3,7 @@ import Icon from '@/components/ui/icon';
 
 interface ReconciliationTotals {
   payments: { amount: number; count: number };
-  receipts: { amount: number; count: number };
+  receipts: { amount: number; count: number; ofd_amount?: number; ofd_count?: number };
   bank: { amount: number; raw_amount: number; commission_amount: number; count: number };
 }
 
@@ -24,6 +24,9 @@ const diffLabel = (a: number, b: number) => {
 const ReconciliationTiles = ({ totals }: ReconciliationTilesProps) => {
   const paymentsVsReceipts = diffLabel(totals.payments.amount, totals.receipts.amount);
   const receiptsVsBank = diffLabel(totals.receipts.amount, totals.bank.amount);
+  const kassaVsOfd = totals.receipts.ofd_amount !== undefined
+    ? diffLabel(totals.receipts.amount, totals.receipts.ofd_amount)
+    : null;
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -48,7 +51,7 @@ const ReconciliationTiles = ({ totals }: ReconciliationTilesProps) => {
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
             <Icon name="Receipt" size={16} />
-            Чеки (касса + ОФД)
+            Чеки кассы
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -58,6 +61,11 @@ const ReconciliationTiles = ({ totals }: ReconciliationTilesProps) => {
           <p className={`text-xs mt-1 ${paymentsVsReceipts.color}`}>
             {totals.receipts.count} чеков · vs платежи: {paymentsVsReceipts.text}
           </p>
+          {kassaVsOfd && (
+            <p className={`text-xs mt-0.5 ${kassaVsOfd.color}`}>
+              vs ОФД ({totals.receipts.ofd_count}): {kassaVsOfd.text}
+            </p>
+          )}
         </CardContent>
       </Card>
 
