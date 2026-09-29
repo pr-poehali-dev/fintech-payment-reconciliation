@@ -8,7 +8,9 @@ const STATUS_LABELS: Record<string, string> = {
   REJECTED: 'Отклонён',
   fail: 'Ошибка',
   REFUNDED: 'Возврат',
-  CANCELED: 'Отменён'
+  CANCELED: 'Отменён',
+  in: 'Приход',
+  out: 'Расход'
 };
 
 export const transactionStatusLabel = (status: string | null): string => {
