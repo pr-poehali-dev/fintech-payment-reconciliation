@@ -225,6 +225,27 @@ const BackfillDialog = ({ ecomkassaIntegrations, ofdIntegrations, bankIntegratio
               </>
             )}
 
+            {bankIntegrations.length > 0 && (
+              <>
+                <Separator />
+                <div className="space-y-1">
+                  <Label className="text-sm font-medium flex items-center gap-2">
+                    <Icon name="Landmark" size={14} />
+                    Деньги — операции по расчётному счёту
+                  </Label>
+                  <div className="flex items-center gap-2">
+                    <Checkbox id="type-money" checked disabled />
+                    <Label htmlFor="type-money" className="text-sm font-normal text-muted-foreground">
+                      Приходы (in) и расходы (out) за период — загружаются всегда, без фильтра по типу
+                    </Label>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Источник: {bankIntegrations.map((b) => b.name).join(', ')}
+                  </p>
+                </div>
+              </>
+            )}
+
             {phase !== 'idle' && (
               <>
                 <Separator />
