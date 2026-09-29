@@ -86,11 +86,12 @@ const BANK_ACCOUNT_FIELDS: FieldConfig[] = [
   { key: 'api_token', label: 'Токен API банка', type: 'password', hint: 'Получите в личном кабинете банка в разделе API/интеграции' }
 ];
 
-// auth_method/api_token для tochka_account не входят в общий список полей -
-// выбор способа авторизации (JWT/OAuth 2.0) и сам токен вводятся в
-// TochkaAuthMethodPicker, аналогично тому, как это сделано для tbank_account.
+// auth_method/api_token/account_number для tochka_account не входят в общий
+// список полей - выбор способа авторизации (JWT/OAuth 2.0), сам токен и счёт
+// вводятся в TochkaAuthMethodPicker: по JWT-токену запрашивается список счетов
+// компании (Get Accounts List), номер счёта выбирается из него, а не вводится
+// руками, как раньше.
 const TOCHKA_ACCOUNT_FIELDS: FieldConfig[] = [
-  { key: 'account_number', label: 'Номер расчётного счёта', type: 'text', placeholder: '40702810000000000000' },
   { key: 'inn', label: 'ИНН организации', type: 'text', placeholder: '1234567890' }
 ];
 

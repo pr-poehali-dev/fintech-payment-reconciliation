@@ -1,7 +1,18 @@
+import { useState } from 'react';
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import Icon from '@/components/ui/icon';
 import { ConfigState } from './providerFieldsConfig';
+import functionUrls from '../../../backend/func2url.json';
+
+interface TochkaAccount {
+  account_id: string;
+  account_number: string;
+  currency: string | null;
+  balance: number | null;
+}
 
 interface TochkaAuthMethodPickerProps {
   config: ConfigState;
@@ -16,6 +27,8 @@ interface TochkaAuthMethodPickerProps {
 //   права доступа сразу там) и вставляется в наш кабинет как есть. Никакого
 //   редиректа и подтверждения через OAuth не требуется - подходит, когда
 //   интеграцией пользуется только сам владелец счёта. Работает уже сейчас.
+//   По этому же токену запрашивается список счетов (Get Accounts List) -
+//   номер счёта выбирается из списка, а не вводится вручную.
 // - OAuth 2.0 - авторизация через редирект на страницу Точки с подтверждением
 //   доступа, обновляемый access/refresh токен без ручного участия владельца
 //   счёта в будущем. Нужен, когда доступ предоставляется третьим лицам
@@ -28,6 +41,41 @@ const TochkaAuthMethodPicker = ({
   onTogglePasswordVisibility
 }: TochkaAuthMethodPickerProps) => {
   const authMethod = (config.auth_method as string) || 'jwt';
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [accounts, setAccounts] = useState<TochkaAccount[]>([]);
+
+  const apiToken = String(config.api_token ?? '');
+  const accountNumber = config.account_number ? String(config.account_number) : '';
+
+  const handleFetchAccounts = async () => {
+    if (!apiToken.trim()) {
+      setError('Вставьте JWT-токен');
+      return;
+    }
+
+    setIsLoading(true);
+    setError('');
+
+    try {
+      const response = await fetch(functionUrls['tochka-accounts-list'], {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ api_token: apiToken })
+      });
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        setAccounts(data.accounts || []);
+      } else {
+        setError(data.error || 'Не удалось получить список счетов');
+      }
+    } catch {
+      setError('Проблема с подключением к серверу');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
     <div className="space-y-3">
@@ -70,7 +118,7 @@ const TochkaAuthMethodPicker = ({
             id="tochka_api_token"
             type={visiblePassword ? 'text' : 'password'}
             placeholder="eyJhbGciOiJSUzI1NiIs..."
-            value={(config.api_token ?? '') as string}
+            value={apiToken}
             onChange={(e) => onConfigChange({ ...config, api_token: e.target.value })}
             className="pr-10"
           />
@@ -87,6 +135,42 @@ const TochkaAuthMethodPicker = ({
           Сгенерируйте в интернет-банке Точки: Настройки → API → Токены — задайте срок действия и права доступа «Счета» (чтение выписки)
         </p>
       </div>
+
+      <Button type="button" variant="outline" size="sm" onClick={handleFetchAccounts} disabled={isLoading}>
+        {isLoading ? (
+          <Icon name="Loader2" size={14} className="animate-spin mr-2" />
+        ) : (
+          <Icon name="Search" size={14} className="mr-2" />
+        )}
+        {accounts.length > 0 ? 'Обновить список счетов' : 'Найти счета по токену'}
+      </Button>
+
+      {error && <p className="text-xs text-destructive">{error}</p>}
+
+      {(accounts.length > 0 || accountNumber) && (
+        <div>
+          <Label>Расчётный счёт</Label>
+          <Select
+            value={accountNumber}
+            onValueChange={(value) => onConfigChange({ ...config, account_number: value })}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Выберите счёт из списка" />
+            </SelectTrigger>
+            <SelectContent>
+              {accounts.map((acc) => (
+                <SelectItem key={acc.account_id} value={acc.account_number}>
+                  {acc.account_number}
+                  {acc.balance !== null ? ` · ${acc.balance.toLocaleString('ru-RU')} ${acc.currency || '₽'}` : ''}
+                </SelectItem>
+              ))}
+              {accountNumber && !accounts.some((a) => a.account_number === accountNumber) && (
+                <SelectItem value={accountNumber}>{accountNumber}</SelectItem>
+              )}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
     </div>
   );
 };

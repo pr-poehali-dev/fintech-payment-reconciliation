@@ -1,4 +1,5 @@
 {
+  "tochka-accounts-list": "https://functions.poehali.dev/06d974db-fab7-4c32-a4da-4ba2ffaa7752",
   "transactions-remove": "https://functions.poehali.dev/c5100180-b141-4e21-8470-9c27ad0ec2a7",
   "transactions-link": "https://functions.poehali.dev/60561bb0-88bd-45c0-babf-7902b1242bdc",
   "ecomkassa-fetch-orders": "https://functions.poehali.dev/dc01171b-cd60-4a98-b96c-5d167bc1add8",

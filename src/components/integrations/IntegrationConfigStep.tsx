@@ -67,7 +67,7 @@ const IntegrationConfigStep = ({
       return false;
     }
 
-    if (isTochkaAccount && !String(config.api_token ?? '').trim()) {
+    if (isTochkaAccount && (!String(config.api_token ?? '').trim() || !String(config.account_number ?? '').trim())) {
       return false;
     }
 
