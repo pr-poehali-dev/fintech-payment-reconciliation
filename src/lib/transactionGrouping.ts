@@ -178,7 +178,23 @@ export const groupTransactions = (transactions: Transaction[]): TransactionGroup
       const { status, isManual } = computeStatus(items);
       return {
         id,
-        items: [...items].sort((a, b) => (displayOrder[a.type] ?? 9) - (displayOrder[b.type] ?? 9)),
+        // Сортировка "главной" строки группы: сначала по иерархии типов
+        // (displayOrder - заказ выше платежа выше чека и т.д.), а при
+        // РАВЕНСТВЕ типа (напр. два payment - "живой" от Т-Банка и
+        // синтетический, досозданный дозагрузкой через шлюз Екомкассы для
+        // того же чека) - по возрастанию occurred_at, т.е. более РАННИЙ
+        // документ побеждает как представитель группы. Иначе датой группы
+        // мог стать момент, когда пользователь нажал "Дозагрузить" (когда
+        // синтетический платёж создаётся в БД), а не момент реальной оплаты -
+        // сверка идёт по датам возникновения событий, а не по датам их
+        // попадания в систему.
+        items: [...items].sort((a, b) => {
+          const orderDiff = (displayOrder[a.type] ?? 9) - (displayOrder[b.type] ?? 9);
+          if (orderDiff !== 0) return orderDiff;
+          const aTime = a.occurred_at ? new Date(a.occurred_at).getTime() : Infinity;
+          const bTime = b.occurred_at ? new Date(b.occurred_at).getTime() : Infinity;
+          return aTime - bTime;
+        }),
         status,
         isManual,
         totalAmount: computeTotal(items)

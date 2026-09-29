@@ -219,7 +219,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     'payment' AS type,
                     p.slug AS source,
                     wp.id AS id,
-                    wp.created_at AS occurred_at,
+                    COALESCE(rid_ekr.doc_datetime, km.doc_datetime, wp.created_at) AS occurred_at,
                     wp.amount AS amount,
                     wp.status AS status,
                     ('Платёж #' || wp.payment_id) AS title,
@@ -244,7 +244,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 JOIN {SCHEMA}.integration_providers p ON p.id = ui.provider_id
                 LEFT JOIN {SCHEMA}.ecomkassa_receipts rid_ekr ON rid_ekr.id = wp.receipt_id AND rid_ekr.removed_at IS NULL
                 LEFT JOIN LATERAL (
-                    SELECT ekr.id, ekr.order_type
+                    SELECT ekr.id, ekr.order_type, ekr.doc_datetime
                     FROM {SCHEMA}.ecomkassa_receipts ekr
                     WHERE ekr.company_id = wp.company_id
                       AND ekr.removed_at IS NULL
