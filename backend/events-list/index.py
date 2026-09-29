@@ -23,12 +23,19 @@ ORDER_TYPE_LABELS = {'VCHR': 'Чек', 'INVC': 'Счёт', 'CORD': 'Заказ'}
 
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     '''
-    Единая лента событий компании: платежи эквайринга (webhook_payments -
-    группировка по заказу, повторные хуки уходят в webhook_history), сделки
-    CRM (webhook_events - группировка по сделке, аналогично) и операции по
-    расчётному счёту (второй слой обработки, приходит не вебхуком, а
-    дозагрузкой). Для каждого события отдаётся человекочитаемый номер
-    (ID платежа/сделки/операции) и краткое summary для отображения в таблице.
+    Единая лента событий компании: сырые данные по КАЖДОМУ источнику ОТДЕЛЬНО,
+    как он есть - платежи эквайринга (webhook_payments), документы Екомкассы
+    (ecomkassa_receipts), чеки ОФД (ofd_receipts), сделки CRM (webhook_events),
+    операции по расчётному счёту (bank_statement_transactions). Группировка
+    ВСЕГДА только ВНУТРИ одного источника по одному заказу/сделке (повторные
+    вебхуки одного платежа или сделки схлопываются в одну строку с историей
+    в webhook_history) - НИКОГДА между разными источниками, даже если у них
+    общий uuid документа (напр. чек кассы Екомкассы и её же платёж через шлюз
+    по одному order_id остаются двумя раздельными строками). Кросс-источниковая
+    связка (платёж + чек кассы + чек ОФД в одну сущность) - это смысл ДРУГОГО
+    раздела, "Транзакции" (подготовка данных перед сверкой), а не "Событий"
+    (сырая лента по источникам, где видно расхождения именно ПОТОМУ ЧТО
+    источники не смешаны).
     Args: company_id (обязателен), integration_id, provider_slug, payment_provider, limit, offset (опционально).
     payment_provider - дискриминатор конкретной платёжной системы внутри шлюза
     Екомкассы (invoice_payload.provider из report(), например "ЮKassa") - у одной
@@ -82,18 +89,18 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     try:
         events = []
 
-        # 1. Платежи эквайринга (Т-Банк и т.д.) - группируем по заказу (order_id,
-        # либо payment_id, если заказа нет), как сделки CRM группируются по
-        # external_deal_id. Каждый входящий вебхук об изменении статуса платежа
-        # попадает в webhook_history этой группы - в интерфейсе это раскрывающийся
-        # список со статусом, датой и raw каждого отдельного вебхука.
-        # Платежи шлюза Екомкассы (p.slug='ecomkassa_gateway') с уже привязанным
-        # чеком (receipt_id) сюда НЕ включаются - они уже показаны ниже (блок 2)
-        # внутри группы документа Екомкассы по тому же uuid/order_id, повторно
-        # отдельной строкой платёж быть не должен. Без receipt_id (чек ещё не
-        # пробит на момент вебхука) платёж пока не с чем группировать - остаётся
-        # здесь как обычная одиночная запись.
-        pay_where = "WHERE wp.company_id = %s AND wp.removed_at IS NULL AND NOT (p.slug = 'ecomkassa_gateway' AND wp.receipt_id IS NOT NULL)"
+        # 1. Платежи эквайринга (Т-Банк, шлюз Екомкассы и т.д.) - группируем
+        # по заказу (order_id, либо payment_id, если заказа нет), как сделки
+        # CRM группируются по external_deal_id. Каждый входящий вебхук об
+        # изменении статуса платежа попадает в webhook_history этой группы -
+        # в интерфейсе это раскрывающийся список со статусом, датой и raw
+        # каждого отдельного вебхука. Группировка ВСЕГДА только внутри одного
+        # источника (одной таблицы) по одному заказу - платёж НЕ склеивается
+        # с чеком кассы или чеком ОФД, это разные источники данных, даже если
+        # у них общий uuid документа Екомкассы. Кросс-источниковая связка -
+        # смысл отдельного раздела "Транзакции" (подготовка перед сверкой),
+        # а не "Событий" (сырая лента по каждому источнику как он есть).
+        pay_where = 'WHERE wp.company_id = %s AND wp.removed_at IS NULL'
         pay_params = [company_id]
         if integration_id:
             pay_where += ' AND wp.integration_id = %s'
@@ -172,15 +179,12 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             })
 
         # 2. Документы Екомкассы (чеки кассы, счета, курьерские заказы) -
-        # группируем по order_id (это и есть uuid документа у Екомкассы: один
-        # и тот же uuid используется и для чека, и для его платежа через шлюз,
-        # и для связанного чека ОФД). В отличие от платежей/CRM, где несколько
-        # РАЗНЫХ вебхуков относятся к одной сущности, здесь ecomkassa_receipts
-        # хранит только ТЕКУЩЕЕ состояние документа (ON CONFLICT DO UPDATE,
-        # промежуточные статусы не копятся) - поэтому "история" тут не про
-        # повторные вебхуки, а про связанные документы одного и того же uuid:
-        # сам чек/заказ + его платёж (webhook_payments.receipt_id) + пробитый
-        # по нему чек ОФД (та же фискальная триада, что и в разделе "Транзакции").
+        # свой источник (ecomkassa_receipts), группировки с чужими источниками
+        # (платежом шлюза, чеком ОФД) здесь НЕТ - это разные таблицы, их
+        # кросс-связку показывает раздел "Транзакции", а не лента "Событий".
+        # Сама таблица хранит только ТЕКУЩЕЕ состояние документа по uuid
+        # (ON CONFLICT DO UPDATE по order_id) - на один uuid всегда ровно одна
+        # строка, поэтому у каждого документа своя запись без webhook_history.
         ekr_where = 'WHERE ekr.company_id = %s AND ekr.removed_at IS NULL'
         ekr_params = [company_id]
         if integration_id:
@@ -196,73 +200,26 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 ekr.id, ekr.order_id, COALESCE(ekr.doc_datetime, ekr.created_at) AS event_at,
                 ekr.status, ekr.total_sum,
                 ekr.order_type, ekr.payment_provider, ekr.raw_data,
-                ui.integration_name,
-                wp.id AS payment_row_id, wp.status AS payment_status, wp.amount AS payment_amount,
-                wp.raw_data AS payment_raw,
-                ofd.id AS ofd_id, ofd.operation_type AS ofd_operation_type,
-                ofd.total_sum AS ofd_total_sum, ofd.raw_data AS ofd_raw
+                ui.integration_name
             FROM {SCHEMA}.ecomkassa_receipts ekr
             JOIN {SCHEMA}.user_integrations ui ON ui.id = ekr.integration_id
-            LEFT JOIN {SCHEMA}.webhook_payments wp ON wp.receipt_id = ekr.id AND wp.removed_at IS NULL
-            LEFT JOIN LATERAL (
-                SELECT o.id, o.operation_type, o.total_sum, o.raw_data
-                FROM {SCHEMA}.ofd_receipts o
-                WHERE o.company_id = ekr.company_id
-                  AND o.removed_at IS NULL
-                  AND (ekr.raw_data->'payload'->>'fn_number') IS NOT NULL
-                  AND (ekr.raw_data->'payload'->>'fiscal_document_number') IS NOT NULL
-                  AND (ekr.raw_data->'payload'->>'fiscal_document_attribute') IS NOT NULL
-                  AND o.fn_number = (ekr.raw_data->'payload'->>'fn_number')
-                  AND o.doc_number = (ekr.raw_data->'payload'->>'fiscal_document_number')
-                  AND (o.raw_data->>'DecimalFiscalSign') = (ekr.raw_data->'payload'->>'fiscal_document_attribute')
-                LIMIT 1
-            ) ofd ON true
             {ekr_where}
             ORDER BY event_at ASC
         ''', ekr_params)
 
         for row in cur.fetchall():
-            (ekr_id, order_id, created_at, status, total_sum, order_type, payment_provider_value,
-             raw_data, integration_name, payment_row_id, payment_status, payment_amount, payment_raw,
-             ofd_id, ofd_operation_type, ofd_total_sum, ofd_raw) = row
-
-            history = [{
-                'id': ekr_id,
-                'status': status,
-                'error_message': None,
-                'created_at': created_at.isoformat() if created_at else None,
-                'raw': raw_data,
-                'event_type': 'ecomkassa_document'
-            }]
-            if payment_row_id:
-                history.append({
-                    'id': f'pay_{payment_row_id}',
-                    'status': payment_status,
-                    'error_message': None,
-                    'created_at': created_at.isoformat() if created_at else None,
-                    'raw': payment_raw,
-                    'event_type': 'ecomkassa_payment'
-                })
-            if ofd_id:
-                history.append({
-                    'id': f'ofd_{ofd_id}',
-                    'status': ofd_operation_type,
-                    'error_message': None,
-                    'created_at': created_at.isoformat() if created_at else None,
-                    'raw': ofd_raw,
-                    'event_type': 'ofd_receipt'
-                })
+            (ekr_id, order_id, event_at, status, total_sum, order_type, payment_provider_value,
+             raw_data, integration_name) = row
 
             doc_label = ORDER_TYPE_LABELS.get(order_type, 'Документ')
             amount_str = f'{float(total_sum):.2f} ₽' if total_sum is not None else ''
             provider_str = f' [{payment_provider_value}]' if payment_provider_value else ''
-            parts_str = f' · {len(history)} документа' if len(history) > 1 else ''
-            summary = f'{doc_label} #{order_id}{provider_str} · {status} {amount_str}{parts_str}'.strip()
+            summary = f'{doc_label} #{order_id}{provider_str} · {status} {amount_str}'.strip()
 
             events.append({
-                'id': f'ekrgrp_{order_id}',
+                'id': f'ekr_{ekr_id}',
                 'source': 'ecomkassa',
-                'created_at': created_at.isoformat() if created_at else None,
+                'created_at': event_at.isoformat() if event_at else None,
                 'provider_slug': 'ecomkassa',
                 'provider_type': PROVIDER_TYPE_LABELS.get('ecomkassa', 'Касса (Екомкасса)'),
                 'integration_name': integration_name,
@@ -272,31 +229,15 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 'error_message': None,
                 'event_number': str(order_id),
                 'summary': summary,
-                'raw': raw_data,
-                'webhook_history': history
+                'raw': raw_data
             })
 
-        # 3. Чеки ОФД без пары с кассой Екомкассы (уже показаны выше внутри
-        # группы документа, если фискальная триада нашла совпадение) - у ОФД
-        # нет вебхуков (только периодическая дозагрузка через API), и у каждого
-        # чека свой уникальный receipt_id, поэтому дублей физически не бывает -
-        # каждый непарный чек ОФД идёт отдельной строкой без группировки.
-        matched_ofd_ids = set()
-        cur.execute(f'''
-            SELECT o.id
-            FROM {SCHEMA}.ofd_receipts o
-            JOIN {SCHEMA}.ecomkassa_receipts ekr ON ekr.company_id = o.company_id
-                AND ekr.removed_at IS NULL
-                AND (ekr.raw_data->'payload'->>'fn_number') IS NOT NULL
-                AND (ekr.raw_data->'payload'->>'fiscal_document_number') IS NOT NULL
-                AND (ekr.raw_data->'payload'->>'fiscal_document_attribute') IS NOT NULL
-                AND o.fn_number = (ekr.raw_data->'payload'->>'fn_number')
-                AND o.doc_number = (ekr.raw_data->'payload'->>'fiscal_document_number')
-                AND (o.raw_data->>'DecimalFiscalSign') = (ekr.raw_data->'payload'->>'fiscal_document_attribute')
-            WHERE o.company_id = %s AND o.removed_at IS NULL
-        ''', [company_id])
-        matched_ofd_ids = {r[0] for r in cur.fetchall()}
-
+        # 3. Чеки ОФД - свой источник (ofd_receipts), группировки с чеком
+        # кассы Екомкассы здесь тоже НЕТ (см. комментарий к блоку 2) - у ОФД
+        # нет вебхуков (только периодическая дозагрузка через API), и у
+        # каждого чека свой уникальный receipt_id, поэтому дублей внутри
+        # самого источника физически не бывает - каждый чек ОФД отдельной
+        # строкой без группировки.
         ofd_where = 'WHERE o.company_id = %s AND o.removed_at IS NULL'
         ofd_params = [company_id]
         if integration_id:
@@ -316,8 +257,6 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
         for row in cur.fetchall():
             ofd_id, receipt_id, created_at, operation_type, total_sum, raw_data, integration_name = row
-            if ofd_id in matched_ofd_ids:
-                continue
 
             amount_str = f'{float(total_sum):.2f} ₽' if total_sum is not None else ''
             summary = f'Чек ОФД #{receipt_id} · {operation_type or ""} {amount_str}'.strip()
