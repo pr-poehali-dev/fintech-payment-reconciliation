@@ -13,6 +13,7 @@ import {
 import { AppEvent, EventWebhookHistoryItem } from './eventsTypes';
 import { useAuth } from '@/contexts/AuthContext';
 import { formatDateTime, DEFAULT_TIMEZONE } from '@/lib/formatDate';
+import { ofdFnsStatusLabel, ofdFnsStatusColorClass } from '@/lib/ofdFnsStatus';
 
 interface EventsTableProps {
   events: AppEvent[];
@@ -50,6 +51,17 @@ const getStatusColor = (status: string | null) => {
     default:
       return 'bg-muted-foreground';
   }
+};
+
+// У чеков ОФД status - это FnsStatus (Success/Fail/Wait, статус ПРОБИТИЯ чека
+// в налоговой), не платёжный статус вроде CONFIRMED/REJECTED - нужен свой
+// лейбл и своя цветовая раскладка (см. lib/ofdFnsStatus.ts), иначе бейдж
+// показывал бы сырое "Success" серым цветом по умолчанию.
+const getStatusDisplay = (event: Pick<AppEvent, 'provider_slug' | 'status'>) => {
+  if (event.provider_slug === 'ofdru') {
+    return { label: ofdFnsStatusLabel(event.status), color: ofdFnsStatusColorClass(event.status) };
+  }
+  return { label: event.status, color: getStatusColor(event.status) };
 };
 
 const EventsTable = ({ events, onRowClick }: EventsTableProps) => {
@@ -150,8 +162,8 @@ const EventsTable = ({ events, onRowClick }: EventsTableProps) => {
                     </TableCell>
                     <TableCell>
                       {event.status && (
-                        <Badge className={`${getStatusColor(event.status)} text-white`}>
-                          {event.status}
+                        <Badge className={`${getStatusDisplay(event).color} text-white`}>
+                          {getStatusDisplay(event).label}
                         </Badge>
                       )}
                     </TableCell>

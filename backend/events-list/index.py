@@ -282,7 +282,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
         cur.execute(f'''
             SELECT o.id, o.receipt_id, o.created_at, o.operation_type, o.total_sum,
-                   o.raw_data, ui.integration_name
+                   o.raw_data, ui.integration_name, o.raw_data->>'FnsStatus' AS fns_status
             FROM {SCHEMA}.ofd_receipts o
             JOIN {SCHEMA}.user_integrations ui ON ui.id = o.integration_id
             {ofd_where}
@@ -290,7 +290,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         ''', ofd_params)
 
         for row in cur.fetchall():
-            ofd_id, receipt_id, created_at, operation_type, total_sum, raw_data, integration_name = row
+            ofd_id, receipt_id, created_at, operation_type, total_sum, raw_data, integration_name, fns_status = row
 
             amount_str = f'{float(total_sum):.2f} ₽' if total_sum is not None else ''
             summary = f'Чек ОФД #{receipt_id} · {operation_type or ""} {amount_str}'.strip()
@@ -304,7 +304,13 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 'transaction_type': 'receipt',
                 'integration_name': integration_name,
                 'event_type': 'ofd_receipt',
-                'status': operation_type,
+                # status здесь - статус ПРОБИТИЯ чека в ФНС (FnsStatus:
+                # Success/Fail), а не тип операции (Income/Expense и т.п.,
+                # OperationType) - тип операции уже виден в тексте summary
+                # выше. Ранее сюда попадал operation_type, из-за чего бейдж
+                # "Статус" в ленте событий вводил в заблуждение, показывая
+                # тип документа вместо факта его успешной регистрации в ФНС.
+                'status': fns_status,
                 'error_message': None,
                 'event_number': str(receipt_id),
                 'summary': summary,

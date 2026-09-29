@@ -6,6 +6,7 @@ import { AppEvent } from './eventsTypes';
 import { useAuth } from '@/contexts/AuthContext';
 import { formatDateTime, DEFAULT_TIMEZONE } from '@/lib/formatDate';
 import { transactionTypeConfig } from './EventsTable';
+import { ofdFnsStatusLabel, ofdFnsStatusColorClass } from '@/lib/ofdFnsStatus';
 
 interface EventDetailsDialogProps {
   open: boolean;
@@ -31,6 +32,15 @@ const getStatusColor = (status: string | null) => {
     default:
       return 'bg-muted-foreground';
   }
+};
+
+// У чеков ОФД status - это FnsStatus (статус пробития в налоговой), не
+// платёжный статус - см. тот же комментарий в EventsTable.tsx.
+const getStatusDisplay = (event: Pick<AppEvent, 'provider_slug' | 'status'>) => {
+  if (event.provider_slug === 'ofdru') {
+    return { label: ofdFnsStatusLabel(event.status), color: ofdFnsStatusColorClass(event.status) };
+  }
+  return { label: event.status, color: getStatusColor(event.status) };
 };
 
 const EventDetailsDialog = ({ open, onOpenChange, event }: EventDetailsDialogProps) => {
@@ -61,8 +71,8 @@ const EventDetailsDialog = ({ open, onOpenChange, event }: EventDetailsDialogPro
             </div>
             <div className="space-y-1">
               <p className="text-sm text-muted-foreground">Статус</p>
-              <Badge className={`${getStatusColor(event.status)} text-white`}>
-                {event.status || '—'}
+              <Badge className={`${getStatusDisplay(event).color} text-white`}>
+                {getStatusDisplay(event).label || '—'}
               </Badge>
             </div>
           </div>
