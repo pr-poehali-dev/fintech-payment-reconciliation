@@ -16,6 +16,8 @@ const TransactionsPage = () => {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [totalsByType, setTotalsByType] = useState<TransactionTotalsByType>({});
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
   const [selectedTx, setSelectedTx] = useState<Transaction | null>(null);
   const [showDetails, setShowDetails] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -30,7 +32,15 @@ const TransactionsPage = () => {
 
   const fetchTransactions = async () => {
     if (!companyId) return;
-    setIsLoading(true);
+    // isLoading используется только для ПЕРВОЙ загрузки страницы (полноэкранный
+    // спиннер вместо контента). Повторные обновления (кнопка "Обновить",
+    // дозагрузка из BackfillDialog) должны обновлять данные без размонтирования
+    // страницы - иначе открытый поверх диалог дозагрузки исчезает вместе с ней.
+    if (hasLoadedOnce) {
+      setIsRefreshing(true);
+    } else {
+      setIsLoading(true);
+    }
     try {
       const params = new URLSearchParams({
         company_id: String(companyId),
@@ -57,6 +67,8 @@ const TransactionsPage = () => {
       });
     } finally {
       setIsLoading(false);
+      setIsRefreshing(false);
+      setHasLoadedOnce(true);
     }
   };
 
@@ -161,8 +173,8 @@ const TransactionsPage = () => {
             <Icon name="Download" size={16} />
             Загрузить
           </Button>
-          <Button onClick={fetchTransactions} variant="outline" size="icon" title="Обновить">
-            <Icon name="RefreshCw" size={16} />
+          <Button onClick={fetchTransactions} variant="outline" size="icon" title="Обновить" disabled={isRefreshing}>
+            <Icon name="RefreshCw" size={16} className={isRefreshing ? 'animate-spin' : ''} />
           </Button>
         </div>
       </div>

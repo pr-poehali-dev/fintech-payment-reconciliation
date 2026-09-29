@@ -101,81 +101,95 @@ const BackfillDialog = ({ open, onOpenChange, hasEcomkassa, hasOfd, bankIntegrat
     let totalInserted = 0;
     let matchedTotal = 0;
 
-    while (!done) {
-      const res = await fetch(functionUrls['ecomkassa-fetch-orders'], {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          company_id: companyId,
-          date_from: dateFrom.toISOString(),
-          date_to: dateTo.toISOString(),
-          order_types: orderTypes,
-          statuses,
-          offset,
-          batch_size: 8
-        })
-      });
-      const data = await res.json();
+    try {
+      while (!done) {
+        const res = await fetch(functionUrls['ecomkassa-fetch-orders'], {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            company_id: companyId,
+            date_from: dateFrom.toISOString(),
+            date_to: dateTo.toISOString(),
+            order_types: orderTypes,
+            statuses,
+            offset,
+            batch_size: 8
+          })
+        });
+        const data = await res.json();
 
-      if (!res.ok || !data.success) {
-        setErrors((prev) => [...prev, data.error || 'Не удалось загрузить данные из Екомкассы']);
-        return;
+        if (!res.ok || !data.success) {
+          setErrors((prev) => [...prev, data.error || 'Не удалось загрузить данные из Екомкассы']);
+          return;
+        }
+
+        matchedTotal = data.matched_total;
+        totalInserted += data.inserted;
+        offset = data.next_offset ?? offset + data.processed;
+        done = data.done;
+
+        setEcomkassaProgress({ processed: offset, total: matchedTotal, inserted: totalInserted });
       }
-
-      matchedTotal = data.matched_total;
-      totalInserted += data.inserted;
-      offset = data.next_offset ?? offset + data.processed;
-      done = data.done;
-
-      setEcomkassaProgress({ processed: offset, total: matchedTotal, inserted: totalInserted });
+    } catch {
+      // Сетевой сбой (не HTTP-ошибка) - ловим здесь, чтобы Promise.all в
+      // handleStart не завис навсегда и диалог не заблокировался в 'running'.
+      setErrors((prev) => [...prev, 'Екомкасса: сбой сети, попробуйте ещё раз']);
     }
   };
 
   const runOfdBackfill = async () => {
     if (!companyId) return;
 
-    const res = await fetch(functionUrls['ofd-fetch-receipts'], {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        company_id: companyId,
-        date_from: dateFrom.toISOString(),
-        date_to: dateTo.toISOString()
-      })
-    });
-    const data = await res.json();
+    try {
+      const res = await fetch(functionUrls['ofd-fetch-receipts'], {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          company_id: companyId,
+          date_from: dateFrom.toISOString(),
+          date_to: dateTo.toISOString()
+        })
+      });
+      const data = await res.json();
 
-    if (!res.ok || !data.success) {
-      setErrors((prev) => [...prev, data.error || 'Не удалось загрузить чеки ОФД']);
-      return;
+      if (!res.ok || !data.success) {
+        setErrors((prev) => [...prev, data.error || 'Не удалось загрузить чеки ОФД']);
+        return;
+      }
+
+      setOfdResult({ inserted: data.inserted ?? 0, total: data.total_receipts ?? 0 });
+    } catch {
+      setErrors((prev) => [...prev, 'ОФД: сбой сети, попробуйте ещё раз']);
     }
-
-    setOfdResult({ inserted: data.inserted ?? 0, total: data.total_receipts ?? 0 });
   };
 
   const runBankBackfill = async (integration: BankIntegration) => {
     if (!companyId) return;
 
-    const res = await fetch(functionUrls['bank-statement-sync'], {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        integration_id: integration.id,
-        date_from: dateFrom.toISOString(),
-        date_to: dateTo.toISOString()
-      })
-    });
-    const data = await res.json();
+    try {
+      const res = await fetch(functionUrls['bank-statement-sync'], {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          integration_id: integration.id,
+          date_from: dateFrom.toISOString(),
+          date_to: dateTo.toISOString()
+        })
+      });
+      const data = await res.json();
 
-    if (!res.ok || !data.success) {
-      setErrors((prev) => [...prev, `${integration.name}: ${data.error || 'не удалось загрузить выписку'}`]);
-      return;
+      if (!res.ok || !data.success) {
+        setErrors((prev) => [...prev, `${integration.name}: ${data.error || 'не удалось загрузить выписку'}`]);
+        return;
+      }
+
+      setBankResults((prev) => ({
+        ...prev,
+        [integration.id]: { inserted: data.inserted ?? 0, total: data.total_transactions ?? data.inserted ?? 0 }
+      }));
+    } catch {
+      setErrors((prev) => [...prev, `${integration.name}: сбой сети, попробуйте ещё раз`]);
     }
-
-    setBankResults((prev) => ({
-      ...prev,
-      [integration.id]: { inserted: data.inserted ?? 0, total: data.total_transactions ?? data.inserted ?? 0 }
-    }));
   };
 
   const handleStart = async () => {
