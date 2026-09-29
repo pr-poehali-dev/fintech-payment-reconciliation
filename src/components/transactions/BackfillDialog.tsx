@@ -21,16 +21,24 @@ import Icon from '@/components/ui/icon';
 import { useAuth } from '@/contexts/AuthContext';
 import { useBackfill, BankIntegration } from '@/contexts/BackfillContext';
 
+interface NamedIntegration {
+  id: number;
+  name: string;
+}
+
 interface BackfillDialogProps {
-  hasEcomkassa: boolean;
-  hasOfd: boolean;
+  ecomkassaIntegrations: NamedIntegration[];
+  ofdIntegrations: NamedIntegration[];
   bankIntegrations: BankIntegration[];
 }
 
+// CORD у Екомкассы технически "курьерский заказ", но для пользователя это
+// просто ещё один вид оплаты (курьеру наличными или картой/СБП через
+// провайдера) - "Платежи" понятнее, чем термин из внутренней классификации API.
 const ORDER_TYPES: { id: string; label: string }[] = [
   { id: 'VCHR', label: 'Чеки' },
   { id: 'INVC', label: 'Счета' },
-  { id: 'CORD', label: 'Заказы' },
+  { id: 'CORD', label: 'Платежи' },
 ];
 
 const STATUSES: { id: string; label: string }[] = [
@@ -56,7 +64,9 @@ const monthAgo = () => {
 // (смонтирован на уровне App.tsx, выше страниц). Свернуть окно (крестик/клик
 // вне) больше не останавливает загрузку - она продолжается в фоне и просто
 // не отображается, пока диалог снова не откроют кнопкой "Загрузить".
-const BackfillDialog = ({ hasEcomkassa, hasOfd, bankIntegrations }: BackfillDialogProps) => {
+const BackfillDialog = ({ ecomkassaIntegrations, ofdIntegrations, bankIntegrations }: BackfillDialogProps) => {
+  const hasEcomkassa = ecomkassaIntegrations.length > 0;
+  const hasOfd = ofdIntegrations.length > 0;
   const { currentCompany } = useAuth();
   const companyId = currentCompany?.id;
   const {
@@ -210,6 +220,9 @@ const BackfillDialog = ({ hasEcomkassa, hasOfd, bankIntegrations }: BackfillDial
                       </div>
                     ))}
                   </div>
+                  <p className="text-xs text-muted-foreground">
+                    Источник: {ecomkassaIntegrations.map((i) => i.name).join(', ')}
+                  </p>
                 </div>
               </>
             )}
@@ -217,9 +230,14 @@ const BackfillDialog = ({ hasEcomkassa, hasOfd, bankIntegrations }: BackfillDial
             {hasOfd && (
               <>
                 <Separator />
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Icon name="Receipt" size={14} />
-                  ОФД: загрузятся все чеки за период (фильтров по типу/статусу у ОФД нет)
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Icon name="Receipt" size={14} />
+                    ОФД: загрузятся все чеки за период (фильтров по типу/статусу у ОФД нет)
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Источник: {ofdIntegrations.map((i) => i.name).join(', ')}
+                  </p>
                 </div>
               </>
             )}
@@ -227,9 +245,14 @@ const BackfillDialog = ({ hasEcomkassa, hasOfd, bankIntegrations }: BackfillDial
             {bankIntegrations.length > 0 && (
               <>
                 <Separator />
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Icon name="Landmark" size={14} />
-                  Расчётный счёт ({bankIntegrations.map((b) => b.name).join(', ')}): загрузятся все операции за период
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Icon name="Landmark" size={14} />
+                    Расчётный счёт: загрузятся все операции за период
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Источник: {bankIntegrations.map((b) => b.name).join(', ')}
+                  </p>
                 </div>
               </>
             )}

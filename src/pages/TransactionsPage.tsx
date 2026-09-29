@@ -24,8 +24,8 @@ const TransactionsPage = () => {
   const [showDetails, setShowDetails] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [showUnmatchedOnly, setShowUnmatchedOnly] = useState(false);
-  const [hasEcomkassa, setHasEcomkassa] = useState(false);
-  const [hasOfd, setHasOfd] = useState(false);
+  const [ecomkassaIntegrations, setEcomkassaIntegrations] = useState<{ id: number; name: string }[]>([]);
+  const [ofdIntegrations, setOfdIntegrations] = useState<{ id: number; name: string }[]>([]);
   const [bankIntegrations, setBankIntegrations] = useState<{ id: number; name: string }[]>([]);
   const [selectedTxByKey, setSelectedTxByKey] = useState<Map<string, Transaction>>(new Map());
   const [isLinking, setIsLinking] = useState(false);
@@ -78,6 +78,43 @@ const TransactionsPage = () => {
     }
   };
 
+  // Список интеграций, доступных для дозагрузки (касса Екомкасса, ОФД,
+  // расчётные счета) - вынесено в отдельную функцию, а не только в useEffect
+  // при монтировании: только что подключённый банк (или ещё не завершённая
+  // настройка - выбор счёта после ввода JWT-токена происходит отдельным
+  // шагом) мог не попасть в список, загруженный раньше. Обновляем его заново
+  // перед каждым открытием диалога дозагрузки (см. openBackfillDialog), чтобы
+  // пользователь всегда видел актуальный набор источников.
+  const fetchBackfillSources = () => {
+    if (!companyId) return;
+    fetch(`${functionUrls['integrations-list']}?company_id=${companyId}`)
+      .then((res) => res.json())
+      .then((data) => {
+        const integrations = data.user_integrations || [];
+        setEcomkassaIntegrations(
+          integrations
+            .filter((i: any) => i.provider_slug === 'ecomkassa' && i.status === 'active')
+            .map((i: any) => ({ id: i.id, name: i.integration_name }))
+        );
+        setOfdIntegrations(
+          integrations
+            .filter((i: any) => i.provider_slug === 'ofdru' && i.status === 'active')
+            .map((i: any) => ({ id: i.id, name: i.integration_name }))
+        );
+        setBankIntegrations(
+          integrations
+            .filter((i: any) => (i.provider_slug === 'tbank_account' || i.provider_slug === 'tochka_account') && i.status === 'active')
+            .map((i: any) => ({ id: i.id, name: i.integration_name }))
+        );
+      })
+      .catch(() => {});
+  };
+
+  const openBackfillDialog = () => {
+    fetchBackfillSources();
+    openDialog();
+  };
+
   useEffect(() => {
     if (!companyId) return;
 
@@ -97,22 +134,7 @@ const TransactionsPage = () => {
       .catch(() => {});
 
     fetchTransactions();
-
-    // Узнаём, есть ли у компании активные касса Екомкасса и/или интеграция ОФД -
-    // от этого зависит, какие вкладки показать в диалоге дозагрузки исторических данных.
-    fetch(`${functionUrls['integrations-list']}?company_id=${companyId}`)
-      .then((res) => res.json())
-      .then((data) => {
-        const integrations = data.user_integrations || [];
-        setHasEcomkassa(integrations.some((i: any) => i.provider_slug === 'ecomkassa' && i.status === 'active'));
-        setHasOfd(integrations.some((i: any) => i.provider_slug === 'ofdru' && i.status === 'active'));
-        setBankIntegrations(
-          integrations
-            .filter((i: any) => (i.provider_slug === 'tbank_account' || i.provider_slug === 'tochka_account') && i.status === 'active')
-            .map((i: any) => ({ id: i.id, name: i.integration_name }))
-        );
-      })
-      .catch(() => {});
+    fetchBackfillSources();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [companyId]);
 
@@ -269,7 +291,7 @@ const TransactionsPage = () => {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button onClick={openDialog} variant="outline" className="gap-2">
+          <Button onClick={openBackfillDialog} variant="outline" className="gap-2">
             <Icon name={backfillPhase === 'running' ? 'Loader2' : 'Download'} size={16} className={backfillPhase === 'running' ? 'animate-spin' : ''} />
             {backfillPhase === 'running' ? 'Загрузка идёт…' : 'Загрузить'}
           </Button>
@@ -432,8 +454,8 @@ const TransactionsPage = () => {
       />
 
       <BackfillDialog
-        hasEcomkassa={hasEcomkassa}
-        hasOfd={hasOfd}
+        ecomkassaIntegrations={ecomkassaIntegrations}
+        ofdIntegrations={ofdIntegrations}
         bankIntegrations={bankIntegrations}
       />
     </div>
