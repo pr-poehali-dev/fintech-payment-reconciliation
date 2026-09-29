@@ -77,29 +77,59 @@ export const BackfillProvider = ({ children }: { children: ReactNode }) => {
     let done = false;
     let totalInserted = 0;
     let matchedTotal = 0;
+    // Счётчик подряд идущих неудач на ОДНОМ и том же offset - если запрос
+    // не задеплоился/упал по таймауту (напр. 504 от платформы на большой
+    // пачке), пробуем этот же offset ещё раз вместо того, чтобы бросать всю
+    // дозагрузку - иначе счета (INVC), чей report() медленнее чеков, могли
+    // не догрузиться при единичном сетевом сбое.
+    let attemptsAtOffset = 0;
+    const MAX_ATTEMPTS_PER_OFFSET = 3;
 
     try {
       while (!done) {
-        const res = await fetch(functionUrls['ecomkassa-fetch-orders'], {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            company_id: companyIdArg,
-            date_from: from.toISOString(),
-            date_to: to.toISOString(),
-            order_types: orderTypes,
-            statuses,
-            offset,
-            batch_size: 8
-          })
-        });
-        const data = await res.json();
-
-        if (!res.ok || !data.success) {
-          setErrors((prev) => [...prev, data.error || 'Не удалось загрузить данные из Екомкассы']);
-          return;
+        let res: Response;
+        try {
+          res = await fetch(functionUrls['ecomkassa-fetch-orders'], {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              company_id: companyIdArg,
+              date_from: from.toISOString(),
+              date_to: to.toISOString(),
+              order_types: orderTypes,
+              statuses,
+              offset,
+              batch_size: 8
+            })
+          });
+        } catch {
+          attemptsAtOffset += 1;
+          if (attemptsAtOffset >= MAX_ATTEMPTS_PER_OFFSET) {
+            setErrors((prev) => [...prev, 'Екомкасса: сбой сети, попробуйте ещё раз']);
+            return;
+          }
+          continue;
         }
 
+        // Не-JSON/5xx ответ (напр. 504 таймаут от платформы) - тоже повторяем
+        // на том же offset, а не считаем это окончательным провалом.
+        let data: any;
+        try {
+          data = await res.json();
+        } catch {
+          data = null;
+        }
+
+        if (!res.ok || !data || !data.success) {
+          attemptsAtOffset += 1;
+          if (attemptsAtOffset >= MAX_ATTEMPTS_PER_OFFSET) {
+            setErrors((prev) => [...prev, data?.error || 'Не удалось загрузить данные из Екомкассы']);
+            return;
+          }
+          continue;
+        }
+
+        attemptsAtOffset = 0;
         matchedTotal = data.matched_total;
         totalInserted += data.inserted;
         offset = data.next_offset ?? offset + data.processed;

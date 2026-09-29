@@ -1,5 +1,6 @@
 import json
 import os
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
@@ -246,10 +247,22 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         inserted = 0
         skipped = 0
 
-        for item in batch:
+        # report() для счетов (INVC) у Екомкассы заметно медленнее, чем для
+        # чеков (VCHR) - при последовательных запросах пачка из batch_size
+        # документов легко превышала таймаут функции, и фронтенд получал 504
+        # посреди дозагрузки счетов, тогда как чеки (более быстрые) успевали
+        # обработаться. Запрашиваем report() параллельно - это сетевой I/O,
+        # GIL не мешает, а сама БД-запись (save_receipt) остаётся
+        # последовательной, т.к. курсор psycopg2 не потокобезопасен.
+        with ThreadPoolExecutor(max_workers=min(8, len(batch)) or 1) as pool:
+            reports = list(pool.map(
+                lambda item: fetch_report(token, store_id, item.get('orderId'), protocol_version),
+                batch
+            ))
+
+        for item, report_data in zip(batch, reports):
             order_id = item.get('orderId')
             external_id = item.get('externalId')
-            report_data = fetch_report(token, store_id, order_id, protocol_version)
 
             if not report_data or report_data.get('status') != 'done':
                 skipped += 1
