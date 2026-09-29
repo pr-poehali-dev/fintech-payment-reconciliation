@@ -65,8 +65,9 @@ const BackfillDialog = ({ hasEcomkassa, hasOfd, bankIntegrations }: BackfillDial
     start
   } = useBackfill();
 
-  const [dateFrom, setDateFrom] = useState<Date>(monthAgo());
-  const [dateTo, setDateTo] = useState<Date>(yesterday());
+  const [dateRange, setDateRange] = useState<DateRange>({ from: monthAgo(), to: yesterday() });
+  const dateFrom = dateRange.from ?? monthAgo();
+  const dateTo = dateRange.to ?? dateFrom;
   const [orderTypes, setOrderTypes] = useState<string[]>(['VCHR']);
   const [statuses, setStatuses] = useState<string[]>(['COMPLETED']);
   const [calendarOpen, setCalendarOpen] = useState(false);
@@ -143,12 +144,18 @@ const BackfillDialog = ({ hasEcomkassa, hasOfd, bankIntegrations }: BackfillDial
                 <PopoverContent className="w-auto p-0" align="start">
                   <Calendar
                     mode="range"
-                    selected={{ from: dateFrom, to: dateTo } as DateRange}
+                    selected={dateRange}
                     onSelect={(range) => {
                       if (!range?.from) return;
-                      setDateFrom(range.from);
+                      // react-day-picker сбрасывает диапазон до {from, to: undefined}
+                      // при начале нового выбора - если хранить это "как есть", то
+                      // повторный клик на ТУ ЖЕ дату (period "с X по X") видит в
+                      // selected ещё старый to и трактует клик как замену конца
+                      // диапазона, а не как его начало, поэтому range.to никогда не
+                      // приходит и календарь не закрывается. Всегда пишем то, что
+                      // вернул picker, без подмешивания предыдущего to.
+                      setDateRange({ from: range.from, to: range.to });
                       if (range.to) {
-                        setDateTo(range.to);
                         // Обе даты выбраны - период готов, закрываем календарь
                         // сами, не заставляя пользователя тянуться к крестику.
                         setCalendarOpen(false);
