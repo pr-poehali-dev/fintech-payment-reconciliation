@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import time
 import psycopg2
 import urllib.request
@@ -9,6 +10,11 @@ from datetime import datetime, timedelta
 
 from tbank_oauth import fetch_statement as fetch_tbank_statement
 from purpose_classifier import matches_keywords, get_purpose_keywords, operation_purpose_text
+from ru_trusted_ca import build_ssl_context
+
+# enter.tochka.com отдаёт TLS-сертификат, подписанный НУЦ Минцифры РФ (ГОСТ) -
+# системное доверенное хранилище Python его не знает без этого контекста.
+TOCHKA_SSL_CONTEXT = build_ssl_context()
 
 CORS_HEADERS = {
     'Access-Control-Allow-Origin': '*',
@@ -116,7 +122,10 @@ def fetch_tochka_account_statement(cur, integration_id: int, company_id: int, co
     затем поллинг Get Statement пока статус не станет Ready.
     https://developers.tochka.com/docs/tochka-api/opisanie-metodov/vypiski
     '''
-    api_token = config.get('api_token', '')
+    # Чистим невидимые символы (BOM, zero-width space), которые иногда
+    # попадают при копировании токена - иначе latin-1 кодировка HTTP-заголовков
+    # падает с UnicodeEncodeError до отправки запроса. См. tochka-accounts-list.
+    api_token = re.sub(r'[^\x21-\x7e]', '', config.get('api_token', ''))
     account_id = config.get('account_number', '')
     keywords = get_purpose_keywords(config)
     base_url = 'https://enter.tochka.com/uapi/open-banking/v1.0'
@@ -136,7 +145,7 @@ def fetch_tochka_account_statement(cur, integration_id: int, company_id: int, co
     )
 
     try:
-        with urllib.request.urlopen(init_req, timeout=15) as response:
+        with urllib.request.urlopen(init_req, timeout=15, context=TOCHKA_SSL_CONTEXT) as response:
             init_data = json.loads(response.read().decode('utf-8'))
     except (urllib.error.URLError, urllib.error.HTTPError, json.JSONDecodeError):
         return None
@@ -151,7 +160,7 @@ def fetch_tochka_account_statement(cur, integration_id: int, company_id: int, co
     raw_transactions = None
     for _ in range(5):
         try:
-            with urllib.request.urlopen(get_req, timeout=15) as response:
+            with urllib.request.urlopen(get_req, timeout=15, context=TOCHKA_SSL_CONTEXT) as response:
                 statement_data = json.loads(response.read().decode('utf-8'))
         except (urllib.error.URLError, urllib.error.HTTPError, json.JSONDecodeError):
             return None
