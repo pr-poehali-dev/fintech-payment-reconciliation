@@ -14,6 +14,7 @@ import { Transaction } from './transactionsTypes';
 import { TransactionGroup } from '@/lib/transactionGrouping';
 import { useAuth } from '@/contexts/AuthContext';
 import { formatDateTime, DEFAULT_TIMEZONE } from '@/lib/formatDate';
+import { ofdOperationTypeLabel, ofdOperationTypeColorClass } from '@/lib/ofdOperationType';
 
 interface TransactionsTableProps {
   groups: TransactionGroup[];
@@ -27,22 +28,20 @@ const typeConfig: Record<string, { icon: string; label: string; className: strin
   money: { icon: 'Landmark', label: 'Деньги', className: 'bg-success/10 text-success border-success/30' },
 };
 
+// Чек ОФД - отдельный случай: его status хранит сырой OperationType из 54-ФЗ
+// (Income/Refund income/...), для него своя раскраска и подпись, см. ниже.
 const getStatusColor = (status: string | null) => {
   switch (status) {
     case 'CONFIRMED':
-    case 'Income':
     case 'done':
     case 'in':
       return 'bg-success';
     case 'AUTHORIZED':
       return 'bg-info';
     case 'REJECTED':
-    case 'RefundIncome':
-    case 'RefundExpense':
     case 'fail':
       return 'bg-destructive';
     case 'REFUNDED':
-    case 'Expense':
     case 'out':
       return 'bg-warning';
     case 'CANCELED':
@@ -50,6 +49,15 @@ const getStatusColor = (status: string | null) => {
     default:
       return 'bg-muted-foreground';
   }
+};
+
+// Единая точка получения цвета/подписи статуса с учётом типа транзакции -
+// у чека ОФД status это OperationType (54-ФЗ), у остальных - обычный статус.
+const getStatusDisplay = (tx: { type: string; status: string | null }) => {
+  if (tx.type === 'receipt_ofd') {
+    return { label: ofdOperationTypeLabel(tx.status), color: ofdOperationTypeColorClass(tx.status) };
+  }
+  return { label: tx.status, color: getStatusColor(tx.status) };
 };
 
 const TransactionsTable = ({ groups, onRowClick }: TransactionsTableProps) => {
@@ -120,8 +128,8 @@ const TransactionsTable = ({ groups, onRowClick }: TransactionsTableProps) => {
         </TableCell>
         <TableCell>
           {tx.status && (
-            <Badge className={`${getStatusColor(tx.status)} text-white`}>
-              {tx.status}
+            <Badge className={`${getStatusDisplay(tx).color} text-white`}>
+              {getStatusDisplay(tx).label}
             </Badge>
           )}
         </TableCell>
@@ -187,8 +195,8 @@ const TransactionsTable = ({ groups, onRowClick }: TransactionsTableProps) => {
                     </TableCell>
                     <TableCell>
                       {primary.status && (
-                        <Badge className={`${getStatusColor(primary.status)} text-white`}>
-                          {primary.status}
+                        <Badge className={`${getStatusDisplay(primary).color} text-white`}>
+                          {getStatusDisplay(primary).label}
                         </Badge>
                       )}
                       {primary.webhook_history && primary.webhook_history.length > 1 && (

@@ -5,6 +5,7 @@ import Icon from '@/components/ui/icon';
 import { Transaction } from './transactionsTypes';
 import { useAuth } from '@/contexts/AuthContext';
 import { formatDateTime as formatDateTimeTz, DEFAULT_TIMEZONE } from '@/lib/formatDate';
+import { ofdOperationTypeLabel } from '@/lib/ofdOperationType';
 
 interface TransactionDetailsDialogProps {
   transaction: Transaction | null;
@@ -65,7 +66,9 @@ const TransactionDetailsDialog = ({ transaction, relatedItems, open, onOpenChang
 
             <div>
               <div className="text-sm text-muted-foreground mb-1">Статус</div>
-              <div className="font-medium">{transaction.status || '—'}</div>
+              <div className="font-medium">
+                {transaction.type === 'receipt_ofd' ? ofdOperationTypeLabel(transaction.status) : (transaction.status || '—')}
+              </div>
             </div>
 
             <div>
