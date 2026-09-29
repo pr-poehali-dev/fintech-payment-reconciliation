@@ -118,22 +118,30 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
     try:
         # 1. Платежи: последний статус по каждому payment_id. Дата платежа -
-        # первое появление вебхука (когда платёж был создан), а не дата
-        # последнего обновления статуса.
+        # первое появление вебхука (когда платёж был создан) для "живых"
+        # платежей. НО для синтетических платежей, досозданных дозагрузкой
+        # исторических документов (ecomkassa-fetch-orders/save_synthetic_payment) -
+        # created_at это момент, когда пользователь нажал "Дозагрузить" (может
+        # быть сильно позже реальной оплаты), поэтому для них берём реальную
+        # дату фискальной операции из привязанного чека (ecomkassa_receipts.
+        # doc_datetime, receipt_id уже проставлен при создании такого платежа) -
+        # иначе платёж "переезжает" на день дозагрузки и выпадает из сверки за
+        # реальный день продажи, создавая ложное расхождение с чеками.
         cur.execute(f'''
             WITH latest AS (
                 SELECT
                     wp.integration_id,
                     wp.payment_id,
                     MAX(wp.amount) AS amount,
-                    MIN(wp.created_at)::date AS payment_date,
+                    MIN(COALESCE(er.doc_datetime, wp.created_at))::date AS payment_date,
                     (array_agg(wp.status ORDER BY wp.created_at DESC))[1] AS latest_status,
                     (array_agg(wp.payment_provider ORDER BY wp.created_at DESC))[1] AS payment_provider
                 FROM {SCHEMA}.webhook_payments wp
                 JOIN {SCHEMA}.user_integrations ui ON ui.id = wp.integration_id
                 JOIN {SCHEMA}.integration_providers p ON p.id = ui.provider_id
                 JOIN {SCHEMA}.integration_categories c ON c.id = p.category_id
-                WHERE wp.company_id = %s AND c.slug = 'payments'
+                LEFT JOIN {SCHEMA}.ecomkassa_receipts er ON er.id = wp.receipt_id
+                WHERE wp.company_id = %s AND c.slug = 'payments' AND wp.removed_at IS NULL
                 GROUP BY wp.integration_id, wp.payment_id
             )
             SELECT payment_date, latest_status, amount, payment_provider
@@ -185,6 +193,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 SELECT ofd.operation_type
                 FROM {SCHEMA}.ofd_receipts ofd
                 WHERE ofd.company_id = ekr.company_id
+                  AND ofd.removed_at IS NULL
                   AND (ekr.raw_data->'payload'->>'fn_number') IS NOT NULL
                   AND (ekr.raw_data->'payload'->>'fiscal_document_number') IS NOT NULL
                   AND (ekr.raw_data->'payload'->>'fiscal_document_attribute') IS NOT NULL
@@ -194,6 +203,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 LIMIT 1
             ) om ON true
             WHERE ekr.company_id = %s
+              AND ekr.removed_at IS NULL
               AND ekr.status IS DISTINCT FROM 'cancelled'
               AND ekr.doc_datetime::date BETWEEN %s AND %s
             UNION ALL
@@ -203,6 +213,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 ofd.operation_type AS linked_ofd_status
             FROM {SCHEMA}.ofd_receipts ofd
             WHERE ofd.company_id = %s
+              AND ofd.removed_at IS NULL
               AND ofd.doc_datetime::date BETWEEN %s AND %s
         ''', (company_id, date_from, date_to, company_id, date_from, date_to))
 
@@ -237,6 +248,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             JOIN {SCHEMA}.integration_providers p ON p.id = ui.provider_id
             JOIN {SCHEMA}.integration_categories c ON c.id = p.category_id
             WHERE bst.company_id = %s AND c.slug = 'banks'
+              AND bst.removed_at IS NULL
               AND bst.operation_date::date BETWEEN %s AND %s
         ''', (company_id, date_from, date_to))
 
