@@ -20,6 +20,22 @@ PROVIDER_TYPE_LABELS = {
 
 ORDER_TYPE_LABELS = {'VCHR': 'Чек', 'INVC': 'Счёт', 'CORD': 'Заказ'}
 
+# Унифицированная категория события для бэйджа "Тип" в интерфейсе - platform-
+# независимая (в отличие от provider_type, который называет конкретного
+# провайдера вроде "Касса (эквайринг)"/"Банк (расчётный счёт)"). Определяется
+# однозначно по тому, из какого источника/блока данных пришло событие - это
+# и есть категория интеграции (Платежи/Кассы/ОФД/Банки/CRM), см. распределение
+# по блокам ниже: платёж эквайринга или шлюза Екомкассы -> 'payment', чек
+# кассы Екомкассы или ОФД -> 'receipt', курьерский заказ Екомкассы -> 'receipt_order',
+# операция по расчётному счёту -> 'money', хук CRM -> 'crm'.
+TRANSACTION_TYPE_LABELS = {
+    'payment': 'Платёж',
+    'receipt': 'Чек',
+    'receipt_order': 'Заказ',
+    'money': 'Деньги',
+    'crm': 'CRM'
+}
+
 
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     '''
@@ -40,7 +56,11 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     payment_provider - дискриминатор конкретной платёжной системы внутри шлюза
     Екомкассы (invoice_payload.provider из report(), например "ЮKassa") - у одной
     кассы может быть подключено больше 10 видов оплат, фильтр сужает до одного.
-    Returns: events[] с полями created_at, integration_name, provider_type, payment_provider, event_number, summary, raw
+    Returns: events[] с полями created_at, integration_name, provider_type,
+    transaction_type (унифицированная категория для бэйджа "Тип" в интерфейсе -
+    payment/receipt/receipt_order/money/crm, однозначно определяется по блоку-
+    источнику события, см. TRANSACTION_TYPE_LABELS), payment_provider,
+    event_number, summary, raw
     '''
 
     method = event.get('httpMethod', 'GET')
@@ -179,6 +199,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 'created_at': latest['created_at'],
                 'provider_slug': group['p_slug'],
                 'provider_type': PROVIDER_TYPE_LABELS.get(group['p_slug'], group['provider_name']),
+                'transaction_type': 'payment',
                 'integration_name': group['integration_name'],
                 'payment_provider': group['payment_provider'],
                 'event_type': 'payment_status_changed',
@@ -234,6 +255,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 'created_at': event_at.isoformat() if event_at else None,
                 'provider_slug': 'ecomkassa',
                 'provider_type': PROVIDER_TYPE_LABELS.get('ecomkassa', 'Касса (Екомкасса)'),
+                'transaction_type': 'receipt_order' if order_type == 'CORD' else 'receipt',
                 'integration_name': integration_name,
                 'payment_provider': payment_provider_value,
                 'event_type': 'ecomkassa_document',
@@ -279,6 +301,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 'created_at': created_at.isoformat() if created_at else None,
                 'provider_slug': 'ofdru',
                 'provider_type': PROVIDER_TYPE_LABELS.get('ofdru', 'ОФД'),
+                'transaction_type': 'receipt',
                 'integration_name': integration_name,
                 'event_type': 'ofd_receipt',
                 'status': operation_type,
@@ -377,6 +400,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 'created_at': latest['created_at'],
                 'provider_slug': p_slug,
                 'provider_type': PROVIDER_TYPE_LABELS.get(p_slug, group['provider_name']),
+                'transaction_type': 'crm',
                 'integration_name': group['integration_name'],
                 'event_type': latest['event_type'],
                 'status': latest['status'],
@@ -425,6 +449,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 'created_at': created_at.isoformat() if created_at else None,
                 'provider_slug': p_slug,
                 'provider_type': PROVIDER_TYPE_LABELS.get(p_slug, provider_name),
+                'transaction_type': 'money',
                 'integration_name': integration_name,
                 'event_type': 'bank_transaction',
                 'status': 'processed',

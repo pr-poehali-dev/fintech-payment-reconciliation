@@ -5,6 +5,7 @@ import Icon from '@/components/ui/icon';
 import { AppEvent } from './eventsTypes';
 import { useAuth } from '@/contexts/AuthContext';
 import { formatDateTime, DEFAULT_TIMEZONE } from '@/lib/formatDate';
+import { transactionTypeConfig } from './EventsTable';
 
 interface EventDetailsDialogProps {
   open: boolean;
@@ -74,6 +75,13 @@ const EventDetailsDialog = ({ open, onOpenChange, event }: EventDetailsDialogPro
               Информация о событии
             </h3>
             <div className="grid grid-cols-2 gap-4">
+              <div>
+                <p className="text-sm text-muted-foreground">Тип</p>
+                <Badge variant="outline" className={`gap-1.5 ${(transactionTypeConfig[event.transaction_type] || transactionTypeConfig.payment).className}`}>
+                  <Icon name={(transactionTypeConfig[event.transaction_type] || transactionTypeConfig.payment).icon as any} size={12} />
+                  {(transactionTypeConfig[event.transaction_type] || transactionTypeConfig.payment).label}
+                </Badge>
+              </div>
               <div>
                 <p className="text-sm text-muted-foreground">Тип интеграции</p>
                 <p className="text-sm">{event.provider_type}</p>

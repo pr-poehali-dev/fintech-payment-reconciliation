@@ -19,6 +19,19 @@ interface EventsTableProps {
   onRowClick: (event: AppEvent) => void;
 }
 
+// Унифицированная категория события (как в реестре "Транзакции", см.
+// components/transactions/TransactionsTable.tsx typeConfig) - в отличие от
+// provider_type (конкретный провайдер вроде "Касса (эквайринг)"), это ответ
+// на вопрос "что это за документ" независимо от того, какая интеграция его
+// прислала.
+export const transactionTypeConfig: Record<string, { icon: string; label: string; className: string }> = {
+  payment: { icon: 'CreditCard', label: 'Платёж', className: 'bg-primary/10 text-primary border-primary/30' },
+  receipt: { icon: 'Receipt', label: 'Чек', className: 'bg-info/10 text-info border-info/30' },
+  receipt_order: { icon: 'Truck', label: 'Заказ', className: 'bg-orange-500/10 text-orange-400 border-orange-500/30' },
+  money: { icon: 'Landmark', label: 'Деньги', className: 'bg-success/10 text-success border-success/30' },
+  crm: { icon: 'Users', label: 'CRM', className: 'bg-violet-500/10 text-violet-400 border-violet-500/30' },
+};
+
 const getStatusColor = (status: string | null) => {
   switch (status) {
     case 'CONFIRMED':
@@ -118,9 +131,18 @@ const EventsTable = ({ events, onRowClick }: EventsTableProps) => {
                       <div className="text-xs text-muted-foreground">{event.summary}</div>
                     </TableCell>
                     <TableCell>
-                      <Badge variant="outline">{event.provider_type}</Badge>
+                      {(() => {
+                        const config = transactionTypeConfig[event.transaction_type] || transactionTypeConfig.payment;
+                        return (
+                          <Badge variant="outline" className={`gap-1.5 ${config.className}`}>
+                            <Icon name={config.icon as any} size={12} />
+                            {config.label}
+                          </Badge>
+                        );
+                      })()}
+                      <div className="text-xs text-muted-foreground mt-1">{event.provider_type}</div>
                       {event.payment_provider && (
-                        <Badge variant="secondary" className="ml-1">{event.payment_provider}</Badge>
+                        <Badge variant="secondary" className="mt-1">{event.payment_provider}</Badge>
                       )}
                     </TableCell>
                     <TableCell className="font-mono text-sm">
