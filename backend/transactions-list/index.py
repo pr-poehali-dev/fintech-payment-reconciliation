@@ -519,6 +519,15 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         ''', {'company_id': company_id})
         manual_links = {(t, s, i): g for t, s, i, g in cur.fetchall()}
 
+        # Записи, выведенные пользователем из группы ("разорвать связь") -
+        # фронт не склеивает их автоматическими связями ни в одну сторону.
+        cur.execute(f'''
+            SELECT tx_type, tx_source, tx_id
+            FROM {SCHEMA}.transaction_link_exclusions
+            WHERE company_id = %(company_id)s
+        ''', {'company_id': company_id})
+        link_exclusions = {(t, s, i) for t, s, i in cur.fetchall()}
+
         # Схлопывание вебхуков одного платежа (payment_id/order_id) в одну
         # транзакцию. Строки уже отсортированы occurred_at DESC на уровне SQL,
         # поэтому первая встреченная строка группы - самая свежая (её статус,
@@ -565,6 +574,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             row['signed_amount'] = signed
             row.pop('linked_ofd_status', None)
             row['manual_group_id'] = manual_links.get((row['type'], row['source'], row['id']))
+            row['link_excluded'] = (row['type'], row['source'], row['id']) in link_exclusions
 
             t = row['type']
             bucket = totals_by_type.setdefault(t, {'count': 0, 'amount': 0.0, 'matched_count': 0})

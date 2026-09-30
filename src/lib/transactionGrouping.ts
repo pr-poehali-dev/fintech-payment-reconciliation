@@ -92,6 +92,16 @@ const sumRepresentativeOrder: Record<string, number> = { payment: 0, receipt_ord
 export const groupTransactions = (transactions: Transaction[]): TransactionGroup[] => {
   const byKey = new Map(transactions.map((t) => [nodeKey(t), t]));
 
+  // Автосвязь (linked_id) не действует, если хотя бы одна из двух записей
+  // выведена пользователем из группы кнопкой "Разорвать связь".
+  const autoLinkTarget = (t: Transaction): string | null => {
+    if (t.link_excluded || !t.linked_id || !t.linked_type || !t.linked_source) return null;
+    const b = `${t.linked_type}:${t.linked_source}:${t.linked_id}`;
+    const target = byKey.get(b);
+    if (!target || target.link_excluded) return null;
+    return b;
+  };
+
   // Первый (авто-only) union-find - только по linked_id, БЕЗ ручных связей.
   // Каждый его корень - это одна физическая "сделка" (платёж + его чек кассы
   // + его чек ОФД - все три источника про ОДНО и то же движение денег).
@@ -103,10 +113,8 @@ export const groupTransactions = (transactions: Transaction[]): TransactionGroup
   transactions.forEach((t) => {
     const a = nodeKey(t);
     autoUF.find(a);
-    if (t.linked_id && t.linked_type && t.linked_source) {
-      const b = `${t.linked_type}:${t.linked_source}:${t.linked_id}`;
-      if (byKey.has(b)) autoUF.union(a, b);
-    }
+    const b = autoLinkTarget(t);
+    if (b) autoUF.union(a, b);
   });
 
   // Финальный union-find - начинается от тех же авто-связей, затем поверх
@@ -118,10 +126,8 @@ export const groupTransactions = (transactions: Transaction[]): TransactionGroup
   transactions.forEach((t) => {
     const a = nodeKey(t);
     finalUF.find(a);
-    if (t.linked_id && t.linked_type && t.linked_source) {
-      const b = `${t.linked_type}:${t.linked_source}:${t.linked_id}`;
-      if (byKey.has(b)) finalUF.union(a, b);
-    }
+    const b = autoLinkTarget(t);
+    if (b) finalUF.union(a, b);
   });
   const byManualGroup = new Map<string, string[]>();
   transactions.forEach((t) => {

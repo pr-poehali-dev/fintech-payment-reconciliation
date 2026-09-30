@@ -25,6 +25,7 @@ export interface Transaction {
   linked_id: number | null;
   match_method: MatchMethod;
   manual_group_id: string | null;
+  link_excluded?: boolean;
   webhook_history?: WebhookHistoryItem[];
 }
 

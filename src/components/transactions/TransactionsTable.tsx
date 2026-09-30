@@ -11,9 +11,11 @@ interface TransactionsTableProps {
   onRowClick: (transaction: Transaction) => void;
   selectedKeys: Set<string>;
   onToggleSelect: (tx: Transaction) => void;
+  onDetach: (tx: Transaction) => void;
+  detachingKey: string | null;
 }
 
-const TransactionsTable = ({ groups, onRowClick, selectedKeys, onToggleSelect }: TransactionsTableProps) => {
+const TransactionsTable = ({ groups, onRowClick, selectedKeys, onToggleSelect, onDetach, detachingKey }: TransactionsTableProps) => {
   const { currentCompany } = useAuth();
   const timezone = currentCompany?.timezone || DEFAULT_TIMEZONE;
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -60,6 +62,8 @@ const TransactionsTable = ({ groups, onRowClick, selectedKeys, onToggleSelect }:
                 onToggleExpand={toggleExpand}
                 onRowClick={onRowClick}
                 onToggleSelect={onToggleSelect}
+                onDetach={onDetach}
+                detachingKey={detachingKey}
               />
             ))
           )}

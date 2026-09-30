@@ -21,6 +21,8 @@ interface TransactionsRegistryCardProps {
   onClearSelection: () => void;
   onRowClick: (tx: Transaction) => void;
   onToggleSelect: (tx: Transaction) => void;
+  onDetach: (tx: Transaction) => void;
+  detachingKey: string | null;
 }
 
 const TransactionsRegistryCard = ({
@@ -37,7 +39,9 @@ const TransactionsRegistryCard = ({
   onDeleteClick,
   onClearSelection,
   onRowClick,
-  onToggleSelect
+  onToggleSelect,
+  onDetach,
+  detachingKey
 }: TransactionsRegistryCardProps) => {
   return (
     <Card>
@@ -87,6 +91,8 @@ const TransactionsRegistryCard = ({
           onRowClick={onRowClick}
           selectedKeys={new Set(selectedTxByKey.keys())}
           onToggleSelect={onToggleSelect}
+          onDetach={onDetach}
+          detachingKey={detachingKey}
         />
       </CardContent>
     </Card>

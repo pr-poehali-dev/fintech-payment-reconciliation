@@ -49,6 +49,37 @@ def validate_items(items: Any) -> List[Dict[str, Any]]:
     return result
 
 
+def detach_one(cur, conn, company_id: Any, target: Dict[str, Any]) -> Dict[str, Any]:
+    '''Выводит ОДНУ транзакцию из её группы, не трогая остальных участников.'''
+    key = (company_id, target['type'], target['source'], target['id'])
+
+    cur.execute(f'''
+        DELETE FROM {SCHEMA}.manual_transaction_links
+        WHERE company_id = %s AND tx_type = %s AND tx_source = %s AND tx_id = %s
+        RETURNING link_group_id
+    ''', key)
+    row = cur.fetchone()
+    if row:
+        # В ручной группе остался один участник - группа больше не имеет смысла.
+        cur.execute(f'''
+            DELETE FROM {SCHEMA}.manual_transaction_links
+            WHERE company_id = %s AND link_group_id = %s
+              AND (SELECT COUNT(*) FROM {SCHEMA}.manual_transaction_links
+                   WHERE company_id = %s AND link_group_id = %s) < 2
+        ''', (company_id, row[0], company_id, row[0]))
+
+    # Отметка "не связывать автоматически" - иначе автосвязь (по реквизитам
+    # чека/платежа) сразу вернула бы запись обратно в группу.
+    cur.execute(f'''
+        INSERT INTO {SCHEMA}.transaction_link_exclusions (company_id, tx_type, tx_source, tx_id)
+        VALUES (%s, %s, %s, %s)
+        ON CONFLICT (company_id, tx_type, tx_source, tx_id) DO NOTHING
+    ''', key)
+
+    conn.commit()
+    return response(200, {'success': True})
+
+
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     '''
     Ручная связка транзакций пользователем в реестре "Транзакции" - кнопка
@@ -58,7 +89,10 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     с link_group_id. Если кто-то из выбранных уже состоит в ручной группе -
     все такие группы сливаются в одну вместе с новыми записями (связь
     только добавляется, существующие члены групп не теряются).
-    DELETE: разрывает ручную связь - удаляет ВСЮ группу (все транзакции с
+    DELETE с mode='detach': выводит из группы ОДНУ запись (item) - снимает её
+    ручную связь и запрещает автосвязь для неё; остальные участники группы
+    остаются связанными. Повторное "Связать" снимает этот запрет.
+    DELETE без mode: разрывает ручную связь - удаляет ВСЮ группу (все транзакции с
     тем же link_group_id), которой принадлежит указанная транзакция. Это
     осознанное решение - "разорвать связь" для пользователя означает разбить
     группу целиком, а не выкинуть из неё одну запись (для этого есть кнопка
@@ -121,6 +155,11 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 ''', (group_id, company_id, existing_groups[1:]))
 
             for item in items:
+                # Явная связка пользователем снимает прежний "вывод из группы".
+                cur.execute(f'''
+                    DELETE FROM {SCHEMA}.transaction_link_exclusions
+                    WHERE company_id = %s AND tx_type = %s AND tx_source = %s AND tx_id = %s
+                ''', (company_id, item['type'], item['source'], item['id']))
                 cur.execute(f'''
                     INSERT INTO {SCHEMA}.manual_transaction_links
                         (company_id, link_group_id, tx_type, tx_source, tx_id)
@@ -142,6 +181,9 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         except ValueError as e:
             return response(400, {'error': str(e)})
         target = items[0]
+
+        if body.get('mode') == 'detach':
+            return detach_one(cur, conn, company_id, target)
 
         cur.execute(f'''
             SELECT link_group_id FROM {SCHEMA}.manual_transaction_links

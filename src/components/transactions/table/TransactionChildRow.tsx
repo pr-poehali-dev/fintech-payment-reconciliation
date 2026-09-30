@@ -1,4 +1,5 @@
 import { Badge } from '@/components/ui/badge';
+import DetachButton from '../DetachButton';
 import Icon from '@/components/ui/icon';
 import { TableCell, TableRow } from '@/components/ui/table';
 import { Transaction } from '../transactionsTypes';
@@ -11,9 +12,11 @@ interface TransactionChildRowProps {
   dateText: string;
   onRowClick: (tx: Transaction) => void;
   onToggleSelect: (tx: Transaction) => void;
+  onDetach: (tx: Transaction) => void;
+  isDetaching: boolean;
 }
 
-const TransactionChildRow = ({ tx, isSelected, dateText, onRowClick, onToggleSelect }: TransactionChildRowProps) => {
+const TransactionChildRow = ({ tx, isSelected, dateText, onRowClick, onToggleSelect, onDetach, isDetaching }: TransactionChildRowProps) => {
   return (
     <TableRow className={`${rowClassName(isSelected)} bg-muted/20`} onClick={() => onRowClick(tx)}>
       <SelectCell isSelected={isSelected} onToggle={() => onToggleSelect(tx)} />
@@ -27,7 +30,9 @@ const TransactionChildRow = ({ tx, isSelected, dateText, onRowClick, onToggleSel
           <Badge className={`${getStatusDisplay(tx).color} text-white`}>{getStatusDisplay(tx).label}</Badge>
         )}
       </TableCell>
-      <TableCell />
+      <TableCell onClick={(e) => e.stopPropagation()}>
+        <DetachButton onClick={() => onDetach(tx)} isLoading={isDetaching} withLabel />
+      </TableCell>
       <TableCell className="text-right font-semibold">
         <AmountValue tx={tx} />
       </TableCell>

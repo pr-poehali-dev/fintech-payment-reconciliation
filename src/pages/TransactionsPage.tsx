@@ -40,6 +40,7 @@ const TransactionsPage = () => {
   const [isLinking, setIsLinking] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [detachingKey, setDetachingKey] = useState<string | null>(null);
   const { toast } = useToast();
   const { currentCompany } = useAuth();
   const companyId = currentCompany?.id;
@@ -201,6 +202,32 @@ const TransactionsPage = () => {
     }
   };
 
+  // Вывод ОДНОЙ записи из группы (кнопка-магнит) - остальные участники
+  // группы остаются связанными между собой.
+  const handleDetach = async (tx: Transaction) => {
+    if (!companyId) return;
+    const key = nodeKey(tx);
+    setDetachingKey(key);
+    try {
+      const response = await fetch(functionUrls['transactions-link'], {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ company_id: companyId, mode: 'detach', item: { type: tx.type, source: tx.source, id: tx.id } })
+      });
+      const data = await response.json();
+      if (response.ok && data.success) {
+        toast({ title: 'Связь разорвана', description: `«${tx.title}» выведена из группы` });
+        await fetchTransactions();
+      } else {
+        toast({ title: 'Не удалось разорвать связь', description: data.error || 'Попробуйте ещё раз', variant: 'destructive' });
+      }
+    } catch {
+      toast({ title: 'Ошибка подключения', description: 'Проверьте интернет-соединение', variant: 'destructive' });
+    } finally {
+      setDetachingKey(null);
+    }
+  };
+
   const handleDeleteConfirmed = async () => {
     if (!companyId || selectedTxByKey.size === 0) return;
     setIsDeleting(true);
@@ -308,11 +335,15 @@ const TransactionsPage = () => {
         onClearSelection={clearSelection}
         onRowClick={handleRowClick}
         onToggleSelect={handleToggleSelect}
+        onDetach={handleDetach}
+        detachingKey={detachingKey}
       />
 
       <TransactionDetailsDialog
         transaction={selectedTx}
         relatedItems={relatedItems}
+        onDetach={handleDetach}
+        detachingKey={detachingKey}
         open={showDetails}
         onOpenChange={setShowDetails}
       />

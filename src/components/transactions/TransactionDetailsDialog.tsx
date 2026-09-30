@@ -3,6 +3,8 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import Icon from '@/components/ui/icon';
 import { Transaction } from './transactionsTypes';
+import DetachButton from './DetachButton';
+import { nodeKey } from '@/lib/transactionGrouping';
 import { useAuth } from '@/contexts/AuthContext';
 import { formatDateTime as formatDateTimeTz, DEFAULT_TIMEZONE } from '@/lib/formatDate';
 import { ofdOperationTypeLabel } from '@/lib/ofdOperationType';
@@ -13,6 +15,8 @@ interface TransactionDetailsDialogProps {
   relatedItems: Transaction[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onDetach: (tx: Transaction) => void;
+  detachingKey: string | null;
 }
 
 const typeConfig: Record<string, { icon: string; label: string; className: string }> = {
@@ -29,7 +33,7 @@ const matchMethodLabels: Record<string, string> = {
   fiscal_triplet: 'Совпали фискальные реквизиты: ФН + номер ФД + ФПД'
 };
 
-const TransactionDetailsDialog = ({ transaction, relatedItems, open, onOpenChange }: TransactionDetailsDialogProps) => {
+const TransactionDetailsDialog = ({ transaction, relatedItems, open, onOpenChange, onDetach, detachingKey }: TransactionDetailsDialogProps) => {
   const { currentCompany } = useAuth();
   const timezone = currentCompany?.timezone || DEFAULT_TIMEZONE;
 
@@ -147,10 +151,15 @@ const TransactionDetailsDialog = ({ transaction, relatedItems, open, onOpenChang
                       className="flex items-center gap-3 bg-success/10 border border-success/30 rounded-lg p-4"
                     >
                       <Icon name={itemConfig.icon} size={20} className="text-success shrink-0" />
-                      <div>
+                      <div className="flex-1 min-w-0">
                         <div className="font-medium">{item.title}</div>
                         <div className="text-sm text-muted-foreground">{reason}</div>
                       </div>
+                      <DetachButton
+                        onClick={() => onDetach(item)}
+                        isLoading={detachingKey === nodeKey(item)}
+                        withLabel
+                      />
                     </div>
                   );
                 })}
