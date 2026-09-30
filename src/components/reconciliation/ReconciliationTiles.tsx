@@ -85,7 +85,7 @@ const ReconciliationTiles = ({ totals }: ReconciliationTilesProps) => {
             {formatMoney(totals.bank.amount)}
           </div>
           <p className={`text-xs mt-1 ${bankVsReceipts.color}`}>
-            {bankVsReceipts.text}
+            {bankVsReceipts.text}, комиссия {formatMoney(totals.bank.commission_amount)}
           </p>
         </CardContent>
       </Card>
