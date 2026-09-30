@@ -2,28 +2,12 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Badge } from '@/components/ui/badge';
 import Icon from '@/components/ui/icon';
 import { useAuth } from '@/contexts/AuthContext';
+import { SUBSCRIPTION_STATUS, subscriptionEndDate, daysLeft, formatLongDate } from '@/lib/subscription';
 
 interface SubscriptionDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }
-
-const STATUS_LABELS: Record<string, { label: string; className: string }> = {
-  trial: { label: 'Пробный период', className: 'bg-info/15 text-info border-info/30' },
-  active: { label: 'Активна', className: 'bg-success/15 text-success border-success/30' },
-  past_due: { label: 'Ожидает оплаты', className: 'bg-warning/15 text-warning border-warning/30' },
-  canceled: { label: 'Отменена', className: 'bg-destructive/15 text-destructive border-destructive/30' },
-  expired: { label: 'Истекла', className: 'bg-destructive/15 text-destructive border-destructive/30' }
-};
-
-const formatDate = (iso?: string | null) =>
-  iso ? new Date(iso).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' }) : '—';
-
-const daysLeft = (iso?: string | null) => {
-  if (!iso) return null;
-  const diff = Math.ceil((new Date(iso).getTime() - Date.now()) / 86400000);
-  return diff;
-};
 
 const Row = ({ icon, label, value }: { icon: string; label: string; value: React.ReactNode }) => (
   <div className="flex items-center justify-between gap-4 py-3">
@@ -37,12 +21,12 @@ const Row = ({ icon, label, value }: { icon: string; label: string; value: React
 
 const SubscriptionDialog = ({ open, onOpenChange }: SubscriptionDialogProps) => {
   const { currentCompany } = useAuth();
-  const status = STATUS_LABELS[currentCompany?.subscription_status || ''] || {
+  const status = SUBSCRIPTION_STATUS[currentCompany?.subscription_status || ''] || {
     label: currentCompany?.subscription_status || 'Нет подписки',
     className: 'bg-muted text-muted-foreground border-border'
   };
   const isTrial = currentCompany?.subscription_status === 'trial';
-  const endDate = isTrial ? currentCompany?.trial_ends_at : currentCompany?.current_period_end;
+  const endDate = subscriptionEndDate(currentCompany);
   const left = daysLeft(endDate);
 
   return (
@@ -75,7 +59,7 @@ const SubscriptionDialog = ({ open, onOpenChange }: SubscriptionDialogProps) => 
             </div>
 
             <div className="divide-y divide-border">
-              <Row icon="CalendarClock" label={isTrial ? 'Пробный период до' : 'Оплачено до'} value={formatDate(endDate)} />
+              <Row icon="CalendarClock" label={isTrial ? 'Пробный период до' : 'Оплачено до'} value={formatLongDate(endDate)} />
               <Row icon="Users" label="Пользователей в тарифе" value={currentCompany.max_users ?? 'Без ограничений'} />
             </div>
           </div>

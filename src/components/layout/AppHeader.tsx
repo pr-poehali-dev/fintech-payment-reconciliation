@@ -2,21 +2,47 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import Icon from '@/components/ui/icon';
 import { useAuth } from '@/contexts/AuthContext';
+import { subscriptionEndDate, daysLeft, formatShortDate } from '@/lib/subscription';
 
 interface AppHeaderProps {
-  title: string;
   unreadCount: number;
   onShowNotifications: () => void;
+  onOpenSubscription?: () => void;
 }
 
-const AppHeader = ({ title, unreadCount, onShowNotifications }: AppHeaderProps) => {
-  const { logout, isPlatformAdmin } = useAuth();
+const AppHeader = ({ unreadCount, onShowNotifications, onOpenSubscription }: AppHeaderProps) => {
+  const { logout, isPlatformAdmin, currentCompany } = useAuth();
+  const endDate = subscriptionEndDate(currentCompany);
+  const left = daysLeft(endDate);
+  const expired = left !== null && left <= 0;
+  const soon = left !== null && left > 0 && left <= 3;
   const navigate = useNavigate();
 
   return (
     <header className="fixed top-0 left-64 right-0 h-16 bg-background/95 backdrop-blur-sm border-b border-border z-40 px-8 flex items-center justify-between">
       <div className="flex items-center gap-4">
-        <h3 className="text-lg font-semibold text-foreground">{title}</h3>
+        {currentCompany?.tariff_name && (
+          <button
+            type="button"
+            onClick={onOpenSubscription}
+            className="flex items-center gap-3 rounded-lg border border-border px-3 py-1.5 text-left transition-colors hover:border-primary/50 hover:bg-muted/40"
+            title="Подробнее о подписке"
+          >
+            <Icon name="CreditCard" size={18} className="text-primary shrink-0" />
+            <span className="text-sm font-semibold text-foreground">{currentCompany.tariff_name}</span>
+            {endDate && (
+              <span
+                className={`text-sm ${
+                  expired ? 'text-destructive font-medium' : soon ? 'text-warning font-medium' : 'text-muted-foreground'
+                }`}
+              >
+                {expired
+                  ? 'срок закончился'
+                  : `до ${formatShortDate(endDate)} · осталось ${left} дн.`}
+              </span>
+            )}
+          </button>
+        )}
       </div>
 
       <div className="flex items-center gap-3">

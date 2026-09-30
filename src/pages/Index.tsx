@@ -11,7 +11,7 @@ import TransactionsPage from './TransactionsPage';
 import ReconciliationPage from './ReconciliationPage';
 import SettingsPlaceholder from './SettingsPlaceholder';
 import { useAuth } from '@/contexts/AuthContext';
-import { APP_MODULES } from '@/config/modules';
+import SubscriptionDialog from '@/components/profile/SubscriptionDialog';
 import { DateFilter } from '@/components/filters/DateRangeFilter';
 import { TYPE_FILTERS, TypeFilter, TypeFilterKey } from '@/lib/transactionTypeFilter';
 
@@ -21,6 +21,7 @@ const Index = () => {
   const [mounted, setMounted] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [unreadCount] = useState(3);
+  const [subscriptionOpen, setSubscriptionOpen] = useState(false);
   const [transactionsDateFilter, setTransactionsDateFilter] = useState<DateFilter | null>(null);
   const [transactionsTypeFilter, setTransactionsTypeFilter] = useState<TypeFilter | null>(null);
 
@@ -56,7 +57,6 @@ const Index = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeModule]);
 
-  const activeModuleName = APP_MODULES.find(m => m.id === activeModule)?.name || 'Дашборд';
 
   return (
     <div className="min-h-screen bg-background">
@@ -65,10 +65,12 @@ const Index = () => {
       )}
 
       <AppHeader
-        title={activeModuleName}
+        onOpenSubscription={() => setSubscriptionOpen(true)}
         unreadCount={unreadCount}
         onShowNotifications={() => setShowNotifications(true)}
       />
+
+      <SubscriptionDialog open={subscriptionOpen} onOpenChange={setSubscriptionOpen} />
 
       <AppSidebar activeModule={activeModule} onModuleChange={handleModuleChange} />
 
