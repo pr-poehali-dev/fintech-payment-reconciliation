@@ -47,9 +47,11 @@ const STATUSES: { id: string; label: string }[] = [
   { id: 'PAID', label: 'Оплачен' },
 ];
 
-const yesterday = () => {
+// Верхняя граница периода - конец СЕГОДНЯШНЕГО дня: ручная дозагрузка
+// должна уметь подтянуть и то, что пришло сегодня (сверка при этом по-прежнему
+// считает только закрытые дни - это ограничение самой Сверки, не загрузки).
+const endOfToday = () => {
   const d = new Date();
-  d.setDate(d.getDate() - 1);
   d.setHours(23, 59, 59, 999);
   return d;
 };
@@ -76,7 +78,7 @@ const BackfillDialog = ({ ecomkassaIntegrations, ofdIntegrations, bankIntegratio
     start
   } = useBackfill();
 
-  const [dateRange, setDateRange] = useState<DateRange>({ from: monthAgo(), to: yesterday() });
+  const [dateRange, setDateRange] = useState<DateRange>({ from: monthAgo(), to: endOfToday() });
   const dateFrom = dateRange.from ?? monthAgo();
   const dateTo = dateRange.to ?? dateFrom;
   const [orderTypes, setOrderTypes] = useState<string[]>(['VCHR']);
@@ -93,10 +95,17 @@ const BackfillDialog = ({ ecomkassaIntegrations, ofdIntegrations, bankIntegratio
 
   const handleStart = () => {
     if (!companyId) return;
+    // Календарь отдаёт даты на полночь - конец периода растягиваем до конца
+    // дня, иначе последний выбранный день (в т.ч. сегодня) не попадал в
+    // загрузку целиком.
+    const from = new Date(dateFrom);
+    from.setHours(0, 0, 0, 0);
+    const to = new Date(dateTo);
+    to.setHours(23, 59, 59, 999);
     start({
       companyId,
-      dateFrom,
-      dateTo,
+      dateFrom: from,
+      dateTo: to,
       hasEcomkassa,
       orderTypes,
       statuses,
@@ -172,7 +181,7 @@ const BackfillDialog = ({ ecomkassaIntegrations, ofdIntegrations, bankIntegratio
                         setCalendarOpen(false);
                       }
                     }}
-                    disabled={{ after: yesterday() }}
+                    disabled={{ after: endOfToday() }}
                     numberOfMonths={2}
                     defaultMonth={dateFrom}
                     locale={ru}
