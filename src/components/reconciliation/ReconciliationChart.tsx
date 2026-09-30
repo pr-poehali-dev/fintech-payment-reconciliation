@@ -22,6 +22,7 @@ interface DailyPoint {
 
 interface ReconciliationChartProps {
   daily: DailyPoint[];
+  onDayClick?: (date: string) => void;
 }
 
 const chartTooltipStyle = {
@@ -35,7 +36,7 @@ const formatDay = (value: string) => {
   return d.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' });
 };
 
-const ReconciliationChart = ({ daily }: ReconciliationChartProps) => {
+const ReconciliationChart = ({ daily, onDayClick }: ReconciliationChartProps) => {
   const chartData = daily.map((d) => ({ ...d, dayLabel: formatDay(d.date) }));
 
   return (
@@ -45,15 +46,26 @@ const ReconciliationChart = ({ daily }: ReconciliationChartProps) => {
           <Icon name="BarChart3" size={20} />
           Динамика по дням
         </CardTitle>
-        <CardDescription>Платежи, чеки кассы и ОФД, поступления на счёт и комиссия банка за выбранный период</CardDescription>
+        <CardDescription>
+          Платежи, чеки кассы и ОФД, поступления на счёт и комиссия банка за выбранный период
+          {onDayClick && ' · нажмите на день, чтобы открыть его транзакции'}
+        </CardDescription>
       </CardHeader>
       <CardContent>
         <ResponsiveContainer width="100%" height={300}>
-          <BarChart data={chartData}>
+          <BarChart
+            data={chartData}
+            className={onDayClick ? 'cursor-pointer' : undefined}
+            onClick={(state) => {
+              const index = Number(state?.activeTooltipIndex ?? state?.activeIndex);
+              const date = Number.isInteger(index) ? chartData[index]?.date : undefined;
+              if (date && onDayClick) onDayClick(date);
+            }}
+          >
             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
             <XAxis dataKey="dayLabel" stroke="hsl(var(--muted-foreground))" />
             <YAxis stroke="hsl(var(--muted-foreground))" />
-            <Tooltip contentStyle={chartTooltipStyle} />
+            <Tooltip contentStyle={chartTooltipStyle} cursor={{ fill: 'hsl(var(--muted))', opacity: 0.4 }} />
             <Legend />
             <Bar dataKey="payments" name="Платежи" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
             <Bar dataKey="receipts" name="Чеки касса" fill="hsl(var(--info))" radius={[4, 4, 0, 0]} />

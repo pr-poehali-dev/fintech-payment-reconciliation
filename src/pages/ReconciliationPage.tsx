@@ -52,7 +52,11 @@ const getDefaultFrom = () => {
   return d;
 };
 
-const ReconciliationPage = () => {
+interface ReconciliationPageProps {
+  onOpenTransactions?: (from: Date, to: Date) => void;
+}
+
+const ReconciliationPage = ({ onOpenTransactions }: ReconciliationPageProps) => {
   const [dateFrom, setDateFrom] = useState<Date>(getDefaultFrom());
   const [dateTo, setDateTo] = useState<Date>(getYesterday());
   const [data, setData] = useState<ReconciliationResponse | null>(null);
@@ -148,8 +152,22 @@ const ReconciliationPage = () => {
         </div>
       ) : data ? (
         <>
-          <ReconciliationTiles totals={data.totals} />
-          <ReconciliationChart daily={data.daily} />
+          <ReconciliationTiles
+            totals={data.totals}
+            onTileClick={onOpenTransactions ? () => onOpenTransactions(dateFrom, dateTo) : undefined}
+          />
+          <ReconciliationChart
+            daily={data.daily}
+            onDayClick={
+              onOpenTransactions
+                ? (day) => {
+                    const [y, m, d] = day.split('-').map(Number);
+                    const date = new Date(y, m - 1, d);
+                    onOpenTransactions(date, date);
+                  }
+                : undefined
+            }
+          />
           {data.details.payments_by_provider && (
             <ReconciliationByProvider paymentsByProvider={data.details.payments_by_provider} />
           )}

@@ -22,12 +22,16 @@ interface IntegrationRow {
   status: string;
 }
 
-const TransactionsPage = () => {
+interface TransactionsPageProps {
+  initialDateFilter?: DateFilter | null;
+}
+
+const TransactionsPage = ({ initialDateFilter = null }: TransactionsPageProps) => {
   const [selectedTx, setSelectedTx] = useState<Transaction | null>(null);
   const [showDetails, setShowDetails] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [showUnmatchedOnly, setShowUnmatchedOnly] = useState(false);
-  const [dateFilter, setDateFilter] = useState<DateFilter | null>(null);
+  const [dateFilter, setDateFilter] = useState<DateFilter | null>(initialDateFilter);
   const [ecomkassaIntegrations, setEcomkassaIntegrations] = useState<{ id: number; name: string }[]>([]);
   const [ofdIntegrations, setOfdIntegrations] = useState<{ id: number; name: string }[]>([]);
   const [bankIntegrations, setBankIntegrations] = useState<{ id: number; name: string }[]>([]);

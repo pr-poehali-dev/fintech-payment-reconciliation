@@ -12,6 +12,7 @@ import ReconciliationPage from './ReconciliationPage';
 import SettingsPlaceholder from './SettingsPlaceholder';
 import { useAuth } from '@/contexts/AuthContext';
 import { APP_MODULES } from '@/config/modules';
+import { DateFilter } from '@/components/filters/DateRangeFilter';
 
 const Index = () => {
   const { currentCompany } = useAuth();
@@ -19,6 +20,19 @@ const Index = () => {
   const [mounted, setMounted] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [unreadCount] = useState(3);
+  const [transactionsDateFilter, setTransactionsDateFilter] = useState<DateFilter | null>(null);
+
+  // Переход из «Сверки» (плитки, столбцы графика) в «Транзакции» сразу с
+  // фильтром на нужный период.
+  const openTransactionsForPeriod = (from: Date, to: Date) => {
+    setTransactionsDateFilter({ from, to });
+    setActiveModule('transactions');
+  };
+
+  const handleModuleChange = (id: string) => {
+    setTransactionsDateFilter(null);
+    setActiveModule(id);
+  };
 
   const companyId = currentCompany?.id;
   const { stats, reload: reloadDashboardStats } = useDashboardStats(companyId);
@@ -52,13 +66,13 @@ const Index = () => {
         onShowNotifications={() => setShowNotifications(true)}
       />
 
-      <AppSidebar activeModule={activeModule} onModuleChange={setActiveModule} />
+      <AppSidebar activeModule={activeModule} onModuleChange={handleModuleChange} />
 
       <main className="ml-64 mt-16 p-8">
         {activeModule === 'dashboard' && <DashboardOverview stats={stats} mounted={mounted} />}
-        {activeModule === 'reconciliation' && <ReconciliationPage />}
+        {activeModule === 'reconciliation' && <ReconciliationPage onOpenTransactions={openTransactionsForPeriod} />}
         {activeModule === 'events' && <EventsPage />}
-        {activeModule === 'transactions' && <TransactionsPage />}
+        {activeModule === 'transactions' && <TransactionsPage initialDateFilter={transactionsDateFilter} />}
         {activeModule === 'integrations' && <IntegrationsPage />}
         {activeModule === 'access' && <AccessManagement />}
         {activeModule === 'settings' && <SettingsPlaceholder />}

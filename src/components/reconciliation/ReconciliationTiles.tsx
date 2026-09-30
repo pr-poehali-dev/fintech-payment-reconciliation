@@ -9,6 +9,7 @@ interface ReconciliationTotals {
 
 interface ReconciliationTilesProps {
   totals: ReconciliationTotals;
+  onTileClick?: () => void;
 }
 
 const formatMoney = (value: number) =>
@@ -26,7 +27,7 @@ const bankVsReceiptsLabel = (bankAmount: number, receiptsAmount: number) => {
   return { text: `разница ${sign}${formatMoney(Math.abs(diff))}`, color: 'text-warning' };
 };
 
-const ReconciliationTiles = ({ totals }: ReconciliationTilesProps) => {
+const ReconciliationTiles = ({ totals, onTileClick }: ReconciliationTilesProps) => {
   // Чеки кассы vs чеки ОФД сравниваются по КОЛИЧЕСТВУ документов - это два
   // разных источника одного и того же чека (касса пробивает сама, ОФД
   // получает копию от налоговой), поэтому расхождение в штуках красноречивее
@@ -35,13 +36,39 @@ const ReconciliationTiles = ({ totals }: ReconciliationTilesProps) => {
   const kassaCountMatchesOfd = ofdCount !== undefined && ofdCount === totals.receipts.count;
   const bankVsReceipts = bankVsReceiptsLabel(totals.bank.amount, totals.receipts.amount);
 
+  const clickable = onTileClick
+    ? {
+        role: 'button' as const,
+        tabIndex: 0,
+        title: 'Открыть транзакции за этот период',
+        onClick: onTileClick,
+        onKeyDown: (e: React.KeyboardEvent) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            onTileClick();
+          }
+        }
+      }
+    : {};
+  const cardClass = `border-border bg-card group ${
+    onTileClick ? 'cursor-pointer transition-colors hover:border-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring' : ''
+  }`;
+  const openHint = onTileClick ? (
+    <Icon
+      name="ArrowUpRight"
+      size={16}
+      className="ml-auto text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 group-hover:text-primary"
+    />
+  ) : null;
+
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-      <Card className="border-border bg-card">
+      <Card className={cardClass} {...clickable}>
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
             <Icon name="CreditCard" size={16} />
             Платежи
+            {openHint}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -54,11 +81,12 @@ const ReconciliationTiles = ({ totals }: ReconciliationTilesProps) => {
         </CardContent>
       </Card>
 
-      <Card className="border-border bg-card">
+      <Card className={cardClass} {...clickable}>
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
             <Icon name="Receipt" size={16} />
             Чеки
+            {openHint}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -73,11 +101,12 @@ const ReconciliationTiles = ({ totals }: ReconciliationTilesProps) => {
         </CardContent>
       </Card>
 
-      <Card className="border-border bg-card">
+      <Card className={cardClass} {...clickable}>
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
             <Icon name="Landmark" size={16} />
             Деньги
+            {openHint}
           </CardTitle>
         </CardHeader>
         <CardContent>
