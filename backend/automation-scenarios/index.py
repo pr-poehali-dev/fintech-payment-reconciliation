@@ -20,10 +20,8 @@ TRIGGERS = {
     'discrepancy': None,
 }
 
-ACTIONS = {
-    'create_receipt': ['regular', 'correction', 'closing'],
-    'create_order': ['paid_order', 'unpaid_order'],
-}
+# Шаблоны действий хранятся в automation_action_templates (правятся в админке платформы).
+ACTIONS = {'create_receipt', 'create_order'}
 
 TARGET_CATEGORIES = ['cash_registers']
 STATUSES = {'active', 'stopped'}
@@ -67,8 +65,14 @@ def validate(cur, company_id: int, body: Dict[str, Any]) -> Optional[str]:
     action = body.get('action_type')
     if action not in ACTIONS:
         return 'Неизвестное действие'
-    if body.get('action_template') not in ACTIONS[action]:
+    cur.execute(f'''
+        SELECT action_type, is_active FROM {SCHEMA}.automation_action_templates WHERE code = %s
+    ''', (body.get('action_template'),))
+    template = cur.fetchone()
+    if not template or template[0] != action:
         return 'Неизвестный шаблон действия'
+    if not template[1] and not body.get('id'):
+        return 'Шаблон действия отключён'
     if not body.get('target_integration_id'):
         return 'Выберите кассу, где выполнить действие'
     if integration_category(cur, company_id, body.get('target_integration_id')) not in TARGET_CATEGORIES:
@@ -107,8 +111,10 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 SELECT s.id, s.name, s.trigger_type, s.source_integration_id, si.integration_name,
                        s.action_type, s.action_template, s.target_integration_id, ti.integration_name,
                        s.field_mapping, s.status, s.created_at, s.updated_at,
-                       COUNT(j.id), COUNT(j.id) FILTER (WHERE j.status = 'error'), MAX(j.created_at)
+                       COUNT(j.id), COUNT(j.id) FILTER (WHERE j.status = 'error'), MAX(j.created_at),
+                       MAX(t.name)
                 FROM {SCHEMA}.automation_scenarios s
+                LEFT JOIN {SCHEMA}.automation_action_templates t ON t.code = s.action_template
                 LEFT JOIN {SCHEMA}.user_integrations si ON si.id = s.source_integration_id
                 LEFT JOIN {SCHEMA}.user_integrations ti ON ti.id = s.target_integration_id
                 LEFT JOIN {SCHEMA}.automation_jobs j ON j.scenario_id = s.id
@@ -123,7 +129,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 'target_integration_id': r[7], 'target_integration_name': r[8],
                 'field_mapping': r[9] or {}, 'status': r[10],
                 'created_at': r[11], 'updated_at': r[12],
-                'jobs_total': r[13], 'jobs_errors': r[14], 'last_job_at': r[15]
+                'jobs_total': r[13], 'jobs_errors': r[14], 'last_job_at': r[15],
+                'action_template_name': r[16]
             } for r in cur.fetchall()]
             return respond(200, {'success': True, 'scenarios': scenarios})
 

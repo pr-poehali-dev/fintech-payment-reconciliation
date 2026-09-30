@@ -1,0 +1,5 @@
+{"tests": [
+  {"name": "Active templates", "method": "GET", "path": "/?active=1", "expectedStatus": 200, "expectedBody": {"success": true}, "bodyMatcher": "partial"},
+  {"name": "No requester", "method": "GET", "path": "/", "expectedStatus": 400, "expectedBody": {"error": "string"}, "bodyMatcher": "partial"},
+  {"name": "Not admin", "method": "GET", "path": "/?requester_user_id=999999", "expectedStatus": 403, "expectedBody": {"error": "string"}, "bodyMatcher": "partial"}
+]}

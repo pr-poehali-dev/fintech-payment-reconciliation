@@ -18,7 +18,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import ScenarioDialog, { ScenarioForm } from '@/components/automation/ScenarioDialog';
 import AutomationJournal from '@/components/automation/AutomationJournal';
-import { ACTIONS, IntegrationOption, Scenario, TEMPLATES, TRIGGERS } from '@/components/automation/automationConfig';
+import { ACTIONS, ActionTemplateOption, IntegrationOption, Scenario, TRIGGERS } from '@/components/automation/automationConfig';
 import functionUrls from '../../backend/func2url.json';
 
 interface IntegrationRow {
@@ -35,6 +35,7 @@ const AutomationPage = () => {
   const companyId = currentCompany?.id;
   const [scenarios, setScenarios] = useState<Scenario[]>([]);
   const [integrations, setIntegrations] = useState<IntegrationOption[]>([]);
+  const [templates, setTemplates] = useState<ActionTemplateOption[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Scenario | null>(null);
@@ -47,13 +48,16 @@ const AutomationPage = () => {
 
   const load = useCallback(async () => {
     if (!companyId) return;
-    const [sRes, iRes] = await Promise.all([
+    const [sRes, iRes, tRes] = await Promise.all([
       fetch(`${api}?company_id=${companyId}`),
-      fetch(`${functionUrls['integrations-list']}?company_id=${companyId}`)
+      fetch(`${functionUrls['integrations-list']}?company_id=${companyId}`),
+      fetch(`${(functionUrls as Record<string, string>)['admin-action-templates']}?active=1`)
     ]);
     const sData = await sRes.json();
     const iData = await iRes.json();
+    const tData = await tRes.json();
     setScenarios(sData.scenarios || []);
+    setTemplates(tData.templates || []);
     setIntegrations(
       ((iData.user_integrations || []) as IntegrationRow[])
         .filter((i) => i.status === 'active')
@@ -200,7 +204,7 @@ const AutomationPage = () => {
                       <Icon name="ArrowRight" size={14} className="text-muted-foreground" />
                       <span className="inline-flex items-center gap-1.5 rounded-md bg-muted px-2 py-1">
                         <Icon name={action.icon} size={14} className="text-primary" />
-                        {TEMPLATES[s.action_template]}
+                        {s.action_template_name || s.action_template}
                         {s.target_integration_name && <span className="text-muted-foreground">· {s.target_integration_name}</span>}
                       </span>
                     </div>
@@ -229,6 +233,7 @@ const AutomationPage = () => {
         onOpenChange={setDialogOpen}
         scenario={editing}
         integrations={integrations}
+        templates={templates}
         isSaving={isSaving}
         onSave={handleSave}
       />

@@ -56,12 +56,17 @@ def claim_jobs(cur, company_id=None, job_id=None) -> List[Dict[str, Any]]:
 
 def process_job(cur, job: Dict[str, Any]) -> str:
     cur.execute(f'''
-        SELECT id, name, action_type, action_template, target_integration_id, field_mapping, status, removed_at
-        FROM {SCHEMA}.automation_scenarios WHERE id = %s
+        SELECT s.id, s.name, s.action_type, s.action_template, s.target_integration_id, s.field_mapping, s.status,
+               s.removed_at, t.operation, t.paid, t.name
+        FROM {SCHEMA}.automation_scenarios s
+        LEFT JOIN {SCHEMA}.automation_action_templates t ON t.code = s.action_template
+        WHERE s.id = %s
     ''', (job['scenario_id'],))
     r = cur.fetchone()
     scenario = {'id': r[0], 'name': r[1], 'action_type': r[2], 'action_template': r[3],
-                'target_integration_id': r[4], 'field_mapping': r[5] or {}}
+                'target_integration_id': r[4], 'field_mapping': r[5] or {},
+                'template': {'operation': r[8] or 'sell', 'paid': r[9] if r[9] is not None else True,
+                             'name': r[10] or r[3]}}
 
     if r[7] is not None:
         status, data, message = 'skipped', {}, 'Сценарий удалён'

@@ -8,12 +8,12 @@ import Icon from '@/components/ui/icon';
 import {
   ACTIONS,
   ActionTemplate,
+  ActionTemplateOption,
   ActionType,
   IntegrationOption,
   MAPPING_FIELDS,
   Scenario,
   TARGET_CATEGORIES,
-  TEMPLATES,
   TRIGGERS,
   TriggerType
 } from './automationConfig';
@@ -33,6 +33,7 @@ interface ScenarioDialogProps {
   onOpenChange: (open: boolean) => void;
   scenario: Scenario | null;
   integrations: IntegrationOption[];
+  templates: ActionTemplateOption[];
   isSaving: boolean;
   onSave: (form: ScenarioForm) => void;
 }
@@ -57,7 +58,7 @@ const Step = ({ n, title, children }: { n: number; title: string; children: Reac
   </div>
 );
 
-const ScenarioDialog = ({ open, onOpenChange, scenario, integrations, isSaving, onSave }: ScenarioDialogProps) => {
+const ScenarioDialog = ({ open, onOpenChange, scenario, integrations, templates: allTemplates, isSaving, onSave }: ScenarioDialogProps) => {
   const [form, setForm] = useState<ScenarioForm>(emptyForm);
 
   useEffect(() => {
@@ -73,8 +74,12 @@ const ScenarioDialog = ({ open, onOpenChange, scenario, integrations, isSaving, 
             target_integration_id: scenario.target_integration_id,
             field_mapping: scenario.field_mapping || {}
           }
-        : emptyForm
+        : {
+            ...emptyForm,
+            action_template: allTemplates.find((t) => t.action_type === emptyForm.action_type)?.code || ''
+          }
     );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, scenario]);
 
   const trigger = TRIGGERS[form.trigger_type];
@@ -82,7 +87,12 @@ const ScenarioDialog = ({ open, onOpenChange, scenario, integrations, isSaving, 
     ? integrations.filter((i) => trigger.sourceCategories?.includes(i.category))
     : [];
   const targetOptions = integrations.filter((i) => TARGET_CATEGORIES.includes(i.category));
-  const templates = ACTIONS[form.action_type].templates;
+  const templates = allTemplates.filter((t) => t.action_type === form.action_type);
+  // Выключенный в админке шаблон остаётся видимым у сценария, который уже на нём настроен.
+  if (scenario && form.action_template && !templates.some((t) => t.code === form.action_template) && scenario.action_type === form.action_type) {
+    templates.push({ code: form.action_template, name: scenario.action_template_name || form.action_template, action_type: form.action_type, description: null });
+  }
+  const currentTemplate = templates.find((t) => t.code === form.action_template);
   let step = 1;
 
   const missingMapping = trigger.needsMapping
@@ -92,12 +102,13 @@ const ScenarioDialog = ({ open, onOpenChange, scenario, integrations, isSaving, 
     !!form.name.trim() &&
     (!trigger.sourceCategories || !!form.source_integration_id) &&
     !!form.target_integration_id &&
+    !!currentTemplate &&
     missingMapping.length === 0 &&
     !isSaving;
 
   const setTrigger = (value: TriggerType) => setForm({ ...form, trigger_type: value, source_integration_id: null });
   const setAction = (value: ActionType) =>
-    setForm({ ...form, action_type: value, action_template: ACTIONS[value].templates[0] });
+    setForm({ ...form, action_type: value, action_template: allTemplates.find((t) => t.action_type === value)?.code || '' });
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -177,16 +188,17 @@ const ScenarioDialog = ({ open, onOpenChange, scenario, integrations, isSaving, 
           <Step n={step++} title="Шаблон действия">
             <Select value={form.action_template} onValueChange={(v) => setForm({ ...form, action_template: v as ActionTemplate })}>
               <SelectTrigger>
-                <SelectValue />
+                <SelectValue placeholder={templates.length ? 'Выберите шаблон' : 'Нет доступных шаблонов'} />
               </SelectTrigger>
               <SelectContent>
                 {templates.map((t) => (
-                  <SelectItem key={t} value={t}>
-                    {TEMPLATES[t]}
+                  <SelectItem key={t.code} value={t.code}>
+                    {t.name}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
+            {currentTemplate?.description && <p className="text-xs text-muted-foreground">{currentTemplate.description}</p>}
           </Step>
 
           <Step n={step++} title="Касса">

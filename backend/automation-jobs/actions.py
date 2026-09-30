@@ -53,7 +53,9 @@ def create_order(cur, job: Dict[str, Any], scenario: Dict[str, Any], data: Dict[
     company = {k: v for k, v in {'inn': source_company.get('inn'), 'sno': data.get('taxation') or source_company.get('sno'),
                                  'payment_address': source_company.get('payment_address'),
                                  'email': source_company.get('email')}.items() if v}
-    paid = scenario['action_template'] == 'paid_order'
+    template = scenario.get('template') or {}
+    paid = bool(template.get('paid', True))
+    operation = template.get('operation') or 'sell'
     external_id = f"auto-{job['id']}"
     body = {
         'external_id': external_id,
@@ -66,12 +68,12 @@ def create_order(cur, job: Dict[str, Any], scenario: Dict[str, Any], data: Dict[
             'total': total
         }
     }
-    result, err = create_courier_order(kassa, 'sell', body)
+    result, err = create_courier_order(kassa, operation, body)
     if not result:
         return 'error', {'request': body}, err
     return 'done', {'request': body, 'response': result, 'external_id': external_id}, (
         f"Заказ создан в Екомкассе: #{result.get('uuid')} на {total:.2f} ₽, "
-        f"{'оплаченный' if paid else 'неоплаченный'} ({result.get('permalink', '')})"
+        f"шаблон «{template.get('name')}», {'оплаченный' if paid else 'неоплаченный'} ({result.get('permalink', '')})"
     )
 
 

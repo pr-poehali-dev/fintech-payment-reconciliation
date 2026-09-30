@@ -1,6 +1,6 @@
 export type TriggerType = 'new_payment' | 'crm_order' | 'discrepancy';
 export type ActionType = 'create_receipt' | 'create_order';
-export type ActionTemplate = 'regular' | 'correction' | 'closing' | 'paid_order' | 'unpaid_order';
+export type ActionTemplate = string;
 export type ScenarioStatus = 'active' | 'stopped';
 export type JobStatus = 'new' | 'processing' | 'ready' | 'done' | 'skipped' | 'error' | 'failed';
 
@@ -12,6 +12,7 @@ export interface Scenario {
   source_integration_name: string | null;
   action_type: ActionType;
   action_template: ActionTemplate;
+  action_template_name?: string | null;
   target_integration_id: number | null;
   target_integration_name: string | null;
   field_mapping: Record<string, string>;
@@ -49,18 +50,18 @@ export const TRIGGERS: Record<TriggerType, { label: string; icon: string; descri
   discrepancy: { label: 'Расхождение', icon: 'TriangleAlert', description: 'Сверка нашла платёж без чека или чек без денег', sourceCategories: null, needsMapping: false }
 };
 
-export const ACTIONS: Record<ActionType, { label: string; icon: string; templates: ActionTemplate[] }> = {
-  create_receipt: { label: 'Создать чек', icon: 'Receipt', templates: ['regular', 'correction', 'closing'] },
-  create_order: { label: 'Создать заказ', icon: 'Truck', templates: ['paid_order', 'unpaid_order'] }
+export const ACTIONS: Record<ActionType, { label: string; icon: string }> = {
+  create_receipt: { label: 'Создать чек', icon: 'Receipt' },
+  create_order: { label: 'Создать заказ', icon: 'Truck' }
 };
 
-export const TEMPLATES: Record<ActionTemplate, string> = {
-  regular: 'Обычный чек',
-  correction: 'Чек коррекции',
-  closing: 'Закрывающий чек',
-  paid_order: 'Оплаченный заказ',
-  unpaid_order: 'Неоплаченный заказ'
-};
+// Шаблоны действий приходят из каталога платформы (админка → «Шаблоны действий»).
+export interface ActionTemplateOption {
+  code: string;
+  name: string;
+  action_type: ActionType;
+  description: string | null;
+}
 
 export const TARGET_CATEGORIES = ['cash_registers'];
 
