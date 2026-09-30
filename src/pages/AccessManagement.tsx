@@ -51,6 +51,7 @@ const modules = [
   { id: 'reconciliation', name: 'Сверка', icon: 'GitCompare' },
   { id: 'events', name: 'События', icon: 'Radio' },
   { id: 'transactions', name: 'Транзакции', icon: 'ArrowLeftRight' },
+  { id: 'automation', name: 'Автоматизация', icon: 'Workflow' },
   { id: 'integrations', name: 'Интеграции', icon: 'Plug' },
   { id: 'access', name: 'Управление доступом', icon: 'Users' },
   { id: 'settings', name: 'Настройки', icon: 'Settings' }

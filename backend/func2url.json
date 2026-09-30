@@ -1,4 +1,6 @@
 {
+  "automation-scenarios": "https://functions.poehali.dev/7650b855-7e7e-4a69-a26a-665c4ce27793",
+  "automation-jobs": "https://functions.poehali.dev/22902813-812b-495a-9ea0-8497b880c461",
   "profile-update": "https://functions.poehali.dev/ad820c6c-64c0-4834-8807-aa2103f472c4",
   "tochka-accounts-list": "https://functions.poehali.dev/06d974db-fab7-4c32-a4da-4ba2ffaa7752",
   "transactions-remove": "https://functions.poehali.dev/c5100180-b141-4e21-8470-9c27ad0ec2a7",

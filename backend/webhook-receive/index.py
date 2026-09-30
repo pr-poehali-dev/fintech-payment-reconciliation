@@ -12,6 +12,7 @@ import tbank_handler
 import bitrix24_handler
 import amocrm_handler
 import ecomkassa_gateway_handler
+import automation
 
 CORS_HEADERS = {
     'Access-Control-Allow-Origin': '*',
@@ -161,6 +162,20 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
         mark_processed(cur, event_id, 'failed' if handler_error else 'processed', handler_error)
 
+        # Автоматизация: задание в журнал на каждый запущенный сценарий.
+        # Только запись в таблицу - сбор данных делает отдельный обработчик.
+        # Сбой автоматизации не должен ломать приём платежа - откатываем
+        # только этот шаг (savepoint), платёж и событие сохраняются.
+        jobs_created = 0
+        if webhook_payment_id and not handler_error:
+            cur.execute('SAVEPOINT automation_enqueue')
+            try:
+                jobs_created = automation.enqueue_payment_jobs(cur, company_id, integration_id, webhook_payment_id, event_id)
+                cur.execute('RELEASE SAVEPOINT automation_enqueue')
+            except Exception as e:
+                cur.execute('ROLLBACK TO SAVEPOINT automation_enqueue')
+                print(f'automation enqueue failed: {e}')
+
         cur.execute('''
             UPDATE t_p83864310_fintech_payment_reco.user_integrations 
             SET last_webhook_at = NOW(), 
@@ -170,6 +185,9 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         ''', (integration_id,))
 
         conn.commit()
+
+        if jobs_created:
+            automation.signal_processor(company_id)
 
         if forward_url and webhook_payment_id:
             start_time = int(time.time() * 1000)

@@ -1,0 +1,8 @@
+{
+  "tests": [
+    {"name": "Missing company_id", "method": "GET", "path": "/", "expectedStatus": 400, "expectedBody": {"error": "company_id required"}},
+    {"name": "Journal list", "method": "GET", "path": "/?company_id=1", "expectedStatus": 200, "expectedBody": {"success": true}, "bodyMatcher": "partial"},
+    {"name": "Run queue", "method": "POST", "body": {"action": "run", "company_id": 1}, "expectedStatus": 200, "expectedBody": {"success": true}, "bodyMatcher": "partial"},
+    {"name": "Retry missing", "method": "POST", "body": {"action": "retry", "company_id": 1, "job_id": 999999}, "expectedStatus": 404, "expectedBody": {"error": "string"}, "bodyMatcher": "partial"}
+  ]
+}

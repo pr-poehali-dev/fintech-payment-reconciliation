@@ -6,6 +6,7 @@ import DashboardOverview from './dashboard/DashboardOverview';
 import { useDashboardStats } from './dashboard/useDashboardStats';
 import AccessManagement from './AccessManagement';
 import IntegrationsPage from './IntegrationsPage';
+import AutomationPage from './AutomationPage';
 import EventsPage from './EventsPage';
 import TransactionsPage from './TransactionsPage';
 import ReconciliationPage from './ReconciliationPage';
@@ -79,6 +80,7 @@ const Index = () => {
         {activeModule === 'reconciliation' && <ReconciliationPage onOpenTransactions={openTransactionsForPeriod} />}
         {activeModule === 'events' && <EventsPage />}
         {activeModule === 'transactions' && <TransactionsPage initialDateFilter={transactionsDateFilter} initialTypeFilter={transactionsTypeFilter} />}
+        {activeModule === 'automation' && <AutomationPage />}
         {activeModule === 'integrations' && <IntegrationsPage />}
         {activeModule === 'access' && <AccessManagement />}
         {activeModule === 'settings' && <SettingsPlaceholder />}

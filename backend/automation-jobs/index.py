@@ -1,0 +1,192 @@
+import json
+import os
+import psycopg2
+from typing import Dict, Any, List
+
+from preparer import prepare, retry_delay, log
+
+SCHEMA = 't_p83864310_fintech_payment_reco'
+BATCH = 20
+
+CORS_HEADERS = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Max-Age': '86400'
+}
+
+
+def respond(status: int, payload: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        'statusCode': status,
+        'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+        'body': json.dumps(payload, ensure_ascii=False, default=str),
+        'isBase64Encoded': False
+    }
+
+
+def claim_jobs(cur, company_id=None, job_id=None) -> List[Dict[str, Any]]:
+    '''Занимает задания на 2 минуты (SKIP LOCKED) - параллельный запуск их не возьмёт.'''
+    where = ["j.status IN ('new', 'error')", 'j.next_attempt_at <= NOW()',
+             '(j.locked_until IS NULL OR j.locked_until < NOW())']
+    args: list = []
+    if company_id:
+        where.append('j.company_id = %s')
+        args.append(company_id)
+    if job_id:
+        where = ['j.id = %s', "j.status IN ('new', 'error', 'failed')",
+                 '(j.locked_until IS NULL OR j.locked_until < NOW())']
+        args = [job_id]
+    cur.execute(f'''
+        UPDATE {SCHEMA}.automation_jobs SET status = 'processing', locked_until = NOW() + INTERVAL '2 minutes',
+               attempts = attempts + 1, updated_at = NOW()
+        WHERE id IN (
+            SELECT j.id FROM {SCHEMA}.automation_jobs j
+            WHERE {' AND '.join(where)}
+            ORDER BY j.next_attempt_at LIMIT {BATCH}
+            FOR UPDATE SKIP LOCKED
+        )
+        RETURNING id, scenario_id, source_type, source_id, attempts
+    ''', args)
+    return [{'id': r[0], 'scenario_id': r[1], 'source_type': r[2], 'source_id': r[3], 'attempts': r[4]}
+            for r in cur.fetchall()]
+
+
+def process_job(cur, job: Dict[str, Any]) -> str:
+    cur.execute(f'''
+        SELECT id, name, action_type, action_template, target_integration_id, field_mapping, status, removed_at
+        FROM {SCHEMA}.automation_scenarios WHERE id = %s
+    ''', (job['scenario_id'],))
+    r = cur.fetchone()
+    scenario = {'id': r[0], 'name': r[1], 'action_type': r[2], 'action_template': r[3],
+                'target_integration_id': r[4], 'field_mapping': r[5] or {}}
+
+    if r[7] is not None:
+        status, data, message = 'skipped', {}, 'Сценарий удалён'
+    else:
+        try:
+            status, data, message = prepare(cur, job, scenario)
+        except Exception as e:
+            status, data, message = 'error', {}, f'Сбой подготовки: {e}'
+
+    if status == 'error':
+        delay = retry_delay(job['attempts'])
+        if delay is None:
+            cur.execute(f'''
+                UPDATE {SCHEMA}.automation_jobs SET status = 'failed', last_error = %s, locked_until = NULL, updated_at = NOW()
+                WHERE id = %s
+            ''', (message, job['id']))
+            log(cur, job['id'], 'error', f'{message}. Попытки исчерпаны ({job["attempts"]})')
+            return 'failed'
+        cur.execute(f'''
+            UPDATE {SCHEMA}.automation_jobs SET status = 'error', last_error = %s, locked_until = NULL,
+                   next_attempt_at = NOW() + (%s || ' minutes')::interval, updated_at = NOW()
+            WHERE id = %s
+        ''', (message, str(delay), job['id']))
+        log(cur, job['id'], 'error', f'{message}. Повтор через {delay} мин (попытка {job["attempts"]})')
+        return 'error'
+
+    cur.execute(f'''
+        UPDATE {SCHEMA}.automation_jobs SET status = %s, prepared_data = %s, last_error = NULL,
+               locked_until = NULL, step = %s, updated_at = NOW()
+        WHERE id = %s
+    ''', (status, json.dumps(data, ensure_ascii=False, default=str),
+          'action' if status == 'ready' else 'prepare', job['id']))
+    log(cur, job['id'], 'info', message)
+    return status
+
+
+def run(cur, conn, company_id=None, job_id=None) -> Dict[str, int]:
+    jobs = claim_jobs(cur, company_id, job_id)
+    conn.commit()
+    result: Dict[str, int] = {}
+    for job in jobs:
+        status = process_job(cur, job)
+        conn.commit()
+        result[status] = result.get(status, 0) + 1
+    return result
+
+
+def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
+    '''
+    Журнал автоматизации и обработчик подготовки данных.
+    GET ?company_id=[&status=][&scenario_id=][&limit=] - журнал заданий
+    GET ?company_id=&job_id= - задание и его история шагов
+    POST {action: "run", company_id?} - обработать задания в очереди (сигнал из
+         приёма вебхука, внешний "будильник" или открытие раздела)
+    POST {action: "retry", company_id, job_id} - повторить задание вручную
+    '''
+    method = event.get('httpMethod', 'GET')
+    if method == 'OPTIONS':
+        return {'statusCode': 200, 'headers': CORS_HEADERS, 'body': '', 'isBase64Encoded': False}
+
+    params = event.get('queryStringParameters') or {}
+    conn = psycopg2.connect(os.environ['DATABASE_URL'])
+    cur = conn.cursor()
+    try:
+        if method == 'POST':
+            body = json.loads(event.get('body') or '{}')
+            action = body.get('action')
+            if action == 'run':
+                return respond(200, {'success': True, 'processed': run(cur, conn, body.get('company_id'))})
+            if action == 'retry':
+                if not body.get('company_id') or not body.get('job_id'):
+                    return respond(400, {'error': 'company_id and job_id required'})
+                cur.execute(f'''
+                    UPDATE {SCHEMA}.automation_jobs SET next_attempt_at = NOW(), attempts = 0, status = 'new', updated_at = NOW()
+                    WHERE id = %s AND company_id = %s AND status IN ('error', 'failed') RETURNING id
+                ''', (body['job_id'], body['company_id']))
+                if not cur.fetchone():
+                    conn.rollback()
+                    return respond(404, {'error': 'Задание не найдено или не в ошибке'})
+                log(cur, body['job_id'], 'info', 'Повтор запущен вручную')
+                conn.commit()
+                return respond(200, {'success': True, 'processed': run(cur, conn, job_id=body['job_id'])})
+            return respond(400, {'error': 'Unknown action'})
+
+        if method != 'GET':
+            return respond(405, {'error': 'Method not allowed'})
+
+        company_id = params.get('company_id')
+        if not company_id:
+            return respond(400, {'error': 'company_id required'})
+
+        if params.get('job_id'):
+            cur.execute(f'''
+                SELECT level, message, details, created_at FROM {SCHEMA}.automation_job_log
+                WHERE job_id = %s AND job_id IN (SELECT id FROM {SCHEMA}.automation_jobs WHERE company_id = %s)
+                ORDER BY created_at, id
+            ''', (params['job_id'], company_id))
+            history = [{'level': r[0], 'message': r[1], 'details': r[2], 'created_at': r[3]} for r in cur.fetchall()]
+            cur.execute(f'SELECT prepared_data, payload FROM {SCHEMA}.automation_jobs WHERE id = %s AND company_id = %s',
+                        (params['job_id'], company_id))
+            row = cur.fetchone()
+            return respond(200, {'success': True, 'history': history,
+                                 'prepared_data': row[0] if row else None, 'payload': row[1] if row else None})
+
+        where = ['j.company_id = %s']
+        args: list = [company_id]
+        if params.get('status'):
+            where.append('j.status = %s')
+            args.append(params['status'])
+        if params.get('scenario_id'):
+            where.append('j.scenario_id = %s')
+            args.append(params['scenario_id'])
+        limit = min(int(params.get('limit', 100)), 500)
+        cur.execute(f'''
+            SELECT j.id, j.scenario_id, s.name, j.source_type, j.source_id, j.status, j.step,
+                   j.attempts, j.last_error, j.next_attempt_at, j.created_at, j.updated_at
+            FROM {SCHEMA}.automation_jobs j
+            JOIN {SCHEMA}.automation_scenarios s ON s.id = j.scenario_id
+            WHERE {' AND '.join(where)}
+            ORDER BY j.created_at DESC LIMIT {limit}
+        ''', args)
+        jobs = [{
+            'id': r[0], 'scenario_id': r[1], 'scenario_name': r[2], 'source_type': r[3], 'source_id': r[4],
+            'status': r[5], 'step': r[6], 'attempts': r[7], 'last_error': r[8],
+            'next_attempt_at': r[9], 'created_at': r[10], 'updated_at': r[11]
+        } for r in cur.fetchall()]
+        return respond(200, {'success': True, 'jobs': jobs})
+    finally:
+        cur.close()
+        conn.close()
