@@ -58,11 +58,6 @@ const AppHeader = ({ unreadCount, onShowNotifications, onOpenSubscription }: App
           </Button>
         )}
 
-        <Button variant="outline" size="sm" className="gap-2">
-          <Icon name="Download" size={16} />
-          Экспорт
-        </Button>
-
         <div className="relative">
           <Button
             variant="outline"
