@@ -171,12 +171,47 @@ export const groupTransactions = (transactions: Transaction[]): TransactionGroup
       list.push(t);
       byDeal.set(dealRoot, list);
     });
-    let total = 0;
+    // Итог группы = реальный финансовый результат. Одно и то же событие
+    // (продажа, возврат) может быть отражено и документами (платёж/чеки), и
+    // банковской операцией - считаем его ОДИН раз:
+    //  1) сделка с деньгами на счёте -> берём сумму денег (факт движения);
+    //  2) сделка только из документов -> сумма документа-представителя;
+    //  3) "свободная" банковская операция (не связана автоматически ни с
+    //     каким документом, напр. возврат переводом, привязанный вручную)
+    //     закрывает сделку без денег с той же суммой, иначе (комиссия,
+    //     доплата) прибавляется к итогу как отдельный расход/доход.
+    // Продажа +10, возврат −10, деньги +10/−10 -> 0; плюс комиссия −0,07 -> −0,07.
+    const amountOf = (t: Transaction) => t.signed_amount ?? t.amount ?? 0;
+    const deals: { value: number; covered: boolean }[] = [];
+    const looseMoney: Transaction[] = [];
     byDeal.forEach((dealItems) => {
-      const representative = [...dealItems].sort((a, b) => (sumRepresentativeOrder[a.type] ?? 9) - (sumRepresentativeOrder[b.type] ?? 9))[0];
-      total += representative.signed_amount ?? representative.amount ?? 0;
+      const docs = dealItems.filter((t) => t.type !== 'money');
+      const money = dealItems.filter((t) => t.type === 'money');
+      if (docs.length === 0) {
+        looseMoney.push(...money);
+        return;
+      }
+      if (money.length > 0) {
+        deals.push({ value: money.reduce((s, t) => s + amountOf(t), 0), covered: true });
+        return;
+      }
+      const representative = [...docs].sort((a, b) => (sumRepresentativeOrder[a.type] ?? 9) - (sumRepresentativeOrder[b.type] ?? 9))[0];
+      deals.push({ value: amountOf(representative), covered: false });
     });
-    return total;
+
+    let extra = 0;
+    looseMoney.forEach((m) => {
+      const value = amountOf(m);
+      const match = deals.find((d) => !d.covered && Math.abs(d.value - value) < 0.005);
+      if (match) {
+        match.covered = true;
+      } else {
+        extra += value;
+      }
+    });
+
+    const total = deals.reduce((s, d) => s + d.value, 0) + extra;
+    return Math.round(total * 100) / 100;
   };
 
   return Array.from(groupsMap.entries())
