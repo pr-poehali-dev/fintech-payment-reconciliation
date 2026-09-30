@@ -90,6 +90,28 @@ def correction_info(template: Dict[str, Any], data: Dict[str, Any]) -> Tuple[Opt
     return info, ''
 
 
+WEBHOOK_RECEIVE_URL = 'https://functions.poehali.dev/a923b457-57a6-4eb2-b566-9a9d65cb04e8'
+
+
+def callback_url(cur, company_id: Optional[int]) -> Optional[str]:
+    '''
+    Адрес, куда Екомкасса пришлёт уведомление о пробитом чеке по заказу (формат АТОЛ:
+    status done/fail, uuid, payload с реквизитами). Принимает его интеграция
+    «Екомкасса — платёжный шлюз» компании: она сохраняет чек к кассе компании.
+    '''
+    if cur is None or not company_id:
+        return None
+    cur.execute(f'''
+        SELECT ui.webhook_token FROM {SCHEMA}.user_integrations ui
+        JOIN {SCHEMA}.integration_providers p ON p.id = ui.provider_id
+        WHERE ui.company_id = %s AND p.slug = 'ecomkassa_gateway' AND ui.status = 'active'
+          AND ui.webhook_token IS NOT NULL
+        ORDER BY ui.id LIMIT 1
+    ''', (company_id,))
+    row = cur.fetchone()
+    return f'{WEBHOOK_RECEIVE_URL}?token={row[0]}' if row else None
+
+
 def create_order(cur, job: Dict[str, Any], scenario: Dict[str, Any], data: Dict[str, Any]) -> Tuple[str, Dict[str, Any], str]:
     '''
     Создаёт заказ в Екомкассе (POST /api/mobile/v1/courier/:storeId/create/:operation).
@@ -142,6 +164,9 @@ def create_order(cur, job: Dict[str, Any], scenario: Dict[str, Any], data: Dict[
     }
     if correction:
         body['receipt']['correction_info'] = correction
+    notify_url = callback_url(cur, job.get('company_id'))
+    if notify_url:
+        body['service'] = {'callback_url': notify_url}
     result, err = create_courier_order(kassa, operation, body)
     if not result:
         return 'error', {'request': body}, err
