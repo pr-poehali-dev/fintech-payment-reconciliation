@@ -9,6 +9,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { formatDateTime as formatDateTimeTz, DEFAULT_TIMEZONE } from '@/lib/formatDate';
 import { ofdOperationTypeLabel } from '@/lib/ofdOperationType';
 import { transactionStatusLabel } from '@/lib/transactionStatus';
+import { getLinkReason, linkReasonClassName } from '@/lib/linkReason';
 
 interface TransactionDetailsDialogProps {
   transaction: Transaction | null;
@@ -27,11 +28,6 @@ const typeConfig: Record<string, { icon: string; label: string; className: strin
   money: { icon: 'Landmark', label: 'Деньги', className: 'bg-success/10 text-success border-success/30' },
 };
 
-const matchMethodLabels: Record<string, string> = {
-  receipt_id: 'Чек привязан при обработке вебхука шлюза Екомкассы',
-  order_id: 'Совпал номер заказа / внешний ID платежа и чека',
-  fiscal_triplet: 'Совпали фискальные реквизиты: ФН + номер ФД + ФПД'
-};
 
 const TransactionDetailsDialog = ({ transaction, relatedItems, open, onOpenChange, onDetach, detachingKey }: TransactionDetailsDialogProps) => {
   const { currentCompany } = useAuth();
@@ -49,6 +45,7 @@ const TransactionDetailsDialog = ({ transaction, relatedItems, open, onOpenChang
   if (!transaction) return null;
 
   const config = typeConfig[transaction.type] || typeConfig.payment;
+  const groupItems = [transaction, ...relatedItems];
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -144,7 +141,7 @@ const TransactionDetailsDialog = ({ transaction, relatedItems, open, onOpenChang
               <div className="space-y-2">
                 {relatedItems.map((item) => {
                   const itemConfig = typeConfig[item.type] || typeConfig.payment;
-                  const reason = matchMethodLabels[transaction.match_method || item.match_method || ''] || 'Связано';
+                  const reason = getLinkReason(item, groupItems);
                   return (
                     <div
                       key={`${item.type}-${item.source}-${item.id}`}
@@ -152,8 +149,14 @@ const TransactionDetailsDialog = ({ transaction, relatedItems, open, onOpenChang
                     >
                       <Icon name={itemConfig.icon} size={20} className="text-success shrink-0" />
                       <div className="flex-1 min-w-0">
-                        <div className="font-medium">{item.title}</div>
-                        <div className="text-sm text-muted-foreground">{reason}</div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-medium">{item.title}</span>
+                          <Badge variant="outline" className={`gap-1 ${linkReasonClassName[reason.kind]}`}>
+                            <Icon name={reason.icon} size={12} />
+                            {reason.label}
+                          </Badge>
+                        </div>
+                        <div className="text-sm text-muted-foreground">{reason.description}</div>
                       </div>
                       <DetachButton
                         onClick={() => onDetach(item)}
