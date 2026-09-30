@@ -254,7 +254,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
         # 2б. Чеки ОФД отдельно - контрольная точка "касса vs ОФД".
         cur.execute(f'''
-            SELECT ofd.total_sum, ofd.operation_type
+            SELECT ofd.total_sum, ofd.operation_type, ofd.doc_datetime::date
             FROM {SCHEMA}.ofd_receipts ofd
             WHERE ofd.company_id = %s
               AND ofd.removed_at IS NULL
@@ -263,10 +263,15 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
         receipts_ofd_total = 0.0
         receipts_ofd_count = 0
-        for total_sum, operation_type in cur.fetchall():
+        daily_receipts_ofd: Dict[str, float] = {}
+        for total_sum, operation_type, ofd_date in cur.fetchall():
             amount_f = float(total_sum) if total_sum else 0.0
-            receipts_ofd_total += amount_f * classify_receipt_sign(operation_type)
+            signed_ofd = amount_f * classify_receipt_sign(operation_type)
+            receipts_ofd_total += signed_ofd
             receipts_ofd_count += 1
+            if ofd_date:
+                day_key = ofd_date.isoformat()
+                daily_receipts_ofd[day_key] = daily_receipts_ofd.get(day_key, 0.0) + signed_ofd
 
         # 3. Деньги на р/с: обе стороны (in/out) - выписка уже отфильтрована по
         # ключевым словам назначения платежа на этапе синхронизации (это все
@@ -382,6 +387,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 'date': day_key,
                 'payments': round(daily_payments.get(day_key, 0.0), 2),
                 'receipts': round(daily_receipts.get(day_key, 0.0), 2),
+                'receipts_ofd': round(daily_receipts_ofd.get(day_key, 0.0), 2),
                 'bank': round(daily_bank.get(day_key, 0.0), 2),
                 'commission': round(daily_commission.get(day_key, 0.0), 2)
             })
