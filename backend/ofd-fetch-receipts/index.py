@@ -79,7 +79,6 @@ def fetch_and_save_receipts(cur, integration_id: int, company_id: int, config: D
             'operation_type': receipt.get('OperationType')
         }
         try:
-            cur.execute('SAVEPOINT ofd_row')
             cur.execute('''
                 INSERT INTO t_p83864310_fintech_payment_reco.ofd_receipts (
                     integration_id, company_id, receipt_id, operation_type,
@@ -105,9 +104,7 @@ def fetch_and_save_receipts(cur, integration_id: int, company_id: int, config: D
                 inserted_count += 1
             else:
                 skipped.append({**info, 'reason': 'уже есть в базе (тот же Id)'})
-            cur.execute('RELEASE SAVEPOINT ofd_row')
         except Exception as e:
-            cur.execute('ROLLBACK TO SAVEPOINT ofd_row')
             skipped.append({**info, 'reason': str(e)[:200]})
 
     cur.execute('''
@@ -293,6 +290,9 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         }
 
     except Exception as e:
+        import traceback
+        print('[OFD ERROR]', type(e).__name__, repr(e))
+        print(traceback.format_exc())
         conn.rollback()
         return {
             'statusCode': 500,
