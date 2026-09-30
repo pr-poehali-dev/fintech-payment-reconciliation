@@ -8,6 +8,7 @@ import psycopg2
 
 from ecomkassa_token import ensure_valid_token
 from ecomkassa_api import search_orders
+from fiscal_merge import merge_after_ecomkassa
 
 SCHEMA = 't_p83864310_fintech_payment_reco'
 ECOMKASSA_BASE_URL = 'https://app.ecomkassa.ru'
@@ -130,6 +131,7 @@ def save_receipt(cur, integration_id: int, company_id: int, order_id: Any,
     ))
     result = cur.fetchone()
     receipt_id = result[0] if result else None
+    merge_after_ecomkassa(cur, receipt_id)
     return receipt_id, float(total_sum) if total_sum else None
 
 

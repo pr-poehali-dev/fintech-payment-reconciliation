@@ -4,6 +4,8 @@ import urllib.error
 from datetime import datetime
 from typing import Any, Dict, Optional, Tuple
 
+from fiscal_merge import merge_after_ecomkassa
+
 ECOMKASSA_BASE_URL = 'https://app.ecomkassa.ru'
 
 # "done" - чек фискализирован и payload с фискальными данными заполнен.
@@ -74,4 +76,6 @@ def save_receipt_from_report(cur, integration_id: int, company_id: int, uid: str
     ))
     result = cur.fetchone()
     receipt_id = result[0] if result else None
+    # Тот же чек мог уже прийти от Т-Банка - сливаем по ФН + ФД + ФП.
+    merge_after_ecomkassa(cur, receipt_id)
     return receipt_id, float(total_sum) if total_sum else 0.0, payment_provider
