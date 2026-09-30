@@ -370,7 +370,7 @@ const AccessManagement = () => {
     .filter(u => u.status !== 'removed')
     .map(u => ({
       id: u.id,
-      fullName: u.full_name || u.phone,
+      fullName: u.full_name || '',
       email: u.email || '',
       phone: u.phone,
       role: u.role_slug,

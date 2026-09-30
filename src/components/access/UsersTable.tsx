@@ -52,7 +52,7 @@ const UsersTable = ({ users, roles, modules, onToggleStatus, onDeleteUser }: Use
     <Table>
       <TableHeader>
         <TableRow>
-          <TableHead>Пользователь</TableHead>
+          <TableHead>ФИО</TableHead>
           <TableHead>Контакты</TableHead>
           <TableHead>Роль</TableHead>
           <TableHead>Статус</TableHead>
@@ -72,7 +72,11 @@ const UsersTable = ({ users, roles, modules, onToggleStatus, onDeleteUser }: Use
                     <Icon name="User" size={20} className="text-primary" />
                   </div>
                   <div>
-                    <div className="font-medium">{user.fullName}</div>
+                    {user.fullName ? (
+                      <div className="font-medium">{user.fullName}</div>
+                    ) : (
+                      <div className="text-sm italic text-muted-foreground">Не указано</div>
+                    )}
                   </div>
                 </div>
               </TableCell>

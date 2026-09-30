@@ -115,7 +115,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 }
 
             cur.execute('''
-                SELECT id, company_id, role_id, phone, status, expires_at
+                SELECT id, company_id, role_id, phone, status, expires_at, full_name
                 FROM invite_tokens WHERE token = %s
             ''', (token,))
             row = cur.fetchone()
@@ -128,7 +128,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     'isBase64Encoded': False
                 }
 
-            invite_id, company_id, role_id, invite_phone, status, expires_at = row
+            invite_id, company_id, role_id, invite_phone, status, expires_at, invite_full_name = row
 
             if status != 'pending':
                 # Приглашение уже принято ровно этим пользователем (например,
@@ -194,6 +194,13 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 "UPDATE invite_tokens SET status = 'accepted', accepted_at = now(), updated_at = now() WHERE id = %s",
                 (invite_id,)
             )
+
+            # ФИО из приглашения - если у пользователя своё ещё не заполнено.
+            if invite_full_name:
+                cur.execute(
+                    "UPDATE app_users SET full_name = %s WHERE id = %s AND (full_name IS NULL OR full_name = '')",
+                    (invite_full_name, user_id)
+                )
 
             conn.commit()
 

@@ -53,7 +53,15 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     try:
         cur.execute('''
             SELECT
-                u.id, u.full_name, u.email, u.phone,
+                u.id,
+                COALESCE(NULLIF(u.full_name, ''), (
+                    SELECT it.full_name FROM invite_tokens it
+                    WHERE it.company_id = cu.company_id
+                      AND regexp_replace(it.phone, '[^0-9]', '', 'g') = regexp_replace(u.phone, '[^0-9]', '', 'g')
+                      AND NULLIF(it.full_name, '') IS NOT NULL
+                    ORDER BY it.created_at DESC LIMIT 1
+                )) AS full_name,
+                u.email, u.phone,
                 r.slug, r.name, r.color,
                 cu.status, cu.invited_at, cu.joined_at
             FROM company_users cu
