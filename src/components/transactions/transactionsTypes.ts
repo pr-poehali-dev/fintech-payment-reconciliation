@@ -1,6 +1,6 @@
 export type TransactionType = 'payment' | 'receipt_ofd' | 'receipt_kassa' | 'receipt_order' | 'money';
 
-export type MatchMethod = 'receipt_id' | 'order_id' | 'fiscal_triplet' | null;
+export type MatchMethod = 'receipt_id' | 'order_id' | 'fiscal_triplet' | 'automation' | string | null;
 
 export interface WebhookHistoryItem {
   status: string | null;

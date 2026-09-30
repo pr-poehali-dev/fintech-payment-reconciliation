@@ -382,10 +382,13 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     ui.integration_name AS integration_name,
                     ekr.order_id AS reference,
                     ekr.raw_data AS raw_data,
-                    CASE WHEN om.id IS NOT NULL THEN 'receipt_ofd' END AS linked_type,
-                    CASE WHEN om.id IS NOT NULL THEN 'ofd' END AS linked_source,
-                    om.id AS linked_id,
-                    CASE WHEN om.id IS NOT NULL THEN 'fiscal_triplet' END AS match_method,
+                    CASE WHEN aj.payment_row_id IS NOT NULL THEN 'payment'
+                         WHEN om.id IS NOT NULL THEN 'receipt_ofd' END AS linked_type,
+                    CASE WHEN aj.payment_row_id IS NOT NULL THEN aj.payment_source
+                         WHEN om.id IS NOT NULL THEN 'ofd' END AS linked_source,
+                    COALESCE(aj.payment_row_id, om.id) AS linked_id,
+                    CASE WHEN aj.payment_row_id IS NOT NULL THEN 'automation'
+                         WHEN om.id IS NOT NULL THEN 'fiscal_triplet' END AS match_method,
                     NULL::text AS group_key,
                     om.operation_type AS linked_ofd_status
                 FROM {SCHEMA}.ecomkassa_receipts ekr
@@ -403,6 +406,19 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                       AND (ofd.raw_data->>'DecimalFiscalSign') = (ekr.raw_data->'payload'->>'fiscal_document_attribute')
                     LIMIT 1
                 ) om ON true
+                LEFT JOIN LATERAL (
+                    -- Заказ создан сценарием автоматизации: external_id = auto-<id задания>,
+                    -- задание знает платёж, из которого заказ появился.
+                    SELECT wp.id AS payment_row_id, pp.slug AS payment_source
+                    FROM {SCHEMA}.automation_jobs j
+                    JOIN {SCHEMA}.webhook_payments wp ON wp.id::text = j.source_id AND wp.removed_at IS NULL
+                    JOIN {SCHEMA}.user_integrations pui ON pui.id = wp.integration_id AND pui.status != 'deleted'
+                    JOIN {SCHEMA}.integration_providers pp ON pp.id = pui.provider_id
+                    WHERE (ekr.raw_data->>'external_id') LIKE 'auto-%%'
+                      AND j.id::text = substring(ekr.raw_data->>'external_id' from 6)
+                      AND j.company_id = ekr.company_id AND j.source_type = 'payment'
+                    LIMIT 1
+                ) aj ON true
                 WHERE ekr.company_id = %(company_id)s AND ekr.removed_at IS NULL
                   AND ekr.order_type = 'CORD'
             ''')
