@@ -326,6 +326,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         bank_count = 0
         bank_with_known_commission = 0
         daily_bank: Dict[str, float] = {}
+        daily_commission: Dict[str, float] = {}
 
         # bank_raw_total - ЛИТЕРАЛЬНЫЙ чистый эффект на остаток счёта (как есть
         # по выписке): каждая строка учитывается своим знаком БЕЗ исключений,
@@ -367,6 +368,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             if op_date:
                 day_key = op_date.isoformat()
                 daily_bank[day_key] = daily_bank.get(day_key, 0.0) + signed_amount + commission_f
+                daily_commission[day_key] = daily_commission.get(day_key, 0.0) + commission_f
 
         bank_total = bank_raw_total + bank_commission_total
 
@@ -380,7 +382,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 'date': day_key,
                 'payments': round(daily_payments.get(day_key, 0.0), 2),
                 'receipts': round(daily_receipts.get(day_key, 0.0), 2),
-                'bank': round(daily_bank.get(day_key, 0.0), 2)
+                'bank': round(daily_bank.get(day_key, 0.0), 2),
+                'commission': round(daily_commission.get(day_key, 0.0), 2)
             })
             cursor_date += timedelta(days=1)
 

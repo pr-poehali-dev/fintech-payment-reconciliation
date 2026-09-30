@@ -16,6 +16,7 @@ interface DailyPoint {
   payments: number;
   receipts: number;
   bank: number;
+  commission?: number;
 }
 
 interface ReconciliationChartProps {
@@ -43,7 +44,7 @@ const ReconciliationChart = ({ daily }: ReconciliationChartProps) => {
           <Icon name="BarChart3" size={20} />
           Динамика по дням
         </CardTitle>
-        <CardDescription>Платежи, чеки и поступления на счёт за выбранный период</CardDescription>
+        <CardDescription>Платежи, чеки, поступления на счёт и комиссия банка за выбранный период</CardDescription>
       </CardHeader>
       <CardContent>
         <ResponsiveContainer width="100%" height={300}>
@@ -56,6 +57,7 @@ const ReconciliationChart = ({ daily }: ReconciliationChartProps) => {
             <Bar dataKey="payments" name="Платежи" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
             <Bar dataKey="receipts" name="Чеки" fill="hsl(var(--info))" radius={[4, 4, 0, 0]} />
             <Bar dataKey="bank" name="Деньги на р/с" fill="hsl(var(--success))" radius={[4, 4, 0, 0]} />
+            <Bar dataKey="commission" name="Комиссия банка" fill="hsl(var(--warning))" radius={[4, 4, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
       </CardContent>
