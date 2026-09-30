@@ -4,6 +4,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from ecomkassa_client import cash_register, create_courier_order
 from receipt_dictionaries import MEASURES, PAYMENT_OBJECTS_V5
 
+SCHEMA = 't_p83864310_fintech_payment_reco'
 MSK = timezone(timedelta(hours=3))
 
 
@@ -107,7 +108,13 @@ def create_order(cur, job: Dict[str, Any], scenario: Dict[str, Any], data: Dict[
     template = scenario.get('template') or {}
     items = apply_template(items, template)
     total = round(sum(float(i.get('sum') or 0) for i in items), 2)
-    source_company = data.get('source_company') or {}
+    source_company = dict(data.get('source_company') or {})
+    if not source_company.get('inn') and cur is not None and job.get('company_id'):
+        # Корзина не из Екомкассы (Т-Банк и др.) - реквизиты организации из карточки компании.
+        cur.execute(f'SELECT inn FROM {SCHEMA}.companies WHERE id = %s', (job['company_id'],))
+        row = cur.fetchone()
+        if row and row[0]:
+            source_company['inn'] = row[0]
     customer = data.get('customer') or {}
     client = {k: v for k, v in {'email': customer.get('email') or template.get('default_email'),
                                 'phone': customer.get('phone'),
