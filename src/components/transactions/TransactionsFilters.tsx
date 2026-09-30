@@ -18,7 +18,7 @@ const TransactionsFilters = ({
   return (
     <div className="flex items-center gap-3">
       <Input
-        placeholder="Поиск по номеру, сумме, описанию..."
+        placeholder="Сумма (2500 или 2 500,00), номер или описание"
         value={searchQuery}
         onChange={(e) => setSearchQuery(e.target.value)}
         className="max-w-md"

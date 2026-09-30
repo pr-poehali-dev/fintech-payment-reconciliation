@@ -14,6 +14,18 @@ import { Transaction, TransactionTotalsByType } from '@/components/transactions/
 import { groupTransactions, computeMatchedKeys, nodeKey } from '@/lib/transactionGrouping';
 import functionUrls from '../../backend/func2url.json';
 
+// "2 500", "2500,00", "-14 ₽", "+1 000.50 руб" -> { value, raw }. Не число -> null.
+const parseAmountQuery = (query: string): { value: number; raw: string } | null => {
+  const cleaned = query
+    .trim()
+    .replace(/(₽|руб\.?|р\.?)$/i, '')
+    .replace(/[\s\u00a0]/g, '')
+    .replace(/^[+-]/, '')
+    .replace(',', '.');
+  if (!/^\d+(\.\d{1,2})?$/.test(cleaned)) return null;
+  return { value: Number(cleaned), raw: cleaned };
+};
+
 const TransactionsPage = () => {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [totalsByType, setTotalsByType] = useState<TransactionTotalsByType>({});
@@ -245,7 +257,20 @@ const TransactionsPage = () => {
   const filteredTransactions = transactions.filter((tx) => {
     if (showUnmatchedOnly && matchedKeys.has(nodeKey(tx))) return false;
 
-    if (!searchQuery) return true;
+    if (!searchQuery.trim()) return true;
+
+    // Запрос похож на число ("14", "2 500", "2420,00", "-14 ₽") - ищем ТОЧНОЕ
+    // совпадение суммы (без учёта знака) или точный номер документа/платежа.
+    // Раньше число искалось как подстрока по всему тексту, и "14" находило
+    // любые записи, где эти цифры встречались в QR-коде, дате или номере.
+    const numeric = parseAmountQuery(searchQuery);
+    if (numeric !== null) {
+      const amountMatches = Math.abs(Math.abs(Number(tx.amount) || 0) - numeric.value) < 0.005;
+      const docNumber = (tx.title || '').match(/#\s*(\S+)/)?.[1];
+      const numberMatches = numeric.raw === docNumber || numeric.raw === String(tx.reference ?? '');
+      return amountMatches || numberMatches;
+    }
+
     const query = searchQuery.toLowerCase();
     const haystack = [
       tx.title,
