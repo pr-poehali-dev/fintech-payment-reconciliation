@@ -69,8 +69,17 @@ def fetch_and_save_receipts(cur, integration_id: int, company_id: int, config: D
         receipts = []
 
     inserted_count = 0
+    skipped: list = []
     for receipt in receipts:
+        info = {
+            'id': receipt.get('Id'),
+            'doc_datetime': receipt.get('DocDateTime'),
+            'doc_number': receipt.get('DocNumber'),
+            'total': float(receipt.get('TotalSumm', 0) or 0) / 100,
+            'operation_type': receipt.get('OperationType')
+        }
         try:
+            cur.execute('SAVEPOINT ofd_row')
             cur.execute('''
                 INSERT INTO t_p83864310_fintech_payment_reco.ofd_receipts (
                     integration_id, company_id, receipt_id, operation_type,
@@ -94,8 +103,12 @@ def fetch_and_save_receipts(cur, integration_id: int, company_id: int, config: D
             ))
             if cur.fetchone():
                 inserted_count += 1
-        except Exception:
-            continue
+            else:
+                skipped.append({**info, 'reason': 'уже есть в базе (тот же Id)'})
+            cur.execute('RELEASE SAVEPOINT ofd_row')
+        except Exception as e:
+            cur.execute('ROLLBACK TO SAVEPOINT ofd_row')
+            skipped.append({**info, 'reason': str(e)[:200]})
 
     cur.execute('''
         UPDATE t_p83864310_fintech_payment_reco.user_integrations
@@ -103,6 +116,7 @@ def fetch_and_save_receipts(cur, integration_id: int, company_id: int, config: D
         WHERE id = %s
     ''', (integration_id,))
 
+    fetch_and_save_receipts.last_skipped = skipped
     return True, len(receipts), inserted_count, None
 
 
@@ -236,10 +250,18 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
         for ui_id, config, last_synced_at in integrations:
             config = json.loads(config) if isinstance(config, str) else (config or {})
-            dt_from = max(last_synced_at, lookback) if last_synced_at else lookback
+            # Явный период (окно "Дозагрузка исторических данных") важнее
+            # автоокна "последние 3 дня" - иначе исторические чеки ОФД не
+            # запрашивались вовсе, какой бы период ни выбрал пользователь.
+            if date_from_param:
+                dt_from = parse_iso_date(date_from_param, lookback)
+                dt_to = parse_iso_date(date_to_param, now)
+            else:
+                dt_from = max(last_synced_at, lookback) if last_synced_at else lookback
+                dt_to = now
 
             success, total_receipts, inserted, error = fetch_and_save_receipts(
-                cur, ui_id, company_id_param, config, dt_from, now
+                cur, ui_id, company_id_param, config, dt_from, dt_to
             )
 
             results.append({
@@ -247,6 +269,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 'success': success,
                 'total_receipts': total_receipts,
                 'inserted': inserted,
+                'skipped': getattr(fetch_and_save_receipts, 'last_skipped', []),
                 'error': error
             })
 
