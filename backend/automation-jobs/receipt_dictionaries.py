@@ -1,0 +1,33 @@
+'''
+Справочники полей чека по документации АТОЛ Онлайн v4 (ФФД 1.05) и v5 (ФФД 1.2).
+Храним код v4 (строка), для v5 переводим в числовые коды через словари *_V5.
+'''
+
+PROTOCOLS = {'v4', 'v5'}
+RECEIPT_TYPES = {'regular', 'correction'}
+# Операция (тип документа в URL запроса): приход / возврат прихода.
+OPERATIONS = {'sell', 'sell_refund'}
+
+# Тег 1214 - признак способа расчёта (одинаково в v4 и v5).
+PAYMENT_METHODS = {'full_prepayment', 'prepayment', 'advance', 'full_payment',
+                   'partial_payment', 'credit', 'credit_payment'}
+
+# Тег 1212 - признак предмета расчёта. v4 - строки, v5 - числа.
+PAYMENT_OBJECTS_V5 = {
+    'commodity': 1,
+    'commodity_marked': 33,
+    'service': 4,
+    'job': 3,
+    'payment': 10,
+}
+
+# Единицы измерения. v4 - measurement_unit (строка), v5 - measure (тег 2108, число).
+MEASURES = {
+    'piece': {'v4': 'шт', 'v5': 0},
+    'gram': {'v4': 'г', 'v5': 10},
+    'kilogram': {'v4': 'кг', 'v5': 11},
+    'day': {'v4': 'сут', 'v5': 70},
+}
+
+# Вид оплаты payments[].type: 0 - наличные, 1 - безналичный, 2 - предоплата (зачёт аванса).
+PAYMENT_TYPES = {0, 1, 2}

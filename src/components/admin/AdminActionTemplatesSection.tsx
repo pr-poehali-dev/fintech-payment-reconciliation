@@ -21,8 +21,16 @@ import {
   ACTION_TYPE_OPTIONS,
   ActionTemplateForm,
   ActionTemplateRow,
+  CashProvider,
   EMPTY_TEMPLATE,
-  operationLabel
+  OPERATION_OPTIONS,
+  PAYMENT_OBJECT_OPTIONS,
+  PAYMENT_TYPE_OPTIONS,
+  RECEIPT_TYPE_OPTIONS,
+  NO_PAYMENT,
+  formToPayload,
+  labelOf,
+  templateToForm
 } from './actionTemplatesConfig';
 
 const API = (functionUrls as Record<string, string>)['admin-action-templates'];
@@ -37,13 +45,17 @@ const AdminActionTemplatesSection = () => {
   const [editing, setEditing] = useState<ActionTemplateRow | null>(null);
   const [form, setForm] = useState<ActionTemplateForm>(EMPTY_TEMPLATE);
   const [toDelete, setToDelete] = useState<ActionTemplateRow | null>(null);
+  const [providers, setProviders] = useState<CashProvider[]>([]);
 
   const load = async () => {
     if (!user) return;
     try {
       const res = await fetch(`${API}?requester_user_id=${user.user_id}`);
       const data = await res.json();
-      if (data.success) setTemplates(data.templates || []);
+      if (data.success) {
+        setTemplates(data.templates || []);
+        setProviders(data.providers || []);
+      }
       else toast({ title: 'Ошибка', description: data.error, variant: 'destructive' });
     } catch {
       toast({ title: 'Ошибка подключения', variant: 'destructive' });
@@ -59,22 +71,13 @@ const AdminActionTemplatesSection = () => {
 
   const openCreate = () => {
     setEditing(null);
-    setForm(EMPTY_TEMPLATE);
+    setForm({ ...EMPTY_TEMPLATE, provider_id: providers[0]?.id ?? null });
     setDialogOpen(true);
   };
 
   const openEdit = (t: ActionTemplateRow) => {
     setEditing(t);
-    setForm({
-      code: t.code,
-      action_type: t.action_type,
-      name: t.name,
-      description: t.description || '',
-      operation: t.operation,
-      paid: t.paid,
-      is_active: t.is_active,
-      sort_order: t.sort_order
-    });
+    setForm(templateToForm(t));
     setDialogOpen(true);
   };
 
@@ -85,7 +88,7 @@ const AdminActionTemplatesSection = () => {
       const res = await fetch(API, {
         method: editing ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, id: editing?.id, requester_user_id: user.user_id })
+        body: JSON.stringify({ ...formToPayload(form), id: editing?.id, requester_user_id: user.user_id })
       });
       const data = await res.json();
       if (data.success) {
@@ -194,8 +197,16 @@ const AdminActionTemplatesSection = () => {
                       </div>
                       {t.description && <p className="line-clamp-2 text-sm text-muted-foreground">{t.description}</p>}
                       <div className="flex flex-wrap gap-2 text-xs">
-                        <span className="rounded-md bg-muted px-2 py-1">{operationLabel(t.operation)}</span>
-                        <span className="rounded-md bg-muted px-2 py-1">{t.paid ? 'С оплатой' : 'Без оплаты'}</span>
+                        <span className="rounded-md bg-muted px-2 py-1">
+                          {t.provider_name || 'Касса не выбрана'} · {t.protocol_version}
+                        </span>
+                        <span className="rounded-md bg-muted px-2 py-1">
+                          {labelOf(RECEIPT_TYPE_OPTIONS, t.receipt_type)} · {labelOf(OPERATION_OPTIONS, t.operation)}
+                        </span>
+                        <span className="rounded-md bg-muted px-2 py-1">{labelOf(PAYMENT_OBJECT_OPTIONS, t.payment_object)}</span>
+                        <span className="rounded-md bg-muted px-2 py-1">
+                          Оплата: {labelOf(PAYMENT_TYPE_OPTIONS, t.payment_type === null ? NO_PAYMENT : String(t.payment_type))}
+                        </span>
                         <span className="rounded-md bg-muted px-2 py-1">Сценариев: {t.scenarios_count}</span>
                       </div>
                     </CardContent>
@@ -233,6 +244,7 @@ const AdminActionTemplatesSection = () => {
         isSaving={isSaving}
         isEditing={!!editing}
         scenariosCount={editing?.scenarios_count || 0}
+        providers={providers}
       />
     </div>
   );

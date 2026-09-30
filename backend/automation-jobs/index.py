@@ -57,7 +57,8 @@ def claim_jobs(cur, company_id=None, job_id=None) -> List[Dict[str, Any]]:
 def process_job(cur, job: Dict[str, Any]) -> str:
     cur.execute(f'''
         SELECT s.id, s.name, s.action_type, s.action_template, s.target_integration_id, s.field_mapping, s.status,
-               s.removed_at, t.operation, t.paid, t.name
+               s.removed_at, t.operation, t.paid, t.name, t.protocol_version, t.receipt_type, t.payment_method,
+               t.payment_object, t.measure, t.payment_type, t.default_email
         FROM {SCHEMA}.automation_scenarios s
         LEFT JOIN {SCHEMA}.automation_action_templates t ON t.code = s.action_template
         WHERE s.id = %s
@@ -66,7 +67,10 @@ def process_job(cur, job: Dict[str, Any]) -> str:
     scenario = {'id': r[0], 'name': r[1], 'action_type': r[2], 'action_template': r[3],
                 'target_integration_id': r[4], 'field_mapping': r[5] or {},
                 'template': {'operation': r[8] or 'sell', 'paid': r[9] if r[9] is not None else True,
-                             'name': r[10] or r[3]}}
+                             'name': r[10] or r[3], 'protocol_version': r[11] or 'v4',
+                             'receipt_type': r[12] or 'regular', 'payment_method': r[13],
+                             'payment_object': r[14], 'measure': r[15], 'payment_type': r[16],
+                             'default_email': r[17]}}
 
     if r[7] is not None:
         status, data, message = 'skipped', {}, 'Сценарий удалён'

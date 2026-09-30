@@ -66,7 +66,7 @@ def validate(cur, company_id: int, body: Dict[str, Any]) -> Optional[str]:
     if action not in ACTIONS:
         return 'Неизвестное действие'
     cur.execute(f'''
-        SELECT action_type, is_active FROM {SCHEMA}.automation_action_templates WHERE code = %s
+        SELECT action_type, is_active, provider_id FROM {SCHEMA}.automation_action_templates WHERE code = %s
     ''', (body.get('action_template'),))
     template = cur.fetchone()
     if not template or template[0] != action:
@@ -77,6 +77,11 @@ def validate(cur, company_id: int, body: Dict[str, Any]) -> Optional[str]:
         return 'Выберите кассу, где выполнить действие'
     if integration_category(cur, company_id, body.get('target_integration_id')) not in TARGET_CATEGORIES:
         return 'Действие можно выполнить только в кассе'
+    if template[2]:
+        cur.execute(f'SELECT provider_id FROM {SCHEMA}.user_integrations WHERE id = %s', (body.get('target_integration_id'),))
+        target = cur.fetchone()
+        if not target or target[0] != template[2]:
+            return 'Шаблон рассчитан на другую кассу'
     if not isinstance(body.get('field_mapping') or {}, dict):
         return 'Некорректная настройка сопоставления полей'
     return None

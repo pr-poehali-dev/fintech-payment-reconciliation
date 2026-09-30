@@ -4,9 +4,9 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import Icon from '@/components/ui/icon';
-import { ACTION_TYPE_OPTIONS, ActionTemplateForm, OPERATION_OPTIONS } from './actionTemplatesConfig';
+import ReceiptFieldsBlock from './ReceiptFieldsBlock';
+import { ACTION_TYPE_OPTIONS, ActionTemplateForm, CashProvider } from './actionTemplatesConfig';
 
 interface ActionTemplateDialogProps {
   open: boolean;
@@ -17,11 +17,15 @@ interface ActionTemplateDialogProps {
   isSaving: boolean;
   isEditing: boolean;
   scenariosCount: number;
+  providers: CashProvider[];
 }
 
-const ActionTemplateDialog = ({ open, onOpenChange, form, onChange, onSubmit, isSaving, isEditing, scenariosCount }: ActionTemplateDialogProps) => {
+const ActionTemplateDialog = ({ open, onOpenChange, form, onChange, onSubmit, isSaving, isEditing, scenariosCount, providers }: ActionTemplateDialogProps) => {
   const codeValid = /^[a-z][a-z0-9_]{1,49}$/.test(form.code);
-  const canSave = !!form.name.trim() && (isEditing || codeValid) && !isSaving;
+  const emailValid = !form.default_email.trim() || /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(form.default_email.trim());
+  const refundCorrectionV4 = form.receipt_type === 'correction' && form.operation === 'sell_refund' && form.protocol_version === 'v4';
+  const canSave =
+    !!form.name.trim() && (isEditing || codeValid) && !!form.provider_id && emailValid && !refundCorrectionV4 && !isSaving;
   const typeLocked = isEditing && scenariosCount > 0;
 
   return (
@@ -83,40 +87,19 @@ const ActionTemplateDialog = ({ open, onOpenChange, form, onChange, onSubmit, is
             {typeLocked && <p className="text-xs text-muted-foreground">Используется в сценариях ({scenariosCount}) — тип менять нельзя</p>}
           </div>
 
-          <div className="grid grid-cols-[1fr_120px] gap-3">
-            <div className="space-y-2">
-              <Label>Операция в кассе</Label>
-              <Select value={form.operation} onValueChange={(v) => onChange({ ...form, operation: v })}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {OPERATION_OPTIONS.map((o) => (
-                    <SelectItem key={o.value} value={o.value}>
-                      {o.label} <span className="font-mono text-xs text-muted-foreground">· {o.value}</span>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>Порядок</Label>
-              <Input
-                type="number"
-                value={form.sort_order}
-                onChange={(e) => onChange({ ...form, sort_order: Number(e.target.value) || 0 })}
-              />
-            </div>
+          <ReceiptFieldsBlock form={form} providers={providers} onChange={onChange} />
+
+          <div className="space-y-2">
+            <Label>Порядок в списке</Label>
+            <Input
+              type="number"
+              className="w-32"
+              value={form.sort_order}
+              onChange={(e) => onChange({ ...form, sort_order: Number(e.target.value) || 0 })}
+            />
           </div>
 
           <div className="space-y-3 rounded-lg border border-border p-3">
-            <label className="flex items-center justify-between gap-3">
-              <div>
-                <div className="text-sm font-medium">Передавать оплату</div>
-                <div className="text-xs text-muted-foreground">Выключено — список оплат пустой (неоплаченный документ)</div>
-              </div>
-              <Switch checked={form.paid} onCheckedChange={(v) => onChange({ ...form, paid: v })} />
-            </label>
             <label className="flex items-center justify-between gap-3">
               <div>
                 <div className="text-sm font-medium">Доступен компаниям</div>
