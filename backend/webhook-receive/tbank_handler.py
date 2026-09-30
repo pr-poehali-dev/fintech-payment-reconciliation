@@ -66,20 +66,34 @@ def save_cart(cur, integration_id: int, company_id: int, webhook_data: Dict[str,
             'payment_object': item.get('PaymentObject'),
             'measurement_unit': item.get('MeasurementUnit'),
             'mark_code': item.get('MarkCode'),
+            'mark_quantity': item.get('MarkQuantity'),
+            'mark_processing_mode': item.get('MarkProcessingMode'),
+            'excise': item.get('Excise'),
+            'country_code': item.get('CountryCode'),
+            'declaration_number': item.get('DeclarationNumber'),
+            'user_data': item.get('UserData'),
+            'sectoral_item_props': item.get('SectoralItemProps'),
             'agent_data': item.get('AgentData'),
             'supplier_info': item.get('SupplierInfo')
         })
     total = round(sum(i['amount'] for i in items), 2)
+    # Реквизиты уже пробитого чека: по ним видно, что чек по платежу есть.
+    fiscal_keys = ['FiscalNumber', 'ShiftNumber', 'ReceiptDatetime', 'FnNumber', 'EcrRegNumber',
+                   'FiscalDocumentNumber', 'FiscalDocumentAttribute', 'Type', 'Ofd', 'Url', 'QrCodeUrl',
+                   'CalculationPlace', 'CashierName', 'SettlePlace', 'ErrorCode', 'ErrorMessage', 'Amount']
+    fiscal = {k: webhook_data.get(k) for k in fiscal_keys if webhook_data.get(k) is not None}
     cur.execute('''
         INSERT INTO t_p83864310_fintech_payment_reco.payment_carts
-            (company_id, integration_id, payment_id, order_id, source, items, receipt, items_total)
-        VALUES (%s, %s, %s, %s, 'tbank_receipt', %s, %s, %s)
+            (company_id, integration_id, payment_id, order_id, source, items, receipt, items_total, fiscal_data)
+        VALUES (%s, %s, %s, %s, 'tbank_receipt', %s, %s, %s, %s)
         ON CONFLICT (integration_id, payment_id) DO UPDATE SET
             items = EXCLUDED.items, receipt = EXCLUDED.receipt, items_total = EXCLUDED.items_total,
+            fiscal_data = EXCLUDED.fiscal_data,
             order_id = COALESCE(EXCLUDED.order_id, payment_carts.order_id), updated_at = NOW()
     ''', (
         company_id, integration_id, str(payment_id), webhook_data.get('OrderId'),
-        json.dumps(items, ensure_ascii=False), json.dumps(receipt, ensure_ascii=False), total
+        json.dumps(items, ensure_ascii=False), json.dumps(receipt, ensure_ascii=False), total,
+        json.dumps(fiscal, ensure_ascii=False)
     ))
     return True
 

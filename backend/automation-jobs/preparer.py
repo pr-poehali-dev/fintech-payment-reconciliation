@@ -29,13 +29,14 @@ def _payment(cur, payment_id: str) -> Optional[Dict[str, Any]]:
 
 def _cart(cur, integration_id: int, provider_payment_id: str) -> Optional[Dict[str, Any]]:
     cur.execute(f'''
-        SELECT items, receipt, items_total, source FROM {SCHEMA}.payment_carts
+        SELECT items, receipt, items_total, source, fiscal_data FROM {SCHEMA}.payment_carts
         WHERE integration_id = %s AND payment_id = %s
     ''', (integration_id, provider_payment_id))
     r = cur.fetchone()
     if not r:
         return None
-    return {'items': r[0] or [], 'receipt': r[1] or {}, 'items_total': float(r[2] or 0), 'source': r[3]}
+    return {'items': r[0] or [], 'receipt': r[1] or {}, 'items_total': float(r[2] or 0), 'source': r[3],
+            'fiscal': r[4] or {}}
 
 
 # Провайдеры, у которых корзина приходит в уведомлении и без неё чек не собрать.
@@ -83,8 +84,11 @@ def prepare(cur, job: Dict[str, Any], scenario: Dict[str, Any]) -> Tuple[str, Di
             'name': receipt.get('Customer'),
             'inn': receipt.get('CustomerInn')
         }
+        data['provider_receipt'] = cart['fiscal']
         diff = round(cart['items_total'] - payment['amount'], 2)
         note = f', расхождение с платежом {diff:+.2f} ₽' if abs(diff) >= 0.01 else ''
+        if cart['fiscal'].get('FnNumber'):
+            note += f", {provider_name} уже пробил чек (ФН {cart['fiscal']['FnNumber']})"
         return 'ready', data, (
             f"Корзина от {provider_name}: {len(cart['items'])} поз. на {cart['items_total']:.2f} ₽ "
             f"(платёж #{payment['payment_id']}{note})"

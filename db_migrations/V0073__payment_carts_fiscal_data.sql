@@ -1,0 +1,1 @@
+ALTER TABLE t_p83864310_fintech_payment_reco.payment_carts ADD COLUMN fiscal_data JSONB NULL;
