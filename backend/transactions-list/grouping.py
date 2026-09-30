@@ -107,7 +107,7 @@ def matches_filters(
         return False
 
     if date_from or date_to:
-        day = local_date(t.get('occurred_at'), tz)
+        day = t.get('filter_date') or local_date(t.get('occurred_at'), tz)
         if not day:
             return False
         if date_from and day < date_from:

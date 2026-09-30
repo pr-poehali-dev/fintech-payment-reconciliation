@@ -625,6 +625,20 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             except Exception:
                 pass
 
+        # Зачисление эквайринга относится к дню ПРОДАЖ ("за ДД.ММ.ГГГГ" в
+        # назначении -> settlement_date), а не к дню поступления денег - как в
+        # разделе "Сверка". Даты выписки банка - календарные (без времени),
+        # поэтому сравниваются как есть, без перевода в часовой пояс.
+        cur.execute(f'''
+            SELECT id, COALESCE(settlement_date, operation_date::date)
+            FROM {SCHEMA}.bank_statement_transactions
+            WHERE company_id = %(company_id)s AND removed_at IS NULL
+        ''', {'company_id': company_id})
+        bank_days = {i: d.isoformat() for i, d in cur.fetchall() if d}
+        for row in final_rows:
+            if row['type'] == 'money' and row['id'] in bank_days:
+                row['filter_date'] = bank_days[row['id']]
+
         all_groups = group_transactions(final_rows)
         matched = set()
         for g in all_groups:
