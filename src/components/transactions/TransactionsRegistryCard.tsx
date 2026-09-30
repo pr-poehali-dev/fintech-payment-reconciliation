@@ -52,7 +52,7 @@ const TransactionsRegistryCard = ({
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="flex items-center gap-3 flex-wrap">
+        <div className="flex items-center gap-3 overflow-x-auto p-0.5">
           <TransactionsFilters
             searchQuery={searchQuery}
             dateFilter={dateFilter}
@@ -62,8 +62,8 @@ const TransactionsRegistryCard = ({
             setShowUnmatchedOnly={setShowUnmatchedOnly}
           />
           {selectedTxByKey.size > 0 && (
-            <div className="flex items-center gap-2 ml-auto">
-              <span className="text-sm text-muted-foreground">Выбрано: {selectedTxByKey.size}</span>
+            <div className="flex items-center gap-2 ml-auto shrink-0">
+              <span className="text-sm text-muted-foreground whitespace-nowrap">Выбрано: {selectedTxByKey.size}</span>
               {selectedTxByKey.size >= 2 && (
                 <Button size="sm" variant="outline" className="gap-1.5" onClick={onLink} disabled={isLinking}>
                   <Icon name={isLinking ? 'Loader2' : 'Link2'} size={14} className={isLinking ? 'animate-spin' : ''} />
