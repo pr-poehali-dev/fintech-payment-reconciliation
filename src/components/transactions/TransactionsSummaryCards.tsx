@@ -15,7 +15,7 @@ const cards: { type: 'payment' | 'receipt_kassa' | 'receipt_ofd' | 'money'; icon
   { type: 'payment', icon: 'CreditCard', title: 'Платежи', showMatched: true },
   { type: 'receipt_kassa', icon: 'Receipt', title: 'Чеки кассы', showMatched: true },
   { type: 'receipt_ofd', icon: 'FileCheck', title: 'Чеки ОФД', showMatched: true },
-  { type: 'money', icon: 'Landmark', title: 'Деньги', showMatched: false }
+  { type: 'money', icon: 'Landmark', title: 'Деньги', showMatched: true }
 ];
 
 const TransactionsSummaryCards = ({ totalsByType, matchedCountByType, isFiltered = false }: TransactionsSummaryCardsProps) => {
