@@ -5,6 +5,7 @@ import { TransactionTotalsByType } from '@/components/transactions/transactionsT
 interface TransactionsSummaryCardsProps {
   totalsByType: TransactionTotalsByType;
   matchedCountByType: Partial<Record<string, number>>;
+  isFiltered?: boolean;
 }
 
 const formatRub = (value: number) =>
@@ -17,15 +18,21 @@ const cards: { type: 'payment' | 'receipt_kassa' | 'receipt_ofd' | 'money'; icon
   { type: 'money', icon: 'Landmark', title: 'Деньги', showMatched: false }
 ];
 
-const TransactionsSummaryCards = ({ totalsByType, matchedCountByType }: TransactionsSummaryCardsProps) => {
+const TransactionsSummaryCards = ({ totalsByType, matchedCountByType, isFiltered = false }: TransactionsSummaryCardsProps) => {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
       {cards.map((card) => (
-        <Card key={card.type} className="border-border bg-card">
+        <Card key={card.type} className={`bg-card transition-colors ${isFiltered ? 'border-primary/40' : 'border-border'}`}>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
               <Icon name={card.icon} size={14} />
               {card.title}
+              {isFiltered && (
+                <span className="ml-auto flex items-center gap-1 text-xs font-normal text-primary">
+                  <Icon name="Filter" size={11} />
+                  по фильтру
+                </span>
+              )}
             </CardTitle>
           </CardHeader>
           <CardContent>

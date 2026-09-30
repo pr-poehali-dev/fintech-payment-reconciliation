@@ -270,23 +270,36 @@ const TransactionsPage = () => {
   // ссылается платёж, сам не узнаёт о своей паре и показывает "Нет пары".
   const matchedKeys = useMemo(() => computeMatchedKeys(transactions), [transactions]);
 
-  const groups = useMemo(
-    () =>
-      groupTransactions(
-        filterTransactions(transactions, { matchedKeys, showUnmatchedOnly, dateFilter, searchQuery })
-      ),
+  const filteredTransactions = useMemo(
+    () => filterTransactions(transactions, { matchedKeys, showUnmatchedOnly, dateFilter, searchQuery }),
     [transactions, matchedKeys, showUnmatchedOnly, dateFilter, searchQuery]
   );
 
+  const groups = useMemo(() => groupTransactions(filteredTransactions), [filteredTransactions]);
+
+  const isFiltered = Boolean(dateFilter) || showUnmatchedOnly || searchQuery.trim() !== '';
+
+  const summaryTotals = useMemo<TransactionTotalsByType>(() => {
+    if (!isFiltered) return totalsByType;
+    const totals: TransactionTotalsByType = {};
+    filteredTransactions.forEach((tx) => {
+      const bucket = totals[tx.type] ?? { count: 0, amount: 0, matched_count: 0 };
+      bucket.count += 1;
+      bucket.amount = Math.round((bucket.amount + Number(tx.signed_amount ?? tx.amount ?? 0)) * 100) / 100;
+      totals[tx.type] = bucket;
+    });
+    return totals;
+  }, [isFiltered, totalsByType, filteredTransactions]);
+
   const matchedCountByType = useMemo(() => {
     const counts: Partial<Record<string, number>> = {};
-    transactions.forEach((tx) => {
+    (isFiltered ? filteredTransactions : transactions).forEach((tx) => {
       if (matchedKeys.has(nodeKey(tx))) {
         counts[tx.type] = (counts[tx.type] || 0) + 1;
       }
     });
     return counts;
-  }, [transactions, matchedKeys]);
+  }, [isFiltered, filteredTransactions, transactions, matchedKeys]);
 
   const relatedItems = useMemo(() => {
     if (!selectedTx) return [];
@@ -318,7 +331,7 @@ const TransactionsPage = () => {
         onRefresh={fetchTransactions}
       />
 
-      <TransactionsSummaryCards totalsByType={totalsByType} matchedCountByType={matchedCountByType} />
+      <TransactionsSummaryCards totalsByType={summaryTotals} matchedCountByType={matchedCountByType} isFiltered={isFiltered} />
 
       <TransactionsRegistryCard
         groups={groups}
