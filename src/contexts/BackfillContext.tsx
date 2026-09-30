@@ -28,6 +28,8 @@ interface StartConfig {
   statuses: string[];
   hasOfd: boolean;
   bankIntegrations: BankIntegration[];
+  ecomkassaNames?: string[];
+  ofdNames?: string[];
 }
 
 interface BackfillContextValue {
@@ -44,6 +46,7 @@ interface BackfillContextValue {
   bankResults: Record<number, BankResult>;
   errors: string[];
   completedTick: number;
+  lastConfig: StartConfig | null;
   start: (config: StartConfig) => void;
 }
 
@@ -65,6 +68,7 @@ export const BackfillProvider = ({ children }: { children: ReactNode }) => {
   const [bankResults, setBankResults] = useState<Record<number, BankResult>>({});
   const [errors, setErrors] = useState<string[]>([]);
   const [completedTick, setCompletedTick] = useState(0);
+  const [lastConfig, setLastConfig] = useState<StartConfig | null>(null);
 
   // Провайдер смонтирован один раз на весь сеанс приложения (в App.tsx, вне
   // Index/страниц) - переключение вкладок внутри /app или закрытие диалога
@@ -116,7 +120,7 @@ export const BackfillProvider = ({ children }: { children: ReactNode }) => {
 
         // Не-JSON/5xx ответ (напр. 504 таймаут от платформы) - тоже повторяем
         // на том же offset, а не считаем это окончательным провалом.
-        let data: any;
+        let data: { success?: boolean; error?: string; matched_total: number; inserted: number; next_offset?: number; processed: number; done: boolean } | null;
         try {
           data = await res.json();
         } catch {
@@ -175,7 +179,7 @@ export const BackfillProvider = ({ children }: { children: ReactNode }) => {
     // обычно проходит сразу. Повторяем до 3 раз, прежде чем показать ошибку.
     const MAX_ATTEMPTS = 3;
     try {
-      let data: any = null;
+      let data: { success?: boolean; error?: string; inserted?: number; total_transactions?: number } | null = null;
       let ok = false;
       for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
         try {
@@ -220,6 +224,7 @@ export const BackfillProvider = ({ children }: { children: ReactNode }) => {
     if (runningRef.current) return;
     runningRef.current = true;
 
+    setLastConfig(config);
     setCompanyId(config.companyId);
     setDateFrom(config.dateFrom);
     setDateTo(config.dateTo);
@@ -263,6 +268,7 @@ export const BackfillProvider = ({ children }: { children: ReactNode }) => {
     setCompanyId(null);
     setDateFrom(null);
     setDateTo(null);
+    setLastConfig(null);
   }, []);
 
   return (
@@ -271,7 +277,7 @@ export const BackfillProvider = ({ children }: { children: ReactNode }) => {
         isDialogOpen, openDialog, closeDialog, reset,
         phase, companyId, dateFrom, dateTo,
         ecomkassaProgress, ofdResult, bankResults, errors,
-        completedTick, start
+        completedTick, lastConfig, start
       }}
     >
       {children}
