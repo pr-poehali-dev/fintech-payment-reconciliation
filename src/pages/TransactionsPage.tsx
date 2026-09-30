@@ -6,7 +6,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { useBackfill } from '@/contexts/BackfillContext';
 import TransactionsTable from '@/components/transactions/TransactionsTable';
-import TransactionsFilters from '@/components/transactions/TransactionsFilters';
+import TransactionsFilters, { DateFilter } from '@/components/transactions/TransactionsFilters';
 import TransactionDetailsDialog from '@/components/transactions/TransactionDetailsDialog';
 import DeleteTransactionsDialog from '@/components/transactions/DeleteTransactionsDialog';
 import BackfillDialog from '@/components/transactions/BackfillDialog';
@@ -36,6 +36,7 @@ const TransactionsPage = () => {
   const [showDetails, setShowDetails] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [showUnmatchedOnly, setShowUnmatchedOnly] = useState(false);
+  const [dateFilter, setDateFilter] = useState<DateFilter | null>(null);
   const [ecomkassaIntegrations, setEcomkassaIntegrations] = useState<{ id: number; name: string }[]>([]);
   const [ofdIntegrations, setOfdIntegrations] = useState<{ id: number; name: string }[]>([]);
   const [bankIntegrations, setBankIntegrations] = useState<{ id: number; name: string }[]>([]);
@@ -257,6 +258,18 @@ const TransactionsPage = () => {
   const filteredTransactions = transactions.filter((tx) => {
     if (showUnmatchedOnly && matchedKeys.has(nodeKey(tx))) return false;
 
+    // Фильтр по дате - по календарному дню операции (включительно оба конца).
+    if (dateFilter) {
+      if (!tx.occurred_at) return false;
+      const day = new Date(tx.occurred_at);
+      day.setHours(0, 0, 0, 0);
+      const from = new Date(dateFilter.from);
+      from.setHours(0, 0, 0, 0);
+      const to = new Date(dateFilter.to);
+      to.setHours(0, 0, 0, 0);
+      if (day < from || day > to) return false;
+    }
+
     if (!searchQuery.trim()) return true;
 
     // Запрос похож на число ("14", "2 500", "2420,00", "-14 ₽") - ищем ТОЧНОЕ
@@ -419,6 +432,8 @@ const TransactionsPage = () => {
           <div className="flex items-center gap-3 flex-wrap">
             <TransactionsFilters
               searchQuery={searchQuery}
+              dateFilter={dateFilter}
+              setDateFilter={setDateFilter}
               setSearchQuery={setSearchQuery}
               showUnmatchedOnly={showUnmatchedOnly}
               setShowUnmatchedOnly={setShowUnmatchedOnly}
