@@ -42,6 +42,48 @@ def verify_tbank_token(data: Dict[str, Any], terminal_password: str) -> bool:
     return calculated_token == received_token
 
 
+def save_cart(cur, integration_id: int, company_id: int, webhook_data: Dict[str, Any]) -> bool:
+    '''
+    Сохраняет корзину (объект Receipt) из уведомления Т-Банка. Receipt приходит
+    в уведомлении о фискализации (Status=RECEIPT). Суммы в копейках -> рубли.
+    Повторное уведомление по тому же платежу обновляет корзину.
+    '''
+    receipt = webhook_data.get('Receipt')
+    payment_id = webhook_data.get('PaymentId')
+    if not isinstance(receipt, dict) or not payment_id:
+        return False
+    items = []
+    for item in receipt.get('Items') or []:
+        if not isinstance(item, dict):
+            continue
+        items.append({
+            'name': item.get('Name'),
+            'price': float(item.get('Price') or 0) / 100,
+            'quantity': float(item.get('Quantity') or 0),
+            'amount': float(item.get('Amount') or 0) / 100,
+            'tax': item.get('Tax'),
+            'payment_method': item.get('PaymentMethod'),
+            'payment_object': item.get('PaymentObject'),
+            'measurement_unit': item.get('MeasurementUnit'),
+            'mark_code': item.get('MarkCode'),
+            'agent_data': item.get('AgentData'),
+            'supplier_info': item.get('SupplierInfo')
+        })
+    total = round(sum(i['amount'] for i in items), 2)
+    cur.execute('''
+        INSERT INTO t_p83864310_fintech_payment_reco.payment_carts
+            (company_id, integration_id, payment_id, order_id, source, items, receipt, items_total)
+        VALUES (%s, %s, %s, %s, 'tbank_receipt', %s, %s, %s)
+        ON CONFLICT (integration_id, payment_id) DO UPDATE SET
+            items = EXCLUDED.items, receipt = EXCLUDED.receipt, items_total = EXCLUDED.items_total,
+            order_id = COALESCE(EXCLUDED.order_id, payment_carts.order_id), updated_at = NOW()
+    ''', (
+        company_id, integration_id, str(payment_id), webhook_data.get('OrderId'),
+        json.dumps(items, ensure_ascii=False), json.dumps(receipt, ensure_ascii=False), total
+    ))
+    return True
+
+
 def process(cur, integration_id: int, company_id: int, config: Dict[str, Any],
             webhook_settings: Dict[str, Any], webhook_data: Dict[str, Any]) -> Tuple[bool, Optional[int], Optional[str]]:
     '''
@@ -54,6 +96,13 @@ def process(cur, integration_id: int, company_id: int, config: Dict[str, Any],
         return False, None, 'Invalid signature'
 
     status = webhook_data.get('Status', '')
+
+    # Корзина из уведомления сохраняется отдельно от платежа.
+    save_cart(cur, integration_id, company_id, webhook_data)
+
+    # Уведомление о фискализации - не новый статус платежа, в платежи не пишем.
+    if status == 'RECEIPT':
+        return True, None, None
 
     payment_status_map = {
         'AUTHORIZED': 'notify_on_authorized',

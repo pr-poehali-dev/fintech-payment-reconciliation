@@ -167,10 +167,13 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         # Сбой автоматизации не должен ломать приём платежа - откатываем
         # только этот шаг (savepoint), платёж и событие сохраняются.
         jobs_created = 0
-        if webhook_payment_id and not handler_error:
+        has_cart = provider_slug == 'tbank' and isinstance(webhook_data.get('Receipt'), dict)
+        if (webhook_payment_id or has_cart) and not handler_error:
             cur.execute('SAVEPOINT automation_enqueue')
             try:
                 jobs_created = automation.enqueue_payment_jobs(cur, company_id, integration_id, webhook_payment_id, event_id)
+                if has_cart:
+                    jobs_created += automation.wake_payment_jobs(cur, integration_id, webhook_data.get('PaymentId'))
                 cur.execute('RELEASE SAVEPOINT automation_enqueue')
             except Exception as e:
                 cur.execute('ROLLBACK TO SAVEPOINT automation_enqueue')
