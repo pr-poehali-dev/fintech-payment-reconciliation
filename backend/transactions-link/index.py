@@ -63,9 +63,9 @@ def detach_one(cur, conn, company_id: Any, target: Dict[str, Any]) -> Dict[str, 
         # В ручной группе остался один участник - группа больше не имеет смысла.
         cur.execute(f'''
             DELETE FROM {SCHEMA}.manual_transaction_links
-            WHERE company_id = %s AND link_group_id = %s
+            WHERE company_id = %s AND link_group_id = %s::uuid
               AND (SELECT COUNT(*) FROM {SCHEMA}.manual_transaction_links
-                   WHERE company_id = %s AND link_group_id = %s) < 2
+                   WHERE company_id = %s AND link_group_id = %s::uuid) < 2
         ''', (company_id, row[0], company_id, row[0]))
 
     # Отметка "не связывать автоматически" - иначе автосвязь (по реквизитам
@@ -139,7 +139,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             existing_groups: List[str] = []
             for item in items:
                 cur.execute(f'''
-                    SELECT link_group_id FROM {SCHEMA}.manual_transaction_links
+                    SELECT link_group_id::text FROM {SCHEMA}.manual_transaction_links
                     WHERE company_id = %s AND tx_type = %s AND tx_source = %s AND tx_id = %s
                 ''', (company_id, item['type'], item['source'], item['id']))
                 row = cur.fetchone()
@@ -147,12 +147,14 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     existing_groups.append(row[0])
 
             group_id = existing_groups[0] if existing_groups else str(uuid.uuid4())
-            if len(existing_groups) > 1:
+            # Сливаем по одной группе, с явным приведением к uuid: передача
+            # списка через ANY(...) в этом окружении падает с "object not found".
+            for old_group in existing_groups[1:]:
                 cur.execute(f'''
                     UPDATE {SCHEMA}.manual_transaction_links
-                    SET link_group_id = %s
-                    WHERE company_id = %s AND link_group_id = ANY(%s)
-                ''', (group_id, company_id, existing_groups[1:]))
+                    SET link_group_id = %s::uuid
+                    WHERE company_id = %s AND link_group_id = %s::uuid
+                ''', (group_id, company_id, old_group))
 
             for item in items:
                 # Явная связка пользователем снимает прежний "вывод из группы".
@@ -163,7 +165,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 cur.execute(f'''
                     INSERT INTO {SCHEMA}.manual_transaction_links
                         (company_id, link_group_id, tx_type, tx_source, tx_id)
-                    VALUES (%s, %s, %s, %s, %s)
+                    VALUES (%s, %s::uuid, %s, %s, %s)
                     ON CONFLICT (company_id, tx_type, tx_source, tx_id) DO UPDATE SET
                         link_group_id = EXCLUDED.link_group_id,
                         created_at = NOW()
@@ -186,7 +188,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             return detach_one(cur, conn, company_id, target)
 
         cur.execute(f'''
-            SELECT link_group_id FROM {SCHEMA}.manual_transaction_links
+            SELECT link_group_id::text FROM {SCHEMA}.manual_transaction_links
             WHERE company_id = %s AND tx_type = %s AND tx_source = %s AND tx_id = %s
         ''', (company_id, target['type'], target['source'], target['id']))
         row = cur.fetchone()
@@ -197,7 +199,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         group_id = row[0]
         cur.execute(f'''
             DELETE FROM {SCHEMA}.manual_transaction_links
-            WHERE company_id = %s AND link_group_id = %s
+            WHERE company_id = %s AND link_group_id = %s::uuid
         ''', (company_id, group_id))
         removed_count = cur.rowcount
 
@@ -206,7 +208,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
     except Exception as e:
         conn.rollback()
-        return response(500, {'error': str(e)})
+        print(f'transactions-link error: {type(e).__name__}: {e}')
+        return response(500, {'error': str(e).strip(), 'error_type': type(e).__name__, 'pgcode': getattr(e, 'pgcode', None)})
     finally:
         cur.close()
         conn.close()
