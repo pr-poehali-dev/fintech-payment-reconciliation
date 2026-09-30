@@ -51,6 +51,9 @@ const BackfillContext = createContext<BackfillContextValue | undefined>(undefine
 
 const emptyProgress: EcomkassaProgress = { processed: 0, total: 0, inserted: 0 };
 
+const toLocalDate = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
 export const BackfillProvider = ({ children }: { children: ReactNode }) => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [phase, setPhase] = useState<BackfillPhase>('idle');
@@ -167,20 +170,38 @@ export const BackfillProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const runBankBackfill = useCallback(async (integration: BankIntegration, from: Date, to: Date) => {
+    // Банк (особенно Точка) формирует выписку асинхронно и иногда не успевает
+    // за отведённое функции время - это временный сбой, повторный запрос
+    // обычно проходит сразу. Повторяем до 3 раз, прежде чем показать ошибку.
+    const MAX_ATTEMPTS = 3;
     try {
-      const res = await fetch(functionUrls['bank-statement-sync'], {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          integration_id: integration.id,
-          date_from: from.toISOString(),
-          date_to: to.toISOString()
-        })
-      });
-      const data = await res.json();
+      let data: any = null;
+      let ok = false;
+      for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+        try {
+          const res = await fetch(functionUrls['bank-statement-sync'], {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            // Выписка банка - по календарным дням, поэтому шлём локальные даты
+            // (YYYY-MM-DD), а не toISOString(): в UTC полночь по Москве - это
+            // 21:00 предыдущего дня, и период "29.09" уезжал на "28.09".
+            body: JSON.stringify({
+              integration_id: integration.id,
+              date_from: toLocalDate(from),
+              date_to: toLocalDate(to)
+            })
+          });
+          data = await res.json().catch(() => null);
+          ok = res.ok && !!data?.success;
+        } catch {
+          ok = false;
+        }
+        if (ok) break;
+        if (attempt < MAX_ATTEMPTS) await new Promise((r) => setTimeout(r, 1500));
+      }
 
-      if (!res.ok || !data.success) {
-        setErrors((prev) => [...prev, `${integration.name}: ${data.error || 'не удалось загрузить выписку'}`]);
+      if (!ok) {
+        setErrors((prev) => [...prev, `${integration.name}: ${data?.error || 'не удалось загрузить выписку'}`]);
         return;
       }
 

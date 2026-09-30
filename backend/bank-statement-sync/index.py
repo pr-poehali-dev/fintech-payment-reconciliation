@@ -224,7 +224,9 @@ def fetch_tochka_account_statement(cur, integration_id: int, company_id: int, co
     base_url = 'https://enter.tochka.com/uapi/open-banking/v1.0'
 
     start_date = datetime.fromisoformat(date_from[:10])
-    end_date = datetime.fromisoformat(date_to[:10])
+    # endDateTime у Точки НЕ включает сам день (полночь = начало дня), поэтому
+    # чтобы последний выбранный день попал в выписку, сдвигаем конец на +1 день.
+    end_date = datetime.fromisoformat(date_to[:10]) + timedelta(days=1)
 
     WINDOW_DAYS = 7
     # Общий бюджет на все окна с запасом под остаток работы функции (batch-вставка
