@@ -207,6 +207,9 @@ const AdminActionTemplatesSection = () => {
                         <span className="rounded-md bg-muted px-2 py-1">
                           Оплата: {labelOf(PAYMENT_TYPE_OPTIONS, t.payment_type === null ? NO_PAYMENT : String(t.payment_type))}
                         </span>
+                        {t.auto_deliver && (
+                          <span className="rounded-md bg-primary/15 px-2 py-1 text-primary">Сразу доставка</span>
+                        )}
                         <span className="rounded-md bg-muted px-2 py-1">Сценариев: {t.scenarios_count}</span>
                       </div>
                     </CardContent>

@@ -21,6 +21,8 @@ export interface ActionTemplateRow {
   correction_date_source: string | null;
   correction_base_date: string | null;
   correction_base_number: string | null;
+  auto_deliver: boolean;
+  cashier_name: string | null;
   scenarios_count: number;
 }
 
@@ -44,6 +46,8 @@ export interface ActionTemplateForm {
   correction_date_source: string;
   correction_base_date: string;
   correction_base_number: string;
+  auto_deliver: boolean;
+  cashier_name: string;
 }
 
 export interface CashProvider {
@@ -134,7 +138,9 @@ export const EMPTY_TEMPLATE: ActionTemplateForm = {
   correction_type: 'self',
   correction_date_source: 'payment',
   correction_base_date: '',
-  correction_base_number: ''
+  correction_base_number: '',
+  auto_deliver: false,
+  cashier_name: ''
 };
 
 export const DATE_SOURCE_OPTIONS: Option[] = [
@@ -172,7 +178,9 @@ export const templateToForm = (t: ActionTemplateRow): ActionTemplateForm => ({
   correction_type: t.correction_type || 'self',
   correction_date_source: t.correction_date_source || 'payment',
   correction_base_date: t.correction_base_date ? t.correction_base_date.slice(0, 10) : '',
-  correction_base_number: t.correction_base_number || ''
+  correction_base_number: t.correction_base_number || '',
+  auto_deliver: !!t.auto_deliver,
+  cashier_name: t.cashier_name || ''
 });
 
 export const formToPayload = (f: ActionTemplateForm) => ({

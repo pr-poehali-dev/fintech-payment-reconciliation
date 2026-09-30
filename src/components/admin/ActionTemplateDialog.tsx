@@ -6,6 +6,7 @@ import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import Icon from '@/components/ui/icon';
 import ReceiptFieldsBlock from './ReceiptFieldsBlock';
+import DeliveryFieldsBlock from './DeliveryFieldsBlock';
 import { ACTION_TYPE_OPTIONS, ActionTemplateForm, CashProvider, correctionValid } from './actionTemplatesConfig';
 
 interface ActionTemplateDialogProps {
@@ -88,6 +89,8 @@ const ActionTemplateDialog = ({ open, onOpenChange, form, onChange, onSubmit, is
           </div>
 
           <ReceiptFieldsBlock form={form} providers={providers} onChange={onChange} />
+
+          {form.action_type === 'create_order' && <DeliveryFieldsBlock form={form} onChange={onChange} />}
 
           <div className="space-y-2">
             <Label>Порядок в списке</Label>

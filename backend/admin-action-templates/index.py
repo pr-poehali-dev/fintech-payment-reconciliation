@@ -22,7 +22,7 @@ EMAIL_RE = re.compile(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
 COLUMNS = ['id', 'code', 'action_type', 'name', 'description', 'operation', 'paid', 'is_active', 'sort_order',
            'provider_id', 'protocol_version', 'receipt_type', 'payment_method', 'payment_object', 'measure',
            'payment_type', 'default_email', 'correction_type', 'correction_date_source', 'correction_base_date',
-           'correction_base_number']
+           'correction_base_number', 'auto_deliver', 'cashier_name']
 EDITABLE = COLUMNS[2:]
 
 
@@ -90,6 +90,15 @@ def normalize(cur, body: Dict[str, Any], creating: bool):
     if error:
         return None, error
 
+    # Подтверждение доставки есть только у заказов (POST /courier/:orderId/deliver).
+    auto_deliver = body['action_type'] == 'create_order' and bool(body.get('auto_deliver'))
+    if auto_deliver and body.get('payment_type') in ('', None):
+        return None, 'Сразу подтверждать доставку можно только у оплаченного заказа (укажите тип оплаты)'
+    cashier = (body.get('cashier_name') or '').strip() or None
+    if cashier and len(cashier) > 100:
+        return None, 'Имя кассира - не больше 100 символов'
+    delivery = {'auto_deliver': auto_deliver, 'cashier_name': cashier if auto_deliver else None}
+
     payment_type = body.get('payment_type')
     if payment_type in ('', None):
         payment_type = None
@@ -130,6 +139,7 @@ def normalize(cur, body: Dict[str, Any], creating: bool):
         'payment_type': payment_type,
         'default_email': email,
         **correction,
+        **delivery,
     }, None
 
 

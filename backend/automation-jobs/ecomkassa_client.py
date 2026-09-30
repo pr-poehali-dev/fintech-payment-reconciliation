@@ -81,3 +81,22 @@ def create_courier_order(kassa: Dict[str, Any], operation: str, body: Dict[str, 
     if status == 200 and isinstance(data, dict) and data.get('uuid') and not data.get('error'):
         return data, ''
     return None, f'Екомкасса не создала заказ ({status}: {str(data)[:300]})'
+
+
+def deliver_courier_order(kassa: Dict[str, Any], order_id: str, body: Dict[str, Any]) -> Tuple[Optional[Dict[str, Any]], str]:
+    '''
+    POST /api/mobile/v1/courier/:orderId/deliver - подтверждение доставки (оплата) заказа.
+    Тело: cashierName, paymentAddress, customerEmail, customerPhone (необязательные) и
+    payments в формате АТОЛ 4 - если заказ не был предоплачен; предоплаченный - пустой массив.
+    После подтверждения касса пробивает чек и шлёт callback_url заказа.
+    '''
+    status, data = _request('POST', f'/api/mobile/v1/courier/{order_id}/deliver', kassa['token'], body, timeout=20.0)
+    if status == 200 and isinstance(data, dict) and data.get('errorCode') == 0:
+        return data.get('payload') or {}, ''
+    return None, f'Екомкасса не подтвердила доставку заказа #{order_id} ({status}: {str(data)[:300]})'
+
+
+def order_status(kassa: Dict[str, Any], order_id: str) -> Optional[str]:
+    '''GET /api/mobile/v1/orders/:orderId - статус заказа (WAITING, PAID ...).'''
+    status, data = _request('GET', f'/api/mobile/v1/orders/{order_id}', kassa['token'])
+    return data.get('status') if status == 200 and isinstance(data, dict) else None

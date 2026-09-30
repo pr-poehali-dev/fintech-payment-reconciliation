@@ -1,7 +1,7 @@
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
-from ecomkassa_client import cash_register, create_courier_order
+from ecomkassa_client import cash_register, create_courier_order, deliver_courier_order, order_status
 from receipt_dictionaries import MEASURES, PAYMENT_OBJECTS_V5
 
 SCHEMA = 't_p83864310_fintech_payment_reco'
@@ -170,9 +170,34 @@ def create_order(cur, job: Dict[str, Any], scenario: Dict[str, Any], data: Dict[
     result, err = create_courier_order(kassa, operation, body)
     if not result:
         return 'error', {'request': body}, err
-    return 'done', {'request': body, 'response': result, 'external_id': external_id}, (
-        f"Заказ создан в Екомкассе: #{result.get('uuid')} на {total:.2f} ₽, "
+    order_id = str(result.get('uuid'))
+    message = (
+        f"Заказ создан в Екомкассе: #{order_id} на {total:.2f} ₽, "
         f"шаблон «{template.get('name')}», {'оплаченный' if paid else 'неоплаченный'} ({result.get('permalink', '')})"
+    )
+    outcome = {'request': body, 'response': result, 'external_id': external_id}
+    if not template.get('auto_deliver'):
+        return 'done', outcome, message
+
+    # Повтор задания вернёт тот же заказ (external_id) - если доставка уже
+    # подтверждена, второй раз не подтверждаем.
+    if order_status(kassa, order_id) == 'PAID':
+        return 'done', outcome, f'{message}. Доставка уже подтверждена'
+    deliver_body = {k: v for k, v in {
+        'cashierName': template.get('cashier_name'),
+        'customerEmail': client.get('email'),
+        'customerPhone': client.get('phone'),
+    }.items() if v}
+    # Предоплаченный заказ - пустой список оплат (касса зачтёт аванс сама).
+    deliver_body['payments'] = []
+    delivered, err = deliver_courier_order(kassa, order_id, deliver_body)
+    outcome['deliver_request'] = deliver_body
+    if delivered is None:
+        return 'error', outcome, f'{message}. {err}'
+    outcome['deliver_response'] = delivered
+    return 'done', outcome, (
+        f"{message}. Доставка подтверждена, заказ {delivered.get('status', 'PAID')} - "
+        f"касса пробьёт чек и пришлёт уведомление"
     )
 
 
