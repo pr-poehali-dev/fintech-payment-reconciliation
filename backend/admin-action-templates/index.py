@@ -5,7 +5,7 @@ import psycopg2
 from typing import Dict, Any, Optional
 
 from dictionaries import (PROTOCOLS, RECEIPT_TYPES, OPERATIONS, PAYMENT_METHODS,
-                          PAYMENT_OBJECTS_V5, MEASURES, PAYMENT_TYPES, CORRECTION_TYPES, DATE_SOURCES)
+                          PAYMENT_OBJECTS_V5, MEASURES, PAYMENT_TYPES, DATE_SOURCES)
 
 SCHEMA = 't_p83864310_fintech_payment_reco'
 
@@ -135,19 +135,15 @@ def normalize(cur, body: Dict[str, Any], creating: bool):
 
 def normalize_correction(body: Dict[str, Any]):
     '''
-    Основание коррекции (correction_info) по протоколу:
-    v4 - type, base_date (дата документа основания), base_number (номер документа) - всё обязательно;
-    v5 - type, base_date (дата корректируемого расчёта) обязательны, base_number - только
-         при коррекции по предписанию ФНС, до 32 символов.
+    Основание коррекции (correction_info) - только самостоятельная коррекция (type = self):
+    v4 - base_date (дата документа основания) и base_number (номер документа) обязательны;
+    v5 - только base_date (дата корректируемого расчёта), номер не передаётся.
     Дата берётся из платежа (payment) или задаётся в шаблоне (fixed).
     '''
     empty = {'correction_type': None, 'correction_date_source': None,
              'correction_base_date': None, 'correction_base_number': None}
     if body.get('receipt_type') != 'correction':
         return empty, None
-    ctype = body.get('correction_type')
-    if ctype not in CORRECTION_TYPES:
-        return None, 'Укажите тип коррекции: самостоятельно или по предписанию'
     source = body.get('correction_date_source')
     if source not in DATE_SOURCES:
         return None, 'Укажите, откуда брать дату основания коррекции'
@@ -157,15 +153,14 @@ def normalize_correction(body: Dict[str, Any]):
         if not re.fullmatch(r'\d{4}-\d{2}-\d{2}', raw):
             return None, 'Укажите дату основания коррекции'
         base_date = raw
-    number = (body.get('correction_base_number') or '').strip() or None
-    v5 = body.get('protocol_version') == 'v5'
-    if v5 and ctype == 'self':
-        number = None
-    elif not number:
-        return None, 'Укажите номер документа основания коррекции'
-    if number and len(number) > 32:
-        return None, 'Номер документа основания - не больше 32 символов'
-    return {'correction_type': ctype, 'correction_date_source': source,
+    number = None
+    if body.get('protocol_version') == 'v4':
+        number = (body.get('correction_base_number') or '').strip() or None
+        if not number:
+            return None, 'Для v4 укажите номер документа основания коррекции'
+        if len(number) > 32:
+            return None, 'Номер документа основания - не больше 32 символов'
+    return {'correction_type': 'self', 'correction_date_source': source,
             'correction_base_date': base_date, 'correction_base_number': number}, None
 
 

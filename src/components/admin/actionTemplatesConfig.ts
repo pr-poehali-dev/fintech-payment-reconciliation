@@ -137,26 +137,18 @@ export const EMPTY_TEMPLATE: ActionTemplateForm = {
   correction_base_number: ''
 };
 
-// correction_info.type, тег 1173.
-export const CORRECTION_TYPE_OPTIONS: Option[] = [
-  { value: 'self', label: 'Самостоятельно', hint: 'self' },
-  { value: 'instruction', label: 'По предписанию ФНС', hint: 'instruction' }
-];
-
 export const DATE_SOURCE_OPTIONS: Option[] = [
   { value: 'payment', label: 'Дата платежа' },
   { value: 'fixed', label: 'Фиксированная дата' }
 ];
 
-// v4: номер документа основания обязателен всегда; v5: только при коррекции по предписанию.
-export const needsBaseNumber = (f: Pick<ActionTemplateForm, 'protocol_version' | 'correction_type'>) =>
-  f.protocol_version === 'v4' || f.correction_type === 'instruction';
+// Только самостоятельная коррекция: номер документа основания нужен лишь в v4.
+export const needsBaseNumber = (f: Pick<ActionTemplateForm, 'protocol_version'>) => f.protocol_version === 'v4';
 
 export const correctionValid = (f: ActionTemplateForm) =>
   f.receipt_type !== 'correction' ||
   ((f.correction_date_source !== 'fixed' || !!f.correction_base_date) &&
-    (!needsBaseNumber(f) || !!f.correction_base_number.trim()) &&
-    f.correction_base_number.trim().length <= 32);
+    (!needsBaseNumber(f) || (!!f.correction_base_number.trim() && f.correction_base_number.trim().length <= 32)));
 
 export const labelOf = (options: Option[], value: string | null | undefined) =>
   options.find((o) => o.value === value)?.label || value || '—';

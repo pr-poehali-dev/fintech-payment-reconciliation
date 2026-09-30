@@ -65,9 +65,9 @@ def document_operation(template: Dict[str, Any]) -> str:
 
 def correction_info(template: Dict[str, Any], data: Dict[str, Any]) -> Tuple[Optional[Dict[str, Any]], str]:
     '''
-    correction_info для чека коррекции:
-    v4 - type, base_date (дата документа основания), base_number (обязателен);
-    v5 - type, base_date (дата корректируемого расчёта), base_number только «по предписанию».
+    correction_info для чека коррекции - только самостоятельная (type = self):
+    v4 - base_date (дата документа основания) + base_number (обязателен);
+    v5 - base_date (дата корректируемого расчёта), без номера.
     '''
     if template.get('receipt_type') != 'correction':
         return None, ''
@@ -79,13 +79,12 @@ def correction_info(template: Dict[str, Any], data: Dict[str, Any]) -> Tuple[Opt
         if not paid_at:
             return None, 'Нет даты платежа для основания коррекции'
         base_date = datetime.fromisoformat(paid_at).date()
-    info = {'type': template.get('correction_type') or 'self', 'base_date': base_date.strftime('%d.%m.%Y')}
-    number = template.get('correction_base_number')
-    v5 = template.get('protocol_version') == 'v5'
-    if v5 and info['type'] == 'self':
+    info = {'type': 'self', 'base_date': base_date.strftime('%d.%m.%Y')}
+    if template.get('protocol_version') == 'v5':
         return info, ''
+    number = template.get('correction_base_number')
     if not number:
-        return None, 'В шаблоне не указан номер документа основания коррекции'
+        return None, 'В шаблоне не указан номер документа основания коррекции (обязателен для v4)'
     info['base_number'] = number
     return info, ''
 
