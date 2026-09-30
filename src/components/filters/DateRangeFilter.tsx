@@ -15,6 +15,7 @@ export interface DateFilter {
 interface DateRangeFilterProps {
   value: DateFilter | null;
   onChange: (value: DateFilter | null) => void;
+  onReset?: () => void;
 }
 
 const formatLabel = (f: DateFilter) => {
@@ -26,7 +27,7 @@ const formatLabel = (f: DateFilter) => {
 
 // Черновик выбора: календарь открывается пустым, 1-й клик - начало,
 // 2-й клик (в т.ч. на тот же день) - конец, тогда фильтр применяется.
-const DateRangeFilter = ({ value, onChange }: DateRangeFilterProps) => {
+const DateRangeFilter = ({ value, onChange, onReset }: DateRangeFilterProps) => {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<DateRange | undefined>(undefined);
 
@@ -68,7 +69,7 @@ const DateRangeFilter = ({ value, onChange }: DateRangeFilterProps) => {
         </PopoverContent>
       </Popover>
       {value && (
-        <Button variant="ghost" size="sm" className="px-2" onClick={() => onChange(null)} aria-label="Сбросить дату">
+        <Button variant="ghost" size="sm" className="px-2" onClick={onReset ?? (() => onChange(null))} aria-label="Сбросить дату">
           <Icon name="X" size={14} />
         </Button>
       )}

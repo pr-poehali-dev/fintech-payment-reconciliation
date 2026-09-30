@@ -91,8 +91,12 @@ const TransactionsRegistryCard = ({
             setSearchQuery={setSearchQuery}
             showUnmatchedOnly={showUnmatchedOnly}
             setShowUnmatchedOnly={setShowUnmatchedOnly}
+            typeFilterSlot={<TransactionTypeFilterButton value={typeFilter} onChange={setTypeFilter} />}
+            onResetDate={() => {
+              setDateFilter(null);
+              setTypeFilter([]);
+            }}
           />
-          <TransactionTypeFilterButton value={typeFilter} onChange={setTypeFilter} />
           {selectedTxByKey.size > 0 && (
             <div className="flex items-center gap-2 ml-auto shrink-0">
               <span className="text-sm text-muted-foreground whitespace-nowrap">Выбрано: {selectedTxByKey.size}</span>
