@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import Icon from '@/components/ui/icon';
@@ -23,6 +24,11 @@ interface TransactionsRegistryCardProps {
   onToggleSelect: (tx: Transaction) => void;
   onDetach: (tx: Transaction) => void;
   detachingKey: string | null;
+  hasMore: boolean;
+  isLoadingMore: boolean;
+  onLoadMore: () => void;
+  totalCount: number;
+  loadedCount: number;
 }
 
 const TransactionsRegistryCard = ({
@@ -41,8 +47,28 @@ const TransactionsRegistryCard = ({
   onRowClick,
   onToggleSelect,
   onDetach,
-  detachingKey
+  detachingKey,
+  hasMore,
+  isLoadingMore,
+  onLoadMore,
+  totalCount,
+  loadedCount
 }: TransactionsRegistryCardProps) => {
+  const sentinelRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const node = sentinelRef.current;
+    if (!node || !hasMore) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) onLoadMore();
+      },
+      { rootMargin: '400px' }
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [hasMore, onLoadMore, loadedCount]);
+
   return (
     <Card>
       <CardHeader>
@@ -94,6 +120,20 @@ const TransactionsRegistryCard = ({
           onDetach={onDetach}
           detachingKey={detachingKey}
         />
+
+        <div ref={sentinelRef} className="flex flex-col items-center gap-2 py-2 text-sm text-muted-foreground">
+          {totalCount > 0 && (
+            <span>
+              Показано {Math.min(loadedCount, totalCount)} из {totalCount}
+            </span>
+          )}
+          {hasMore && (
+            <Button size="sm" variant="ghost" className="gap-1.5" onClick={onLoadMore} disabled={isLoadingMore}>
+              <Icon name={isLoadingMore ? 'Loader2' : 'ChevronsDown'} size={14} className={isLoadingMore ? 'animate-spin' : ''} />
+              {isLoadingMore ? 'Загружаю…' : 'Показать ещё'}
+            </Button>
+          )}
+        </div>
       </CardContent>
     </Card>
   );

@@ -5,7 +5,9 @@
       "method": "GET",
       "path": "/",
       "expectedStatus": 400,
-      "expectedBody": {"error": "string"},
+      "expectedBody": {
+        "error": "string"
+      },
       "bodyMatcher": "partial"
     },
     {
@@ -13,7 +15,9 @@
       "method": "GET",
       "path": "/?company_id=1",
       "expectedStatus": 200,
-      "expectedBody": {"success": true},
+      "expectedBody": {
+        "success": true
+      },
       "bodyMatcher": "partial"
     },
     {
@@ -21,7 +25,9 @@
       "method": "GET",
       "path": "/?company_id=1&type=payment",
       "expectedStatus": 200,
-      "expectedBody": {"success": true},
+      "expectedBody": {
+        "success": true
+      },
       "bodyMatcher": "partial"
     },
     {
@@ -29,7 +35,9 @@
       "method": "GET",
       "path": "/?company_id=1&type=receipt_ofd",
       "expectedStatus": 200,
-      "expectedBody": {"success": true},
+      "expectedBody": {
+        "success": true
+      },
       "bodyMatcher": "partial"
     },
     {
@@ -37,7 +45,20 @@
       "method": "GET",
       "path": "/?company_id=1&type=receipt_kassa",
       "expectedStatus": 200,
-      "expectedBody": {"success": true},
+      "expectedBody": {
+        "success": true
+      },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Paged registry with filters",
+      "method": "GET",
+      "path": "/?company_id=1&paged=1&limit=50&offset=0&date_from=2026-09-01&date_to=2026-09-30&unmatched_only=1&search=10",
+      "expectedStatus": 200,
+      "expectedBody": {
+        "success": true,
+        "has_more": false
+      },
       "bodyMatcher": "partial"
     }
   ]

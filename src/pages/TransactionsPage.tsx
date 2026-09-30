@@ -10,9 +10,9 @@ import BackfillDialog from '@/components/transactions/BackfillDialog';
 import TransactionsPageHeader from '@/components/transactions/TransactionsPageHeader';
 import TransactionsSummaryCards from '@/components/transactions/TransactionsSummaryCards';
 import TransactionsRegistryCard from '@/components/transactions/TransactionsRegistryCard';
-import { Transaction, TransactionTotalsByType } from '@/components/transactions/transactionsTypes';
-import { groupTransactions, computeMatchedKeys, nodeKey } from '@/lib/transactionGrouping';
-import { filterTransactions } from '@/lib/transactionFilters';
+import { Transaction } from '@/components/transactions/transactionsTypes';
+import { groupTransactions, nodeKey } from '@/lib/transactionGrouping';
+import { useTransactionsFeed } from '@/hooks/useTransactionsFeed';
 import functionUrls from '../../backend/func2url.json';
 
 interface IntegrationRow {
@@ -23,11 +23,6 @@ interface IntegrationRow {
 }
 
 const TransactionsPage = () => {
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [totalsByType, setTotalsByType] = useState<TransactionTotalsByType>({});
-  const [isLoading, setIsLoading] = useState(true);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
   const [selectedTx, setSelectedTx] = useState<Transaction | null>(null);
   const [showDetails, setShowDetails] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -46,47 +41,13 @@ const TransactionsPage = () => {
   const companyId = currentCompany?.id;
   const { openDialog, completedTick, phase: backfillPhase } = useBackfill();
 
-  const fetchTransactions = async () => {
-    if (!companyId) return;
-    // isLoading используется только для ПЕРВОЙ загрузки страницы (полноэкранный
-    // спиннер вместо контента). Повторные обновления (кнопка "Обновить",
-    // дозагрузка из BackfillDialog) должны обновлять данные без размонтирования
-    // страницы - иначе открытый поверх диалог дозагрузки исчезает вместе с ней.
-    if (hasLoadedOnce) {
-      setIsRefreshing(true);
-    } else {
-      setIsLoading(true);
-    }
-    try {
-      const params = new URLSearchParams({
-        company_id: String(companyId),
-        limit: '200'
-      });
-      const response = await fetch(`${functionUrls['transactions-list']}?${params}`);
-      const data = await response.json();
-
-      if (response.ok && data.success) {
-        setTransactions(data.transactions || []);
-        setTotalsByType(data.totals_by_type || {});
-      } else {
-        toast({
-          title: 'Ошибка загрузки',
-          description: data.error || 'Не удалось загрузить транзакции',
-          variant: 'destructive'
-        });
-      }
-    } catch (error) {
-      toast({
-        title: 'Ошибка подключения',
-        description: 'Проверьте интернет-соединение',
-        variant: 'destructive'
-      });
-    } finally {
-      setIsLoading(false);
-      setIsRefreshing(false);
-      setHasLoadedOnce(true);
-    }
-  };
+  const feed = useTransactionsFeed(
+    companyId,
+    { dateFilter, searchQuery, showUnmatchedOnly },
+    (message) => toast({ title: 'Ошибка загрузки', description: message, variant: 'destructive' })
+  );
+  const { transactions, contextTransactions, totalsByType, isLoading, isRefreshing } = feed;
+  const fetchTransactions = () => feed.reload(true);
 
   // Список интеграций, доступных для дозагрузки (касса Екомкасса, ОФД,
   // расчётные счета) - вынесено в отдельную функцию, а не только в useEffect
@@ -135,7 +96,6 @@ const TransactionsPage = () => {
       })
       .catch(() => {});
 
-    fetchTransactions();
     fetchBackfillSources();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [companyId]);
@@ -265,51 +225,39 @@ const TransactionsPage = () => {
     }
   };
 
-  // Связь считается по группе (union-find по всему списку), а не по
-  // одностороннему полю linked_id одной записи - иначе чек, на который
-  // ссылается платёж, сам не узнаёт о своей паре и показывает "Нет пары".
-  const matchedKeys = useMemo(() => computeMatchedKeys(transactions), [transactions]);
+  // Строки страницы уже отфильтрованы сервером. Участники тех же групп, не
+  // попавшие под фильтр (contextTransactions), нужны только для расчёта
+  // связей и окна деталей - в реестр они не выводятся.
+  const allKnown = useMemo(() => [...transactions, ...contextTransactions], [transactions, contextTransactions]);
+  const visibleKeys = useMemo(() => new Set(transactions.map(nodeKey)), [transactions]);
 
-  const filteredTransactions = useMemo(
-    () => filterTransactions(transactions, { matchedKeys, showUnmatchedOnly, dateFilter, searchQuery }),
-    [transactions, matchedKeys, showUnmatchedOnly, dateFilter, searchQuery]
+  const groups = useMemo(
+    () =>
+      groupTransactions(allKnown)
+        .map((g) => ({ ...g, items: g.items.filter((i) => visibleKeys.has(nodeKey(i))) }))
+        .filter((g) => g.items.length > 0),
+    [allKnown, visibleKeys]
   );
-
-  const groups = useMemo(() => groupTransactions(filteredTransactions), [filteredTransactions]);
 
   const isFiltered = Boolean(dateFilter) || showUnmatchedOnly || searchQuery.trim() !== '';
 
-  const summaryTotals = useMemo<TransactionTotalsByType>(() => {
-    if (!isFiltered) return totalsByType;
-    const totals: TransactionTotalsByType = {};
-    filteredTransactions.forEach((tx) => {
-      const bucket = totals[tx.type] ?? { count: 0, amount: 0, matched_count: 0 };
-      bucket.count += 1;
-      bucket.amount = Math.round((bucket.amount + Number(tx.signed_amount ?? tx.amount ?? 0)) * 100) / 100;
-      totals[tx.type] = bucket;
-    });
-    return totals;
-  }, [isFiltered, totalsByType, filteredTransactions]);
-
   const matchedCountByType = useMemo(() => {
     const counts: Partial<Record<string, number>> = {};
-    (isFiltered ? filteredTransactions : transactions).forEach((tx) => {
-      if (matchedKeys.has(nodeKey(tx))) {
-        counts[tx.type] = (counts[tx.type] || 0) + 1;
-      }
+    Object.entries(totalsByType).forEach(([type, t]) => {
+      counts[type] = t?.matched_count ?? 0;
     });
     return counts;
-  }, [isFiltered, filteredTransactions, transactions, matchedKeys]);
+  }, [totalsByType]);
 
   const relatedItems = useMemo(() => {
     if (!selectedTx) return [];
     const key = nodeKey(selectedTx);
     return (
-      groupTransactions(transactions)
+      groupTransactions(allKnown)
         .find((g) => g.items.some((i) => nodeKey(i) === key))
         ?.items.filter((i) => nodeKey(i) !== key) || []
     );
-  }, [transactions, selectedTx]);
+  }, [allKnown, selectedTx]);
 
   if (isLoading) {
     return (
@@ -331,7 +279,7 @@ const TransactionsPage = () => {
         onRefresh={fetchTransactions}
       />
 
-      <TransactionsSummaryCards totalsByType={summaryTotals} matchedCountByType={matchedCountByType} isFiltered={isFiltered} />
+      <TransactionsSummaryCards totalsByType={totalsByType} matchedCountByType={matchedCountByType} isFiltered={isFiltered} />
 
       <TransactionsRegistryCard
         groups={groups}
@@ -350,6 +298,11 @@ const TransactionsPage = () => {
         onToggleSelect={handleToggleSelect}
         onDetach={handleDetach}
         detachingKey={detachingKey}
+        hasMore={feed.hasMore}
+        isLoadingMore={feed.isLoadingMore}
+        onLoadMore={feed.loadMore}
+        totalCount={feed.totalCount}
+        loadedCount={transactions.length}
       />
 
       <TransactionDetailsDialog

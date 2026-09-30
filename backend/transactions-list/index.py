@@ -4,8 +4,12 @@ import os
 import psycopg2
 from typing import Dict, Any, Optional
 from decimal import Decimal
+from zoneinfo import ZoneInfo
+
+from grouping import group_transactions, node_key, matches_filters, latest_time
 
 SCHEMA = 't_p83864310_fintech_payment_reco'
+DEFAULT_TZ = 'Europe/Moscow'
 
 CORS_HEADERS = {
     'Access-Control-Allow-Origin': '*',
@@ -13,6 +17,15 @@ CORS_HEADERS = {
     'Access-Control-Allow-Headers': 'Content-Type',
     'Access-Control-Max-Age': '86400'
 }
+
+
+def json_ok(payload: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        'statusCode': 200,
+        'headers': {**CORS_HEADERS, 'Content-Type': 'application/json'},
+        'body': json.dumps(payload),
+        'isBase64Encoded': False
+    }
 
 
 def to_json_value(val):
@@ -169,7 +182,12 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     transactionGrouping.ts.
     Args: company_id (обязателен), type (payment/receipt_ofd/receipt_kassa/
     receipt_order/money/receipt-алиас на все 3 вида чеков, опционально),
-    limit, offset (опционально)
+    limit, offset (опционально).
+    Постраничный режим реестра (paged=1): date_from/date_to (YYYY-MM-DD, по
+    часовому поясу компании), search, unmatched_only=1; offset/limit - в
+    группах/строках, totals_by_type - по ВСЕМ отфильтрованным записям,
+    context_transactions - остальные участники групп страницы (для окна
+    деталей), has_more/next_offset - для автоподгрузки.
     Returns: transactions[] с полями type, source, id, occurred_at, amount,
     signed_amount, status, title, subtitle, integration_name, reference,
     raw_data, linked_type, linked_source, linked_id, match_method,
@@ -197,6 +215,11 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     type_filter = params.get('type')
     limit = int(params.get('limit', 100))
     offset = int(params.get('offset', 0))
+    paged = params.get('paged') == '1'
+    date_from = params.get('date_from') or None
+    date_to = params.get('date_to') or None
+    search = params.get('search') or ''
+    unmatched_only = params.get('unmatched_only') == '1'
 
     if not company_id:
         return {
@@ -568,35 +591,94 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             if len(group['webhook_history']) <= 1:
                 del group['webhook_history']
 
-        totals_by_type: Dict[str, Dict[str, Any]] = {}
         for row in final_rows:
-            signed = compute_signed_amount(row)
-            row['signed_amount'] = signed
+            row['signed_amount'] = compute_signed_amount(row)
             row.pop('linked_ofd_status', None)
             row['manual_group_id'] = manual_links.get((row['type'], row['source'], row['id']))
             row['link_excluded'] = (row['type'], row['source'], row['id']) in link_exclusions
 
-            t = row['type']
-            bucket = totals_by_type.setdefault(t, {'count': 0, 'amount': 0.0, 'matched_count': 0})
-            bucket['count'] += 1
-            bucket['amount'] += signed
-            if row.get('linked_id'):
-                bucket['matched_count'] += 1
-
-        paginated = final_rows[offset:offset + limit]
-
-        return {
-            'statusCode': 200,
-            'headers': {**CORS_HEADERS, 'Content-Type': 'application/json'},
-            'body': json.dumps({
+        if not paged:
+            totals_by_type: Dict[str, Dict[str, Any]] = {}
+            for row in final_rows:
+                bucket = totals_by_type.setdefault(row['type'], {'count': 0, 'amount': 0.0, 'matched_count': 0})
+                bucket['count'] += 1
+                bucket['amount'] += row['signed_amount']
+                if row.get('linked_id'):
+                    bucket['matched_count'] += 1
+            return json_ok({
                 'success': True,
-                'transactions': paginated,
+                'transactions': final_rows[offset:offset + limit],
                 'totals_by_type': totals_by_type,
                 'limit': limit,
                 'offset': offset
-            }),
-            'isBase64Encoded': False
-        }
+            })
+
+        # Постраничный режим реестра: фильтры применяются на сервере ко ВСЕЙ
+        # базе, итоги плиток считаются по всем отфильтрованным записям, а
+        # отдаётся порция групп (группа никогда не режется между страницами).
+        company_tz = ZoneInfo(DEFAULT_TZ)
+        cur.execute(f'SELECT timezone FROM {SCHEMA}.companies WHERE id = %(company_id)s', {'company_id': company_id})
+        tz_row = cur.fetchone()
+        if tz_row and tz_row[0]:
+            try:
+                company_tz = ZoneInfo(tz_row[0])
+            except Exception:
+                pass
+
+        all_groups = group_transactions(final_rows)
+        matched = set()
+        for g in all_groups:
+            if len(g) > 1:
+                matched.update(node_key(t) for t in g)
+        group_of = {}
+        for g in all_groups:
+            for t in g:
+                group_of[node_key(t)] = g
+
+        filtered = [
+            t for t in final_rows
+            if matches_filters(t, matched, unmatched_only, date_from, date_to, company_tz, search)
+        ]
+
+        totals_by_type = {}
+        for row in filtered:
+            bucket = totals_by_type.setdefault(row['type'], {'count': 0, 'amount': 0.0, 'matched_count': 0})
+            bucket['count'] += 1
+            bucket['amount'] += row['signed_amount']
+            if node_key(row) in matched:
+                bucket['matched_count'] += 1
+        for bucket in totals_by_type.values():
+            bucket['amount'] = round(bucket['amount'], 2)
+
+        filtered_groups = group_transactions(filtered)
+        filtered_groups.sort(key=latest_time, reverse=True)
+
+        page_rows = []
+        next_offset = offset
+        while next_offset < len(filtered_groups) and len(page_rows) < limit:
+            page_rows.extend(filtered_groups[next_offset])
+            next_offset += 1
+
+        page_keys = {node_key(t) for t in page_rows}
+        context_rows = []
+        seen = set(page_keys)
+        for t in page_rows:
+            for member in group_of.get(node_key(t), []):
+                k = node_key(member)
+                if k not in seen:
+                    seen.add(k)
+                    context_rows.append(member)
+
+        return json_ok({
+            'success': True,
+            'transactions': page_rows,
+            'context_transactions': context_rows,
+            'totals_by_type': totals_by_type,
+            'total_groups': len(filtered_groups),
+            'total_count': len(filtered),
+            'next_offset': next_offset,
+            'has_more': next_offset < len(filtered_groups)
+        })
 
     except Exception as e:
         return {
