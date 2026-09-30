@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { format } from 'date-fns';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import Icon from '@/components/ui/icon';
@@ -6,6 +7,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import EventsTable from '@/components/events/EventsTable';
 import EventsFilters from '@/components/events/EventsFilters';
+import { DateFilter } from '@/components/filters/DateRangeFilter';
 import EventDetailsDialog from '@/components/events/EventDetailsDialog';
 import { AppEvent } from '@/components/events/eventsTypes';
 import functionUrls from '../../backend/func2url.json';
@@ -16,15 +18,24 @@ const EventsPage = () => {
   const [selectedEvent, setSelectedEvent] = useState<AppEvent | null>(null);
   const [showDetails, setShowDetails] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [dateFilter, setDateFilter] = useState<DateFilter | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const hasLoadedOnce = useRef(false);
   const { toast } = useToast();
   const { currentCompany } = useAuth();
   const companyId = currentCompany?.id;
 
   const fetchEvents = async () => {
     if (!companyId) return;
-    setIsLoading(true);
+    if (hasLoadedOnce.current) setIsRefreshing(true);
+    else setIsLoading(true);
     try {
-      const response = await fetch(`${functionUrls['events-list']}?company_id=${companyId}&limit=200`);
+      const params = new URLSearchParams({ company_id: String(companyId), limit: dateFilter ? '2000' : '200' });
+      if (dateFilter) {
+        params.set('date_from', format(dateFilter.from, 'yyyy-MM-dd'));
+        params.set('date_to', format(dateFilter.to, 'yyyy-MM-dd'));
+      }
+      const response = await fetch(`${functionUrls['events-list']}?${params}`);
       const data = await response.json();
 
       if (response.ok) {
@@ -44,6 +55,8 @@ const EventsPage = () => {
       });
     } finally {
       setIsLoading(false);
+      setIsRefreshing(false);
+      hasLoadedOnce.current = true;
     }
   };
 
@@ -65,9 +78,15 @@ const EventsPage = () => {
       })
       .catch(() => {});
 
-    fetchEvents();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [companyId]);
+
+  const dateKey = dateFilter ? `${dateFilter.from.toDateString()}-${dateFilter.to.toDateString()}` : '';
+  useEffect(() => {
+    if (!companyId) return;
+    fetchEvents();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [companyId, dateKey]);
 
   const handleRowClick = (event: AppEvent) => {
     setSelectedEvent(event);
@@ -117,8 +136,8 @@ const EventsPage = () => {
             Все входящие вебхуки и операции по интеграциям компании
           </p>
         </div>
-        <Button onClick={fetchEvents} variant="outline">
-          <Icon name="RefreshCw" size={16} className="mr-2" />
+        <Button onClick={fetchEvents} variant="outline" disabled={isRefreshing}>
+          <Icon name="RefreshCw" size={16} className={`mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
           Обновить
         </Button>
       </div>
@@ -134,6 +153,8 @@ const EventsPage = () => {
           <EventsFilters
             searchQuery={searchQuery}
             setSearchQuery={setSearchQuery}
+            dateFilter={dateFilter}
+            setDateFilter={setDateFilter}
           />
 
           <EventsTable events={filteredEvents} onRowClick={handleRowClick} />

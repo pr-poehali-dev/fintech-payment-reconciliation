@@ -1,7 +1,9 @@
 import json
 import os
 import psycopg2
+from datetime import datetime, timezone
 from typing import Dict, Any
+from zoneinfo import ZoneInfo
 
 SCHEMA = 't_p83864310_fintech_payment_reco'
 
@@ -52,7 +54,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     раздела, "Транзакции" (подготовка данных перед сверкой), а не "Событий"
     (сырая лента по источникам, где видно расхождения именно ПОТОМУ ЧТО
     источники не смешаны).
-    Args: company_id (обязателен), integration_id, provider_slug, payment_provider, limit, offset (опционально).
+    Args: company_id (обязателен), integration_id, provider_slug, payment_provider, limit, offset,
+    date_from/date_to (YYYY-MM-DD, день события в часовом поясе компании) - опционально.
     payment_provider - дискриминатор конкретной платёжной системы внутри шлюза
     Екомкассы (invoice_payload.provider из report(), например "ЮKassa") - у одной
     кассы может быть подключено больше 10 видов оплат, фильтр сужает до одного.
@@ -93,6 +96,9 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     payment_provider = params.get('payment_provider')
     limit = int(params.get('limit', 100))
     offset = int(params.get('offset', 0))
+    date_from = params.get('date_from') or None
+    date_to = params.get('date_to') or None
+    has_date_filter = bool(date_from or date_to)
 
     if not company_id:
         return {
@@ -445,7 +451,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             {bank_where}
             ORDER BY bst.created_at DESC
             LIMIT %s OFFSET %s
-        ''', bank_params + [limit, offset])
+        ''', bank_params + [100000 if has_date_filter else limit, 0 if has_date_filter else offset])
 
         for row in cur.fetchall():
             (tx_id, created_at, p_slug, external_tx_id, amount, direction,
@@ -470,6 +476,32 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 'summary': summary,
                 'raw': raw_data
             })
+
+        # Фильтр по периоду - по календарному дню события в часовом поясе
+        # компании (даты в БД хранятся в UTC), оба конца включительно.
+        if has_date_filter:
+            cur.execute(
+                'SELECT timezone FROM t_p83864310_fintech_payment_reco.companies WHERE id = %s',
+                (company_id,)
+            )
+            tz_row = cur.fetchone()
+            try:
+                tz = ZoneInfo(tz_row[0]) if tz_row and tz_row[0] else ZoneInfo('Europe/Moscow')
+            except Exception:
+                tz = ZoneInfo('Europe/Moscow')
+
+            def event_day(e):
+                if not e.get('created_at'):
+                    return None
+                dt = datetime.fromisoformat(e['created_at'])
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
+                return dt.astimezone(tz).date().isoformat()
+
+            events = [
+                e for e in events
+                if (d := event_day(e)) and (not date_from or d >= date_from) and (not date_to or d <= date_to)
+            ]
 
         events.sort(key=lambda e: e['created_at'] or '', reverse=True)
         events = events[:limit]

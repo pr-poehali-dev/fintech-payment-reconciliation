@@ -1,25 +1,25 @@
 import { Input } from '@/components/ui/input';
-import Icon from '@/components/ui/icon';
+import DateRangeFilter, { DateFilter } from '@/components/filters/DateRangeFilter';
 
 interface EventsFiltersProps {
   searchQuery: string;
   setSearchQuery: (query: string) => void;
+  dateFilter: DateFilter | null;
+  setDateFilter: (value: DateFilter | null) => void;
 }
 
-const EventsFilters = ({ searchQuery, setSearchQuery }: EventsFiltersProps) => {
+const EventsFilters = ({ searchQuery, setSearchQuery, dateFilter, setDateFilter }: EventsFiltersProps) => {
   return (
-    <div className="relative">
-      <Icon
-        name="Search"
-        size={16}
-        className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground"
-      />
-      <Input
-        placeholder="Поиск по номеру события, сумме или любым данным вебхука..."
-        value={searchQuery}
-        onChange={(e) => setSearchQuery(e.target.value)}
-        className="pl-9"
-      />
+    <div className="flex items-center gap-3 overflow-x-auto p-0.5">
+      <div className="flex items-center gap-3 flex-1 min-w-0">
+        <Input
+          placeholder="Номер события, сумма или данные вебхука"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="flex-1 min-w-[180px] max-w-md w-auto"
+        />
+        <DateRangeFilter value={dateFilter} onChange={setDateFilter} />
+      </div>
     </div>
   );
 };

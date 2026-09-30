@@ -16,6 +16,13 @@
       "path": "/?company_id=2",
       "expectedStatus": 200,
       "bodyMatcher": "partial"
+    },
+    {
+      "name": "Events filtered by period",
+      "method": "GET",
+      "path": "/?company_id=2&date_from=2026-09-29&date_to=2026-09-29",
+      "expectedStatus": 200,
+      "bodyMatcher": "partial"
     }
   ]
 }
