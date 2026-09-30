@@ -3,6 +3,16 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import Icon from '@/components/ui/icon';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle
+} from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import functionUrls from '../../../backend/func2url.json';
@@ -26,6 +36,7 @@ const AdminActionTemplatesSection = () => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<ActionTemplateRow | null>(null);
   const [form, setForm] = useState<ActionTemplateForm>(EMPTY_TEMPLATE);
+  const [toDelete, setToDelete] = useState<ActionTemplateRow | null>(null);
 
   const load = async () => {
     if (!user) return;
@@ -91,6 +102,28 @@ const AdminActionTemplatesSection = () => {
     }
   };
 
+  const handleDelete = async () => {
+    if (!user || !toDelete) return;
+    const target = toDelete;
+    setToDelete(null);
+    try {
+      const res = await fetch(API, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: target.id, requester_user_id: user.user_id })
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast({ title: 'Шаблон удалён', description: target.name });
+        load();
+      } else {
+        toast({ title: 'Не удалось удалить', description: data.error, variant: 'destructive' });
+      }
+    } catch {
+      toast({ title: 'Ошибка подключения', variant: 'destructive' });
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex h-96 items-center justify-center">
@@ -137,12 +170,27 @@ const AdminActionTemplatesSection = () => {
                           <div className="truncate font-semibold">{t.name}</div>
                           <div className="font-mono text-xs text-muted-foreground">{t.code}</div>
                         </div>
-                        <Badge
-                          variant="outline"
-                          className={t.is_active ? 'border-success/30 bg-success/15 text-success' : 'text-muted-foreground'}
-                        >
-                          {t.is_active ? 'Доступен' : 'Выключен'}
-                        </Badge>
+                        <div className="flex shrink-0 items-center gap-1">
+                          <Badge
+                            variant="outline"
+                            className={t.is_active ? 'border-success/30 bg-success/15 text-success' : 'text-muted-foreground'}
+                          >
+                            {t.is_active ? 'Доступен' : 'Выключен'}
+                          </Badge>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                            disabled={t.scenarios_count > 0}
+                            title={t.scenarios_count > 0 ? 'Используется в сценариях — можно только выключить' : 'Удалить'}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setToDelete(t);
+                            }}
+                          >
+                            <Icon name="Trash2" size={16} />
+                          </Button>
+                        </div>
                       </div>
                       {t.description && <p className="line-clamp-2 text-sm text-muted-foreground">{t.description}</p>}
                       <div className="flex flex-wrap gap-2 text-xs">
@@ -158,6 +206,23 @@ const AdminActionTemplatesSection = () => {
           </div>
         );
       })}
+
+      <AlertDialog open={!!toDelete} onOpenChange={(o) => !o && setToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Удалить шаблон?</AlertDialogTitle>
+            <AlertDialogDescription>
+              «{toDelete?.name}» пропадёт из списка шаблонов во всех компаниях. Отменить удаление нельзя.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Отмена</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Удалить
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <ActionTemplateDialog
         open={dialogOpen}

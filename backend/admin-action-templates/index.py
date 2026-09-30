@@ -8,7 +8,7 @@ SCHEMA = 't_p83864310_fintech_payment_reco'
 
 CORS_HEADERS = {
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET, POST, PUT, OPTIONS',
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type',
     'Access-Control-Max-Age': '86400'
 }
@@ -61,13 +61,14 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     GET ?requester_user_id= - все шаблоны со счётчиком сценариев (админ платформы)
     POST {requester_user_id, code, action_type, name, description, operation, paid, is_active, sort_order} - создать
     PUT {requester_user_id, id, ...те же поля, кроме code} - изменить
+    DELETE {requester_user_id, id} - удалить (только если не используется в сценариях)
     '''
     method = event.get('httpMethod', 'GET')
     if method == 'OPTIONS':
         return {'statusCode': 200, 'headers': CORS_HEADERS, 'body': '', 'isBase64Encoded': False}
 
     params = event.get('queryStringParameters') or {}
-    body = json.loads(event.get('body') or '{}') if method in ('POST', 'PUT') else {}
+    body = json.loads(event.get('body') or '{}') if method in ('POST', 'PUT', 'DELETE') else {}
 
     conn = psycopg2.connect(os.environ['DATABASE_URL'])
     cur = conn.cursor()
@@ -136,6 +137,23 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             ''', (body['action_type'], body['name'].strip(), (body.get('description') or '').strip() or None,
                   body['operation'], bool(body.get('paid', True)), bool(body.get('is_active', True)),
                   int(body.get('sort_order') or 100), body['id']))
+            conn.commit()
+            return respond(200, {'success': True})
+
+        if method == 'DELETE':
+            if not body.get('id'):
+                return respond(400, {'error': 'id required'})
+            cur.execute(f'''
+                SELECT t.name, (SELECT COUNT(*) FROM {SCHEMA}.automation_scenarios s
+                                WHERE s.action_template = t.code AND s.removed_at IS NULL)
+                FROM {SCHEMA}.automation_action_templates t WHERE t.id = %s
+            ''', (body['id'],))
+            current = cur.fetchone()
+            if not current:
+                return respond(404, {'error': 'Шаблон не найден'})
+            if current[1]:
+                return respond(400, {'error': f'Шаблон используется в сценариях ({current[1]}) - удалить нельзя, можно выключить'})
+            cur.execute(f'DELETE FROM {SCHEMA}.automation_action_templates WHERE id = %s', (body['id'],))
             conn.commit()
             return respond(200, {'success': True})
 
