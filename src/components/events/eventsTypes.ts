@@ -26,3 +26,12 @@ export interface AppEvent {
   raw: any;
   webhook_history?: EventWebhookHistoryItem[];
 }
+export type EventSource = 'acquiring' | 'kassa' | 'ofd' | 'bank' | 'crm';
+
+export const EVENT_SOURCE_OPTIONS: { value: EventSource; label: string; icon: string }[] = [
+  { value: 'acquiring', label: 'Эквайринг', icon: 'CreditCard' },
+  { value: 'kassa', label: 'Касса', icon: 'Receipt' },
+  { value: 'ofd', label: 'ОФД', icon: 'FileCheck' },
+  { value: 'bank', label: 'Банк', icon: 'Landmark' },
+  { value: 'crm', label: 'CRM', icon: 'Users' }
+];

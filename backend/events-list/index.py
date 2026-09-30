@@ -39,6 +39,20 @@ TRANSACTION_TYPE_LABELS = {
 }
 
 
+def event_source_category(e: Dict[str, Any]) -> str:
+    '''Источник события для фильтра в интерфейсе: acquiring/kassa/ofd/bank/crm.'''
+    t = e.get('transaction_type')
+    if t == 'payment':
+        return 'acquiring'
+    if t == 'money':
+        return 'bank'
+    if t == 'crm':
+        return 'crm'
+    if e.get('provider_slug') == 'ofdru':
+        return 'ofd'
+    return 'kassa'
+
+
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     '''
     Единая лента событий компании: сырые данные по КАЖДОМУ источнику ОТДЕЛЬНО,
@@ -55,7 +69,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     (сырая лента по источникам, где видно расхождения именно ПОТОМУ ЧТО
     источники не смешаны).
     Args: company_id (обязателен), integration_id, provider_slug, payment_provider, limit, offset,
-    date_from/date_to (YYYY-MM-DD, день события в часовом поясе компании) - опционально.
+    date_from/date_to (YYYY-MM-DD, день события в часовом поясе компании),
+    sources (через запятую: acquiring,kassa,ofd,bank,crm) - опционально.
     payment_provider - дискриминатор конкретной платёжной системы внутри шлюза
     Екомкассы (invoice_payload.provider из report(), например "ЮKassa") - у одной
     кассы может быть подключено больше 10 видов оплат, фильтр сужает до одного.
@@ -99,6 +114,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     date_from = params.get('date_from') or None
     date_to = params.get('date_to') or None
     has_date_filter = bool(date_from or date_to)
+    sources_filter = {x for x in (params.get('sources') or '').split(',') if x}
+    needs_full_scan = has_date_filter or bool(sources_filter)
 
     if not company_id:
         return {
@@ -451,7 +468,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             {bank_where}
             ORDER BY bst.created_at DESC
             LIMIT %s OFFSET %s
-        ''', bank_params + [100000 if has_date_filter else limit, 0 if has_date_filter else offset])
+        ''', bank_params + [100000 if needs_full_scan else limit, 0 if needs_full_scan else offset])
 
         for row in cur.fetchall():
             (tx_id, created_at, p_slug, external_tx_id, amount, direction,
@@ -502,6 +519,9 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 e for e in events
                 if (d := event_day(e)) and (not date_from or d >= date_from) and (not date_to or d <= date_to)
             ]
+
+        if sources_filter:
+            events = [e for e in events if event_source_category(e) in sources_filter]
 
         events.sort(key=lambda e: e['created_at'] or '', reverse=True)
         events = events[:limit]

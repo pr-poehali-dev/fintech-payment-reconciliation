@@ -9,7 +9,7 @@ import EventsTable from '@/components/events/EventsTable';
 import EventsFilters from '@/components/events/EventsFilters';
 import { DateFilter } from '@/components/filters/DateRangeFilter';
 import EventDetailsDialog from '@/components/events/EventDetailsDialog';
-import { AppEvent } from '@/components/events/eventsTypes';
+import { AppEvent, EventSource } from '@/components/events/eventsTypes';
 import functionUrls from '../../backend/func2url.json';
 
 const EventsPage = () => {
@@ -19,6 +19,7 @@ const EventsPage = () => {
   const [showDetails, setShowDetails] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [dateFilter, setDateFilter] = useState<DateFilter | null>(null);
+  const [sourceFilter, setSourceFilter] = useState<EventSource[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const hasLoadedOnce = useRef(false);
   const { toast } = useToast();
@@ -30,7 +31,8 @@ const EventsPage = () => {
     if (hasLoadedOnce.current) setIsRefreshing(true);
     else setIsLoading(true);
     try {
-      const params = new URLSearchParams({ company_id: String(companyId), limit: dateFilter ? '2000' : '200' });
+      const params = new URLSearchParams({ company_id: String(companyId), limit: dateFilter || sourceFilter.length ? '2000' : '200' });
+      if (sourceFilter.length) params.set('sources', sourceFilter.join(','));
       if (dateFilter) {
         params.set('date_from', format(dateFilter.from, 'yyyy-MM-dd'));
         params.set('date_to', format(dateFilter.to, 'yyyy-MM-dd'));
@@ -86,7 +88,7 @@ const EventsPage = () => {
     if (!companyId) return;
     fetchEvents();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [companyId, dateKey]);
+  }, [companyId, dateKey, sourceFilter.join(',')]);
 
   const handleRowClick = (event: AppEvent) => {
     setSelectedEvent(event);
@@ -155,6 +157,8 @@ const EventsPage = () => {
             setSearchQuery={setSearchQuery}
             dateFilter={dateFilter}
             setDateFilter={setDateFilter}
+            sourceFilter={sourceFilter}
+            setSourceFilter={setSourceFilter}
           />
 
           <EventsTable events={filteredEvents} onRowClick={handleRowClick} />
