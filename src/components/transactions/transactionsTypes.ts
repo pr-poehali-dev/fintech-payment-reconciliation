@@ -12,6 +12,7 @@ export interface Transaction {
   source: string;
   id: number;
   occurred_at: string | null;
+  settlement_date?: string | null;
   amount: number | null;
   signed_amount: number | null;
   status: string | null;

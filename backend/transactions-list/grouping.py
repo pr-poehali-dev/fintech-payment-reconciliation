@@ -107,7 +107,13 @@ def matches_filters(
         return False
 
     if date_from or date_to:
-        day = t.get('filter_date') or local_date(t.get('occurred_at'), tz)
+        # Зачисление эквайринга относится к дню ПРОДАЖ (settlement_date из
+        # назначения "за ДД.ММ.ГГГГ"), а не к дню поступления - как в "Сверке".
+        # Даты выписки банка календарные, без времени - сравниваем как есть.
+        if t.get('type') == 'money':
+            day = t.get('settlement_date') or (t.get('occurred_at') or '')[:10] or None
+        else:
+            day = local_date(t.get('occurred_at'), tz)
         if not day:
             return False
         if date_from and day < date_from:

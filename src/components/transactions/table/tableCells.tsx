@@ -26,10 +26,27 @@ export const TypeBadge = ({ type }: { type: string }) => {
   );
 };
 
+// Зачисление эквайринга приходит на счёт позже дня продаж - показываем, за
+// какой день продаж деньги, если эти даты различаются.
+const SettlementNote = ({ tx }: { tx: Transaction }) => {
+  if (tx.type !== 'money' || !tx.settlement_date) return null;
+  if (tx.occurred_at && tx.occurred_at.slice(0, 10) === tx.settlement_date) return null;
+  const [y, m, d] = tx.settlement_date.split('-');
+  return (
+    <span className="mt-1 inline-flex items-center gap-1 rounded-md bg-primary/15 px-2 py-0.5 text-xs font-semibold text-primary">
+      <Icon name="CalendarCheck" size={12} />
+      за продажи {d}.{m}.{y}
+    </span>
+  );
+};
+
 // Дата, описание и интеграция - одинаковы для главной и вложенной строки.
 export const InfoCells = ({ tx, dateText }: { tx: Transaction; dateText: string }) => (
   <>
-    <TableCell className="text-sm text-muted-foreground whitespace-nowrap">{dateText}</TableCell>
+    <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+      <div>{dateText}</div>
+      <SettlementNote tx={tx} />
+    </TableCell>
     <TableCell>
       <div className="text-sm font-medium">{tx.title}</div>
       {tx.subtitle && <div className="text-xs text-muted-foreground">{tx.subtitle}</div>}

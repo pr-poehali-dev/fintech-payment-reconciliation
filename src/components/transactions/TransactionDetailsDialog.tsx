@@ -92,6 +92,14 @@ const TransactionDetailsDialog = ({ transaction, relatedItems, open, onOpenChang
             <div>
               <div className="text-sm text-muted-foreground mb-1">Дата и время</div>
               <div className="font-medium">{formatDateTimeTz(transaction.occurred_at, timezone, true)}</div>
+              {transaction.type === 'money' &&
+                transaction.settlement_date &&
+                transaction.occurred_at?.slice(0, 10) !== transaction.settlement_date && (
+                  <div className="mt-1 inline-flex items-center gap-1 rounded-md bg-primary/15 px-2 py-0.5 text-xs font-semibold text-primary">
+                    <Icon name="CalendarCheck" size={12} />
+                    за продажи {transaction.settlement_date.split('-').reverse().join('.')}
+                  </div>
+                )}
             </div>
           </div>
 

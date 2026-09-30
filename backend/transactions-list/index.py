@@ -243,6 +243,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     p.slug AS source,
                     wp.id AS id,
                     COALESCE(rid_ekr.doc_datetime, km.doc_datetime, wp.created_at) AS occurred_at,
+                    NULL::date AS settlement_date,
                     wp.amount AS amount,
                     wp.status AS status,
                     ('Платёж #' || wp.payment_id) AS title,
@@ -292,6 +293,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     'ofd' AS source,
                     ofd.id AS id,
                     ofd.doc_datetime AS occurred_at,
+                    NULL::date AS settlement_date,
                     ofd.total_sum AS amount,
                     ofd.operation_type AS status,
                     ('Чек #' || COALESCE(ofd.doc_number, ofd.receipt_id)) AS title,
@@ -330,6 +332,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     'ecomkassa' AS source,
                     ekr.id AS id,
                     ekr.doc_datetime AS occurred_at,
+                    NULL::date AS settlement_date,
                     ekr.total_sum AS amount,
                     ekr.status AS status,
                     ('Чек #' || COALESCE(ekr.doc_number, ekr.order_id, ekr.id::text)) AS title,
@@ -369,6 +372,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     'ecomkassa' AS source,
                     ekr.id AS id,
                     ekr.doc_datetime AS occurred_at,
+                    NULL::date AS settlement_date,
                     ekr.total_sum AS amount,
                     ekr.status AS status,
                     ('Заказ #' || COALESCE(ekr.doc_number, ekr.order_id, ekr.id::text)) AS title,
@@ -408,6 +412,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     bst.provider_slug AS source,
                     bst.id AS id,
                     bst.operation_date AS occurred_at,
+                    bst.settlement_date AS settlement_date,
                     bst.amount AS amount,
                     bst.direction AS status,
                     COALESCE(bst.counterparty_name, 'Операция по счёту') AS title,
@@ -624,20 +629,6 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 company_tz = ZoneInfo(tz_row[0])
             except Exception:
                 pass
-
-        # Зачисление эквайринга относится к дню ПРОДАЖ ("за ДД.ММ.ГГГГ" в
-        # назначении -> settlement_date), а не к дню поступления денег - как в
-        # разделе "Сверка". Даты выписки банка - календарные (без времени),
-        # поэтому сравниваются как есть, без перевода в часовой пояс.
-        cur.execute(f'''
-            SELECT id, COALESCE(settlement_date, operation_date::date)
-            FROM {SCHEMA}.bank_statement_transactions
-            WHERE company_id = %(company_id)s AND removed_at IS NULL
-        ''', {'company_id': company_id})
-        bank_days = {i: d.isoformat() for i, d in cur.fetchall() if d}
-        for row in final_rows:
-            if row['type'] == 'money' and row['id'] in bank_days:
-                row['filter_date'] = bank_days[row['id']]
 
         all_groups = group_transactions(final_rows)
         matched = set()
