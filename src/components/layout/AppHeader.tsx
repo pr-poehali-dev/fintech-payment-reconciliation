@@ -38,7 +38,7 @@ const AppHeader = ({ unreadCount, onShowNotifications, onOpenSubscription }: App
               >
                 {expired
                   ? 'срок закончился'
-                  : `до ${formatShortDate(endDate)} · осталось ${left} дн.`}
+                  : `до ${formatShortDate(endDate)}`}
               </span>
             )}
           </button>
