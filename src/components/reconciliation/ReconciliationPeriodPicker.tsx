@@ -54,13 +54,31 @@ const ReconciliationPeriodPicker = ({ dateFrom, dateTo, onChange }: Reconciliati
   const [open, setOpen] = useState(false);
   const maxDate = yesterday();
 
-  const range: DateRange = { from: dateFrom, to: dateTo };
+  // Черновик выбора внутри открытого календаря. Раньше в календарь всегда
+  // передавался полный диапазон (to подставлялся = from сразу после первого
+  // клика), поэтому календарь не видел "начатый" выбор и повторный клик на
+  // тот же день не давал период "с X по X". Теперь при открытии черновик
+  // пустой: 1-й клик - начало, 2-й клик (в т.ч. на тот же день) - конец,
+  // и только тогда период применяется и календарь закрывается.
+  const [draft, setDraft] = useState<DateRange | undefined>(undefined);
+
+  const handleOpenChange = (next: boolean) => {
+    setOpen(next);
+    if (next) setDraft(undefined);
+  };
 
   const handleSelect = (selected: DateRange | undefined) => {
-    if (!selected?.from) return;
-    const from = selected.from;
-    const to = selected.to && selected.to <= maxDate ? selected.to : (selected.from <= maxDate ? selected.from : maxDate);
-    onChange(from > maxDate ? maxDate : from, to);
+    if (!selected?.from) {
+      setDraft(undefined);
+      return;
+    }
+    setDraft({ from: selected.from, to: selected.to });
+    if (selected.to) {
+      const from = selected.from > maxDate ? maxDate : selected.from;
+      const to = selected.to > maxDate ? maxDate : selected.to;
+      onChange(from, to);
+      setOpen(false);
+    }
   };
 
   return (
@@ -79,7 +97,7 @@ const ReconciliationPeriodPicker = ({ dateFrom, dateTo, onChange }: Reconciliati
         </Button>
       ))}
 
-      <Popover open={open} onOpenChange={setOpen}>
+      <Popover open={open} onOpenChange={handleOpenChange}>
         <PopoverTrigger asChild>
           <Button variant="outline" size="sm" className="gap-2">
             <Icon name="Calendar" size={14} />
@@ -89,7 +107,7 @@ const ReconciliationPeriodPicker = ({ dateFrom, dateTo, onChange }: Reconciliati
         <PopoverContent className="w-auto p-0" align="start">
           <Calendar
             mode="range"
-            selected={range}
+            selected={draft}
             onSelect={handleSelect}
             disabled={{ after: maxDate }}
             numberOfMonths={2}
