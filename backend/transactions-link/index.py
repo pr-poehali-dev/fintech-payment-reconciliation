@@ -55,10 +55,9 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     "Связать", появляется когда выбрано 2+ транзакций галочками.
     POST: создаёт новую группу связи (manual_transaction_links) - каждая
     переданная транзакция (type/source/id) становится членом одной группы
-    с новым link_group_id (UUID). Если транзакция уже состоит в другой
-    ручной группе - её старая привязка молча заменяется новой (UNIQUE на
-    company_id+tx_type+tx_source+tx_id, ON CONFLICT DO UPDATE), т.к. у
-    одной транзакции может быть только одна ручная группа одновременно.
+    с link_group_id. Если кто-то из выбранных уже состоит в ручной группе -
+    все такие группы сливаются в одну вместе с новыми записями (связь
+    только добавляется, существующие члены групп не теряются).
     DELETE: разрывает ручную связь - удаляет ВСЮ группу (все транзакции с
     тем же link_group_id), которой принадлежит указанная транзакция. Это
     осознанное решение - "разорвать связь" для пользователя означает разбить
@@ -99,7 +98,28 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             if len(items) < 2:
                 return response(400, {'error': 'Нужно выбрать минимум 2 транзакции для связи'})
 
-            group_id = str(uuid.uuid4())
+            # Если кто-то из выбранных уже состоит в ручных группах - НЕ
+            # перезаписываем его привязку (иначе он выпадает из старой группы
+            # и "отрывает" остальных её членов), а СЛИВАЕМ все эти группы
+            # и новые записи в одну.
+            existing_groups: List[str] = []
+            for item in items:
+                cur.execute(f'''
+                    SELECT link_group_id FROM {SCHEMA}.manual_transaction_links
+                    WHERE company_id = %s AND tx_type = %s AND tx_source = %s AND tx_id = %s
+                ''', (company_id, item['type'], item['source'], item['id']))
+                row = cur.fetchone()
+                if row and row[0] not in existing_groups:
+                    existing_groups.append(row[0])
+
+            group_id = existing_groups[0] if existing_groups else str(uuid.uuid4())
+            if len(existing_groups) > 1:
+                cur.execute(f'''
+                    UPDATE {SCHEMA}.manual_transaction_links
+                    SET link_group_id = %s
+                    WHERE company_id = %s AND link_group_id = ANY(%s)
+                ''', (group_id, company_id, existing_groups[1:]))
+
             for item in items:
                 cur.execute(f'''
                     INSERT INTO {SCHEMA}.manual_transaction_links
