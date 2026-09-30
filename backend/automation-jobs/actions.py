@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 from ecomkassa_client import cash_register, create_courier_order
@@ -63,6 +63,33 @@ def document_operation(template: Dict[str, Any]) -> str:
     return operation
 
 
+def correction_info(template: Dict[str, Any], data: Dict[str, Any]) -> Tuple[Optional[Dict[str, Any]], str]:
+    '''
+    correction_info для чека коррекции:
+    v4 - type, base_date (дата документа основания), base_number (обязателен);
+    v5 - type, base_date (дата корректируемого расчёта), base_number только «по предписанию».
+    '''
+    if template.get('receipt_type') != 'correction':
+        return None, ''
+    if template.get('correction_date_source') == 'fixed' and template.get('correction_base_date'):
+        base = template['correction_base_date']
+        base_date = base if isinstance(base, date) else datetime.strptime(str(base)[:10], '%Y-%m-%d').date()
+    else:
+        paid_at = (data.get('payment') or {}).get('created_at')
+        if not paid_at:
+            return None, 'Нет даты платежа для основания коррекции'
+        base_date = datetime.fromisoformat(paid_at).date()
+    info = {'type': template.get('correction_type') or 'self', 'base_date': base_date.strftime('%d.%m.%Y')}
+    number = template.get('correction_base_number')
+    v5 = template.get('protocol_version') == 'v5'
+    if v5 and info['type'] == 'self':
+        return info, ''
+    if not number:
+        return None, 'В шаблоне не указан номер документа основания коррекции'
+    info['base_number'] = number
+    return info, ''
+
+
 def create_order(cur, job: Dict[str, Any], scenario: Dict[str, Any], data: Dict[str, Any]) -> Tuple[str, Dict[str, Any], str]:
     '''
     Создаёт заказ в Екомкассе (POST /api/mobile/v1/courier/:storeId/create/:operation).
@@ -92,6 +119,9 @@ def create_order(cur, job: Dict[str, Any], scenario: Dict[str, Any], data: Dict[
     payment_type = template.get('payment_type')
     paid = payment_type is not None
     operation = document_operation(template)
+    correction, err = correction_info(template, data)
+    if err:
+        return 'error', {}, err
     external_id = f"auto-{job['id']}"
     body = {
         'external_id': external_id,
@@ -104,6 +134,8 @@ def create_order(cur, job: Dict[str, Any], scenario: Dict[str, Any], data: Dict[
             'total': total
         }
     }
+    if correction:
+        body['receipt']['correction_info'] = correction
     result, err = create_courier_order(kassa, operation, body)
     if not result:
         return 'error', {'request': body}, err

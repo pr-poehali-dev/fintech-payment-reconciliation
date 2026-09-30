@@ -1,6 +1,7 @@
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import ReceiptFieldSelect from './ReceiptFieldSelect';
+import CorrectionFieldsBlock from './CorrectionFieldsBlock';
 import {
   ActionTemplateForm,
   CashProvider,
@@ -46,6 +47,8 @@ const ReceiptFieldsBlock = ({ form, providers, onChange }: ReceiptFieldsBlockPro
       {refundCorrectionV4 && (
         <p className="text-xs text-destructive">Коррекция возврата прихода есть только в протоколе v5</p>
       )}
+
+      {form.receipt_type === 'correction' && <CorrectionFieldsBlock form={form} onChange={onChange} />}
 
       <ReceiptFieldSelect label="Признак расчёта" value={form.payment_method} options={PAYMENT_METHOD_OPTIONS} onChange={set('payment_method')} />
 

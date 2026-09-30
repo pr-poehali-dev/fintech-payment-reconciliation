@@ -17,6 +17,10 @@ export interface ActionTemplateRow {
   measure: string;
   payment_type: number | null;
   default_email: string | null;
+  correction_type: string | null;
+  correction_date_source: string | null;
+  correction_base_date: string | null;
+  correction_base_number: string | null;
   scenarios_count: number;
 }
 
@@ -36,6 +40,10 @@ export interface ActionTemplateForm {
   measure: string;
   payment_type: string;
   default_email: string;
+  correction_type: string;
+  correction_date_source: string;
+  correction_base_date: string;
+  correction_base_number: string;
 }
 
 export interface CashProvider {
@@ -122,8 +130,33 @@ export const EMPTY_TEMPLATE: ActionTemplateForm = {
   payment_object: 'commodity',
   measure: 'piece',
   payment_type: '1',
-  default_email: ''
+  default_email: '',
+  correction_type: 'self',
+  correction_date_source: 'payment',
+  correction_base_date: '',
+  correction_base_number: ''
 };
+
+// correction_info.type, тег 1173.
+export const CORRECTION_TYPE_OPTIONS: Option[] = [
+  { value: 'self', label: 'Самостоятельно', hint: 'self' },
+  { value: 'instruction', label: 'По предписанию ФНС', hint: 'instruction' }
+];
+
+export const DATE_SOURCE_OPTIONS: Option[] = [
+  { value: 'payment', label: 'Дата платежа' },
+  { value: 'fixed', label: 'Фиксированная дата' }
+];
+
+// v4: номер документа основания обязателен всегда; v5: только при коррекции по предписанию.
+export const needsBaseNumber = (f: Pick<ActionTemplateForm, 'protocol_version' | 'correction_type'>) =>
+  f.protocol_version === 'v4' || f.correction_type === 'instruction';
+
+export const correctionValid = (f: ActionTemplateForm) =>
+  f.receipt_type !== 'correction' ||
+  ((f.correction_date_source !== 'fixed' || !!f.correction_base_date) &&
+    (!needsBaseNumber(f) || !!f.correction_base_number.trim()) &&
+    f.correction_base_number.trim().length <= 32);
 
 export const labelOf = (options: Option[], value: string | null | undefined) =>
   options.find((o) => o.value === value)?.label || value || '—';
@@ -143,7 +176,11 @@ export const templateToForm = (t: ActionTemplateRow): ActionTemplateForm => ({
   payment_object: t.payment_object,
   measure: t.measure,
   payment_type: t.payment_type === null ? NO_PAYMENT : String(t.payment_type),
-  default_email: t.default_email || ''
+  default_email: t.default_email || '',
+  correction_type: t.correction_type || 'self',
+  correction_date_source: t.correction_date_source || 'payment',
+  correction_base_date: t.correction_base_date ? t.correction_base_date.slice(0, 10) : '',
+  correction_base_number: t.correction_base_number || ''
 });
 
 export const formToPayload = (f: ActionTemplateForm) => ({

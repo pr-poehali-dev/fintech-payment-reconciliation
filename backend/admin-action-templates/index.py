@@ -5,7 +5,7 @@ import psycopg2
 from typing import Dict, Any, Optional
 
 from dictionaries import (PROTOCOLS, RECEIPT_TYPES, OPERATIONS, PAYMENT_METHODS,
-                          PAYMENT_OBJECTS_V5, MEASURES, PAYMENT_TYPES)
+                          PAYMENT_OBJECTS_V5, MEASURES, PAYMENT_TYPES, CORRECTION_TYPES, DATE_SOURCES)
 
 SCHEMA = 't_p83864310_fintech_payment_reco'
 
@@ -21,7 +21,8 @@ EMAIL_RE = re.compile(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
 
 COLUMNS = ['id', 'code', 'action_type', 'name', 'description', 'operation', 'paid', 'is_active', 'sort_order',
            'provider_id', 'protocol_version', 'receipt_type', 'payment_method', 'payment_object', 'measure',
-           'payment_type', 'default_email']
+           'payment_type', 'default_email', 'correction_type', 'correction_date_source', 'correction_base_date',
+           'correction_base_number']
 EDITABLE = COLUMNS[2:]
 
 
@@ -85,6 +86,10 @@ def normalize(cur, body: Dict[str, Any], creating: bool):
     if body['receipt_type'] == 'correction' and body['operation'] == 'sell_refund' and body['protocol_version'] == 'v4':
         return None, 'Коррекция возврата прихода есть только в протоколе v5'
 
+    correction, error = normalize_correction(body)
+    if error:
+        return None, error
+
     payment_type = body.get('payment_type')
     if payment_type in ('', None):
         payment_type = None
@@ -124,7 +129,44 @@ def normalize(cur, body: Dict[str, Any], creating: bool):
         'measure': body['measure'],
         'payment_type': payment_type,
         'default_email': email,
+        **correction,
     }, None
+
+
+def normalize_correction(body: Dict[str, Any]):
+    '''
+    Основание коррекции (correction_info) по протоколу:
+    v4 - type, base_date (дата документа основания), base_number (номер документа) - всё обязательно;
+    v5 - type, base_date (дата корректируемого расчёта) обязательны, base_number - только
+         при коррекции по предписанию ФНС, до 32 символов.
+    Дата берётся из платежа (payment) или задаётся в шаблоне (fixed).
+    '''
+    empty = {'correction_type': None, 'correction_date_source': None,
+             'correction_base_date': None, 'correction_base_number': None}
+    if body.get('receipt_type') != 'correction':
+        return empty, None
+    ctype = body.get('correction_type')
+    if ctype not in CORRECTION_TYPES:
+        return None, 'Укажите тип коррекции: самостоятельно или по предписанию'
+    source = body.get('correction_date_source')
+    if source not in DATE_SOURCES:
+        return None, 'Укажите, откуда брать дату основания коррекции'
+    base_date = None
+    if source == 'fixed':
+        raw = (body.get('correction_base_date') or '').strip()
+        if not re.fullmatch(r'\d{4}-\d{2}-\d{2}', raw):
+            return None, 'Укажите дату основания коррекции'
+        base_date = raw
+    number = (body.get('correction_base_number') or '').strip() or None
+    v5 = body.get('protocol_version') == 'v5'
+    if v5 and ctype == 'self':
+        number = None
+    elif not number:
+        return None, 'Укажите номер документа основания коррекции'
+    if number and len(number) > 32:
+        return None, 'Номер документа основания - не больше 32 символов'
+    return {'correction_type': ctype, 'correction_date_source': source,
+            'correction_base_date': base_date, 'correction_base_number': number}, None
 
 
 def usage(cur, template_id) -> Optional[tuple]:

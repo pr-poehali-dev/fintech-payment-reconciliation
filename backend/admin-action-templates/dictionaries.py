@@ -31,3 +31,8 @@ MEASURES = {
 
 # Вид оплаты payments[].type: 0 - наличные, 1 - безналичный, 2 - предоплата (зачёт аванса).
 PAYMENT_TYPES = {0, 1, 2}
+
+# correction_info.type (тег 1173): самостоятельно / по предписанию ФНС.
+CORRECTION_TYPES = {'self', 'instruction'}
+# Откуда брать correction_info.base_date: дата платежа или фиксированная дата из шаблона.
+DATE_SOURCES = {'payment', 'fixed'}
