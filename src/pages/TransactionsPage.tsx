@@ -13,6 +13,7 @@ import TransactionsRegistryCard from '@/components/transactions/TransactionsRegi
 import { Transaction } from '@/components/transactions/transactionsTypes';
 import { groupTransactions, nodeKey } from '@/lib/transactionGrouping';
 import { useTransactionsFeed } from '@/hooks/useTransactionsFeed';
+import { TypeFilter } from '@/lib/transactionTypeFilter';
 import functionUrls from '../../backend/func2url.json';
 
 interface IntegrationRow {
@@ -24,14 +25,16 @@ interface IntegrationRow {
 
 interface TransactionsPageProps {
   initialDateFilter?: DateFilter | null;
+  initialTypeFilter?: TypeFilter | null;
 }
 
-const TransactionsPage = ({ initialDateFilter = null }: TransactionsPageProps) => {
+const TransactionsPage = ({ initialDateFilter = null, initialTypeFilter = null }: TransactionsPageProps) => {
   const [selectedTx, setSelectedTx] = useState<Transaction | null>(null);
   const [showDetails, setShowDetails] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [showUnmatchedOnly, setShowUnmatchedOnly] = useState(false);
   const [dateFilter, setDateFilter] = useState<DateFilter | null>(initialDateFilter);
+  const [typeFilter, setTypeFilter] = useState<TypeFilter | null>(initialTypeFilter);
   const [ecomkassaIntegrations, setEcomkassaIntegrations] = useState<{ id: number; name: string }[]>([]);
   const [ofdIntegrations, setOfdIntegrations] = useState<{ id: number; name: string }[]>([]);
   const [bankIntegrations, setBankIntegrations] = useState<{ id: number; name: string }[]>([]);
@@ -47,7 +50,7 @@ const TransactionsPage = ({ initialDateFilter = null }: TransactionsPageProps) =
 
   const feed = useTransactionsFeed(
     companyId,
-    { dateFilter, searchQuery, showUnmatchedOnly },
+    { dateFilter, searchQuery, showUnmatchedOnly, types: typeFilter?.types ?? null },
     (message) => toast({ title: 'Ошибка загрузки', description: message, variant: 'destructive' })
   );
   const { transactions, contextTransactions, totalsByType, isLoading, isRefreshing } = feed;
@@ -291,6 +294,8 @@ const TransactionsPage = ({ initialDateFilter = null }: TransactionsPageProps) =
         setSearchQuery={setSearchQuery}
         dateFilter={dateFilter}
         setDateFilter={setDateFilter}
+        typeFilter={typeFilter}
+        onClearTypeFilter={() => setTypeFilter(null)}
         showUnmatchedOnly={showUnmatchedOnly}
         setShowUnmatchedOnly={setShowUnmatchedOnly}
         selectedTxByKey={selectedTxByKey}

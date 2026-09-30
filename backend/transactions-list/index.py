@@ -184,7 +184,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     receipt_order/money/receipt-алиас на все 3 вида чеков, опционально),
     limit, offset (опционально).
     Постраничный режим реестра (paged=1): date_from/date_to (YYYY-MM-DD, по
-    часовому поясу компании), search, unmatched_only=1; offset/limit - в
+    часовому поясу компании), search, unmatched_only=1, types (через запятую,
+    например receipt_kassa,receipt_ofd - только эти виды записей); offset/limit - в
     группах/строках, totals_by_type - по ВСЕМ отфильтрованным записям,
     context_transactions - остальные участники групп страницы (для окна
     деталей), has_more/next_offset - для автоподгрузки.
@@ -220,6 +221,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     date_to = params.get('date_to') or None
     search = params.get('search') or ''
     unmatched_only = params.get('unmatched_only') == '1'
+    types_filter = {t for t in (params.get('types') or '').split(',') if t}
 
     if not company_id:
         return {
@@ -642,7 +644,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
         filtered = [
             t for t in final_rows
-            if matches_filters(t, matched, unmatched_only, date_from, date_to, company_tz, search)
+            if (not types_filter or t['type'] in types_filter)
+            and matches_filters(t, matched, unmatched_only, date_from, date_to, company_tz, search)
         ]
 
         totals_by_type = {}

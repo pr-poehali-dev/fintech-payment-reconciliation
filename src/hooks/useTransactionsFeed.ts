@@ -10,6 +10,7 @@ interface FeedFilters {
   dateFilter: DateFilter | null;
   searchQuery: string;
   showUnmatchedOnly: boolean;
+  types?: string[] | null;
 }
 
 interface FeedResponse {
@@ -59,7 +60,7 @@ export const useTransactionsFeed = (
   onErrorRef.current = onError;
 
   const buildParams = (offset: number, limit: number) => {
-    const { dateFilter, searchQuery, showUnmatchedOnly } = filtersRef.current;
+    const { dateFilter, searchQuery, showUnmatchedOnly, types } = filtersRef.current;
     const params = new URLSearchParams({
       company_id: String(companyId),
       paged: '1',
@@ -72,6 +73,7 @@ export const useTransactionsFeed = (
     }
     if (searchQuery.trim()) params.set('search', searchQuery.trim());
     if (showUnmatchedOnly) params.set('unmatched_only', '1');
+    if (types?.length) params.set('types', types.join(','));
     return params;
   };
 
@@ -137,7 +139,8 @@ export const useTransactionsFeed = (
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [companyId, hasMore]);
 
-  const { dateFilter, searchQuery, showUnmatchedOnly } = filters;
+  const { dateFilter, searchQuery, showUnmatchedOnly, types } = filters;
+  const typesKey = types?.join(',') ?? '';
   const dateKey = dateFilter ? `${dateFilter.from.toDateString()}-${dateFilter.to.toDateString()}` : '';
 
   useEffect(() => {
@@ -145,7 +148,7 @@ export const useTransactionsFeed = (
     const delay = hasLoadedOnceRef.current ? 350 : 0;
     const timer = setTimeout(() => reload(false), delay);
     return () => clearTimeout(timer);
-  }, [companyId, dateKey, searchQuery, showUnmatchedOnly, reload]);
+  }, [companyId, dateKey, searchQuery, showUnmatchedOnly, typesKey, reload]);
 
   return {
     transactions,

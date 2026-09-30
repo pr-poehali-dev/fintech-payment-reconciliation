@@ -1,5 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import Icon from '@/components/ui/icon';
+import { TYPE_FILTERS, TypeFilterKey } from '@/lib/transactionTypeFilter';
 
 interface ReconciliationTotals {
   payments: { amount: number; count: number };
@@ -9,7 +10,7 @@ interface ReconciliationTotals {
 
 interface ReconciliationTilesProps {
   totals: ReconciliationTotals;
-  onTileClick?: () => void;
+  onTileClick?: (typeKey: TypeFilterKey) => void;
 }
 
 const formatMoney = (value: number) =>
@@ -36,20 +37,21 @@ const ReconciliationTiles = ({ totals, onTileClick }: ReconciliationTilesProps) 
   const kassaCountMatchesOfd = ofdCount !== undefined && ofdCount === totals.receipts.count;
   const bankVsReceipts = bankVsReceiptsLabel(totals.bank.amount, totals.receipts.amount);
 
-  const clickable = onTileClick
-    ? {
-        role: 'button' as const,
-        tabIndex: 0,
-        title: 'Открыть транзакции за этот период',
-        onClick: onTileClick,
-        onKeyDown: (e: React.KeyboardEvent) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            onTileClick();
+  const clickable = (typeKey: TypeFilterKey) =>
+    onTileClick
+      ? {
+          role: 'button' as const,
+          tabIndex: 0,
+          title: `Открыть транзакции за период: ${TYPE_FILTERS[typeKey].label.toLowerCase()}`,
+          onClick: () => onTileClick(typeKey),
+          onKeyDown: (e: React.KeyboardEvent) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              onTileClick(typeKey);
+            }
           }
         }
-      }
-    : {};
+      : {};
   const cardClass = `border-border bg-card group ${
     onTileClick ? 'cursor-pointer transition-colors hover:border-primary/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring' : ''
   }`;
@@ -63,7 +65,7 @@ const ReconciliationTiles = ({ totals, onTileClick }: ReconciliationTilesProps) 
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-      <Card className={cardClass} {...clickable}>
+      <Card className={cardClass} {...clickable('payments')}>
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
             <Icon name="CreditCard" size={16} />
@@ -81,7 +83,7 @@ const ReconciliationTiles = ({ totals, onTileClick }: ReconciliationTilesProps) 
         </CardContent>
       </Card>
 
-      <Card className={cardClass} {...clickable}>
+      <Card className={cardClass} {...clickable('receipts')}>
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
             <Icon name="Receipt" size={16} />
@@ -101,7 +103,7 @@ const ReconciliationTiles = ({ totals, onTileClick }: ReconciliationTilesProps) 
         </CardContent>
       </Card>
 
-      <Card className={cardClass} {...clickable}>
+      <Card className={cardClass} {...clickable('money')}>
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
             <Icon name="Landmark" size={16} />

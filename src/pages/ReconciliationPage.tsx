@@ -7,6 +7,7 @@ import ReconciliationPeriodPicker from '@/components/reconciliation/Reconciliati
 import ReconciliationTiles from '@/components/reconciliation/ReconciliationTiles';
 import ReconciliationChart from '@/components/reconciliation/ReconciliationChart';
 import ReconciliationByProvider from '@/components/reconciliation/ReconciliationByProvider';
+import { TypeFilterKey } from '@/lib/transactionTypeFilter';
 import functionUrls from '../../backend/func2url.json';
 
 interface ReconciliationTotals {
@@ -53,7 +54,7 @@ const getDefaultFrom = () => {
 };
 
 interface ReconciliationPageProps {
-  onOpenTransactions?: (from: Date, to: Date) => void;
+  onOpenTransactions?: (from: Date, to: Date, typeKey?: TypeFilterKey) => void;
 }
 
 const ReconciliationPage = ({ onOpenTransactions }: ReconciliationPageProps) => {
@@ -154,7 +155,7 @@ const ReconciliationPage = ({ onOpenTransactions }: ReconciliationPageProps) => 
         <>
           <ReconciliationTiles
             totals={data.totals}
-            onTileClick={onOpenTransactions ? () => onOpenTransactions(dateFrom, dateTo) : undefined}
+            onTileClick={onOpenTransactions ? (typeKey) => onOpenTransactions(dateFrom, dateTo, typeKey) : undefined}
           />
           <ReconciliationChart
             daily={data.daily}

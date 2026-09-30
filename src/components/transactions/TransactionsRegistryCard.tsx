@@ -6,12 +6,15 @@ import TransactionsTable from '@/components/transactions/TransactionsTable';
 import TransactionsFilters, { DateFilter } from '@/components/transactions/TransactionsFilters';
 import { Transaction } from '@/components/transactions/transactionsTypes';
 import { TransactionGroup } from '@/lib/transactionGrouping';
+import { TypeFilter } from '@/lib/transactionTypeFilter';
 
 interface TransactionsRegistryCardProps {
   groups: TransactionGroup[];
   searchQuery: string;
   setSearchQuery: (value: string) => void;
   dateFilter: DateFilter | null;
+  typeFilter?: TypeFilter | null;
+  onClearTypeFilter?: () => void;
   setDateFilter: (value: DateFilter | null) => void;
   showUnmatchedOnly: boolean;
   setShowUnmatchedOnly: (value: boolean) => void;
@@ -37,6 +40,8 @@ const TransactionsRegistryCard = ({
   setSearchQuery,
   dateFilter,
   setDateFilter,
+  typeFilter,
+  onClearTypeFilter,
   showUnmatchedOnly,
   setShowUnmatchedOnly,
   selectedTxByKey,
@@ -79,6 +84,18 @@ const TransactionsRegistryCard = ({
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="flex items-center gap-3 overflow-x-auto p-0.5">
+          {typeFilter && (
+            <Button
+              size="sm"
+              className="gap-1.5 shrink-0"
+              onClick={onClearTypeFilter}
+              title="Показать все виды записей"
+            >
+              <Icon name="Filter" size={14} />
+              Только: {typeFilter.label}
+              <Icon name="X" size={14} />
+            </Button>
+          )}
           <TransactionsFilters
             searchQuery={searchQuery}
             dateFilter={dateFilter}

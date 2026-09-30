@@ -13,6 +13,7 @@ import SettingsPlaceholder from './SettingsPlaceholder';
 import { useAuth } from '@/contexts/AuthContext';
 import { APP_MODULES } from '@/config/modules';
 import { DateFilter } from '@/components/filters/DateRangeFilter';
+import { TYPE_FILTERS, TypeFilter, TypeFilterKey } from '@/lib/transactionTypeFilter';
 
 const Index = () => {
   const { currentCompany } = useAuth();
@@ -21,16 +22,19 @@ const Index = () => {
   const [showNotifications, setShowNotifications] = useState(false);
   const [unreadCount] = useState(3);
   const [transactionsDateFilter, setTransactionsDateFilter] = useState<DateFilter | null>(null);
+  const [transactionsTypeFilter, setTransactionsTypeFilter] = useState<TypeFilter | null>(null);
 
   // Переход из «Сверки» (плитки, столбцы графика) в «Транзакции» сразу с
   // фильтром на нужный период.
-  const openTransactionsForPeriod = (from: Date, to: Date) => {
+  const openTransactionsForPeriod = (from: Date, to: Date, typeKey?: TypeFilterKey) => {
     setTransactionsDateFilter({ from, to });
+    setTransactionsTypeFilter(typeKey ? TYPE_FILTERS[typeKey] : null);
     setActiveModule('transactions');
   };
 
   const handleModuleChange = (id: string) => {
     setTransactionsDateFilter(null);
+    setTransactionsTypeFilter(null);
     setActiveModule(id);
   };
 
@@ -72,7 +76,7 @@ const Index = () => {
         {activeModule === 'dashboard' && <DashboardOverview stats={stats} mounted={mounted} />}
         {activeModule === 'reconciliation' && <ReconciliationPage onOpenTransactions={openTransactionsForPeriod} />}
         {activeModule === 'events' && <EventsPage />}
-        {activeModule === 'transactions' && <TransactionsPage initialDateFilter={transactionsDateFilter} />}
+        {activeModule === 'transactions' && <TransactionsPage initialDateFilter={transactionsDateFilter} initialTypeFilter={transactionsTypeFilter} />}
         {activeModule === 'integrations' && <IntegrationsPage />}
         {activeModule === 'access' && <AccessManagement />}
         {activeModule === 'settings' && <SettingsPlaceholder />}

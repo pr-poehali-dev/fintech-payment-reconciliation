@@ -60,6 +60,16 @@
         "has_more": false
       },
       "bodyMatcher": "partial"
+    },
+    {
+      "name": "Paged registry by types",
+      "method": "GET",
+      "path": "/?company_id=1&paged=1&limit=50&types=money",
+      "expectedStatus": 200,
+      "expectedBody": {
+        "success": true
+      },
+      "bodyMatcher": "partial"
     }
   ]
 }
