@@ -51,7 +51,7 @@ const TransactionDetailsDialog = ({ transaction, relatedItems, open, onOpenChang
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-2xl flex items-center gap-2">
-            <Icon name={config.icon as any} size={22} />
+            <Icon name={config.icon} size={22} />
             {transaction.title}
           </DialogTitle>
           <DialogDescription>
@@ -146,7 +146,7 @@ const TransactionDetailsDialog = ({ transaction, relatedItems, open, onOpenChang
                       key={`${item.type}-${item.source}-${item.id}`}
                       className="flex items-center gap-3 bg-success/10 border border-success/30 rounded-lg p-4"
                     >
-                      <Icon name={itemConfig.icon as any} size={20} className="text-success shrink-0" />
+                      <Icon name={itemConfig.icon} size={20} className="text-success shrink-0" />
                       <div>
                         <div className="font-medium">{item.title}</div>
                         <div className="text-sm text-muted-foreground">{reason}</div>

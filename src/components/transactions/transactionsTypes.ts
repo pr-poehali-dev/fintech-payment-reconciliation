@@ -19,7 +19,7 @@ export interface Transaction {
   subtitle: string | null;
   integration_name: string | null;
   reference: string | null;
-  raw_data: any;
+  raw_data: unknown;
   linked_type: TransactionType | null;
   linked_source: string | null;
   linked_id: number | null;

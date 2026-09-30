@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import Icon from '@/components/ui/icon';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
@@ -14,6 +14,13 @@ import { Transaction, TransactionTotalsByType } from '@/components/transactions/
 import { groupTransactions, computeMatchedKeys, nodeKey } from '@/lib/transactionGrouping';
 import { filterTransactions } from '@/lib/transactionFilters';
 import functionUrls from '../../backend/func2url.json';
+
+interface IntegrationRow {
+  id: number;
+  integration_name: string;
+  provider_slug: string;
+  status: string;
+}
 
 const TransactionsPage = () => {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -92,22 +99,14 @@ const TransactionsPage = () => {
     fetch(`${functionUrls['integrations-list']}?company_id=${companyId}`)
       .then((res) => res.json())
       .then((data) => {
-        const integrations = data.user_integrations || [];
-        setEcomkassaIntegrations(
+        const integrations: IntegrationRow[] = data.user_integrations || [];
+        const pick = (slugs: string[]) =>
           integrations
-            .filter((i: any) => i.provider_slug === 'ecomkassa' && i.status === 'active')
-            .map((i: any) => ({ id: i.id, name: i.integration_name }))
-        );
-        setOfdIntegrations(
-          integrations
-            .filter((i: any) => i.provider_slug === 'ofdru' && i.status === 'active')
-            .map((i: any) => ({ id: i.id, name: i.integration_name }))
-        );
-        setBankIntegrations(
-          integrations
-            .filter((i: any) => (i.provider_slug === 'tbank_account' || i.provider_slug === 'tochka_account') && i.status === 'active')
-            .map((i: any) => ({ id: i.id, name: i.integration_name }))
-        );
+            .filter((i) => slugs.includes(i.provider_slug) && i.status === 'active')
+            .map((i) => ({ id: i.id, name: i.integration_name }));
+        setEcomkassaIntegrations(pick(['ecomkassa']));
+        setOfdIntegrations(pick(['ofdru']));
+        setBankIntegrations(pick(['tbank_account', 'tochka_account']));
       })
       .catch(() => {});
   };
@@ -242,23 +241,35 @@ const TransactionsPage = () => {
   // Связь считается по группе (union-find по всему списку), а не по
   // одностороннему полю linked_id одной записи - иначе чек, на который
   // ссылается платёж, сам не узнаёт о своей паре и показывает "Нет пары".
-  const matchedKeys = computeMatchedKeys(transactions);
+  const matchedKeys = useMemo(() => computeMatchedKeys(transactions), [transactions]);
 
-  const filteredTransactions = filterTransactions(transactions, {
-    matchedKeys,
-    showUnmatchedOnly,
-    dateFilter,
-    searchQuery
-  });
+  const groups = useMemo(
+    () =>
+      groupTransactions(
+        filterTransactions(transactions, { matchedKeys, showUnmatchedOnly, dateFilter, searchQuery })
+      ),
+    [transactions, matchedKeys, showUnmatchedOnly, dateFilter, searchQuery]
+  );
 
-  const groups = groupTransactions(filteredTransactions);
+  const matchedCountByType = useMemo(() => {
+    const counts: Partial<Record<string, number>> = {};
+    transactions.forEach((tx) => {
+      if (matchedKeys.has(nodeKey(tx))) {
+        counts[tx.type] = (counts[tx.type] || 0) + 1;
+      }
+    });
+    return counts;
+  }, [transactions, matchedKeys]);
 
-  const matchedCountByType: Partial<Record<string, number>> = {};
-  transactions.forEach((tx) => {
-    if (matchedKeys.has(nodeKey(tx))) {
-      matchedCountByType[tx.type] = (matchedCountByType[tx.type] || 0) + 1;
-    }
-  });
+  const relatedItems = useMemo(() => {
+    if (!selectedTx) return [];
+    const key = nodeKey(selectedTx);
+    return (
+      groupTransactions(transactions)
+        .find((g) => g.items.some((i) => nodeKey(i) === key))
+        ?.items.filter((i) => nodeKey(i) !== key) || []
+    );
+  }, [transactions, selectedTx]);
 
   if (isLoading) {
     return (
@@ -301,13 +312,7 @@ const TransactionsPage = () => {
 
       <TransactionDetailsDialog
         transaction={selectedTx}
-        relatedItems={
-          selectedTx
-            ? groupTransactions(transactions)
-                .find((g) => g.items.some((i) => nodeKey(i) === nodeKey(selectedTx)))
-                ?.items.filter((i) => nodeKey(i) !== nodeKey(selectedTx)) || []
-            : []
-        }
+        relatedItems={relatedItems}
         open={showDetails}
         onOpenChange={setShowDetails}
       />
