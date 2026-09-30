@@ -30,6 +30,13 @@
       "path": "/?company_id=2&sources=ofd,bank&limit=5",
       "expectedStatus": 200,
       "bodyMatcher": "partial"
+    },
+    {
+      "name": "Events errors only",
+      "method": "GET",
+      "path": "/?company_id=2&errors_only=1",
+      "expectedStatus": 200,
+      "bodyMatcher": "partial"
     }
   ]
 }

@@ -20,6 +20,7 @@ const EventsPage = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [dateFilter, setDateFilter] = useState<DateFilter | null>(null);
   const [sourceFilter, setSourceFilter] = useState<EventSource[]>([]);
+  const [errorsOnly, setErrorsOnly] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const hasLoadedOnce = useRef(false);
   const { toast } = useToast();
@@ -31,7 +32,8 @@ const EventsPage = () => {
     if (hasLoadedOnce.current) setIsRefreshing(true);
     else setIsLoading(true);
     try {
-      const params = new URLSearchParams({ company_id: String(companyId), limit: dateFilter || sourceFilter.length ? '2000' : '200' });
+      const params = new URLSearchParams({ company_id: String(companyId), limit: dateFilter || sourceFilter.length || errorsOnly ? '2000' : '200' });
+      if (errorsOnly) params.set('errors_only', '1');
       if (sourceFilter.length) params.set('sources', sourceFilter.join(','));
       if (dateFilter) {
         params.set('date_from', format(dateFilter.from, 'yyyy-MM-dd'));
@@ -88,7 +90,7 @@ const EventsPage = () => {
     if (!companyId) return;
     fetchEvents();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [companyId, dateKey, sourceFilter.join(',')]);
+  }, [companyId, dateKey, sourceFilter.join(','), errorsOnly]);
 
   const handleRowClick = (event: AppEvent) => {
     setSelectedEvent(event);
@@ -159,6 +161,8 @@ const EventsPage = () => {
             setDateFilter={setDateFilter}
             sourceFilter={sourceFilter}
             setSourceFilter={setSourceFilter}
+            errorsOnly={errorsOnly}
+            setErrorsOnly={setErrorsOnly}
           />
 
           <EventsTable events={filteredEvents} onRowClick={handleRowClick} />

@@ -15,12 +15,18 @@ interface MultiSelectFilterButtonProps<T extends string> {
   options: FilterOption<T>[];
   value: T[];
   onChange: (value: T[]) => void;
+  extraToggle?: { label: string; icon: string; checked: boolean; onChange: (checked: boolean) => void };
 }
 
 // Пустой выбор = показываются все записи (состояние по умолчанию, без цифры на кнопке).
-function MultiSelectFilterButton<T extends string>({ title, options, value, onChange }: MultiSelectFilterButtonProps<T>) {
+function MultiSelectFilterButton<T extends string>({ title, options, value, onChange, extraToggle }: MultiSelectFilterButtonProps<T>) {
   const [open, setOpen] = useState(false);
-  const count = value.length;
+  const count = value.length + (extraToggle?.checked ? 1 : 0);
+
+  const resetAll = () => {
+    onChange([]);
+    extraToggle?.onChange(false);
+  };
 
   const toggle = (item: T) => {
     onChange(value.includes(item) ? value.filter((v) => v !== item) : [...value, item]);
@@ -48,7 +54,7 @@ function MultiSelectFilterButton<T extends string>({ title, options, value, onCh
         <div className="flex items-center justify-between border-b border-border px-4 py-3">
           <span className="text-sm font-semibold">{title}</span>
           {count > 0 && (
-            <button type="button" className="text-xs font-medium text-primary hover:underline" onClick={() => onChange([])}>
+            <button type="button" className="text-xs font-medium text-primary hover:underline" onClick={resetAll}>
               Сбросить
             </button>
           )}
@@ -65,6 +71,15 @@ function MultiSelectFilterButton<T extends string>({ title, options, value, onCh
             </label>
           ))}
         </div>
+        {extraToggle && (
+          <div className="border-t border-border p-2">
+            <label className="flex cursor-pointer items-center gap-3 rounded-md px-2 py-2 text-sm hover:bg-muted">
+              <Checkbox checked={extraToggle.checked} onCheckedChange={(c) => extraToggle.onChange(c === true)} />
+              <Icon name={extraToggle.icon} size={14} className="text-destructive" />
+              <span>{extraToggle.label}</span>
+            </label>
+          </div>
+        )}
         <p className="border-t border-border px-4 py-2 text-xs text-muted-foreground">
           Ничего не отмечено — показываются все записи
         </p>

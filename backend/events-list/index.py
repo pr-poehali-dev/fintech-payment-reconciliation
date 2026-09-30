@@ -53,6 +53,20 @@ def event_source_category(e: Dict[str, Any]) -> str:
     return 'kassa'
 
 
+ERROR_STATUSES = {'failed', 'rejected', 'fail', 'error'}
+
+
+def _is_error(status: Any, error_message: Any) -> bool:
+    return bool(error_message) or str(status or '').strip().lower() in ERROR_STATUSES
+
+
+def event_has_error(e: Dict[str, Any]) -> bool:
+    '''Ошибка у самого события или у любого вебхука в его истории.'''
+    if _is_error(e.get('status'), e.get('error_message')):
+        return True
+    return any(_is_error(h.get('status'), h.get('error_message')) for h in e.get('webhook_history') or [])
+
+
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     '''
     Единая лента событий компании: сырые данные по КАЖДОМУ источнику ОТДЕЛЬНО,
@@ -70,7 +84,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     источники не смешаны).
     Args: company_id (обязателен), integration_id, provider_slug, payment_provider, limit, offset,
     date_from/date_to (YYYY-MM-DD, день события в часовом поясе компании),
-    sources (через запятую: acquiring,kassa,ofd,bank,crm) - опционально.
+    sources (через запятую: acquiring,kassa,ofd,bank,crm), errors_only=1 (только
+    события с ошибкой, в т.ч. в истории вебхуков) - опционально.
     payment_provider - дискриминатор конкретной платёжной системы внутри шлюза
     Екомкассы (invoice_payload.provider из report(), например "ЮKassa") - у одной
     кассы может быть подключено больше 10 видов оплат, фильтр сужает до одного.
@@ -115,7 +130,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     date_to = params.get('date_to') or None
     has_date_filter = bool(date_from or date_to)
     sources_filter = {x for x in (params.get('sources') or '').split(',') if x}
-    needs_full_scan = has_date_filter or bool(sources_filter)
+    errors_only = params.get('errors_only') == '1'
+    needs_full_scan = has_date_filter or bool(sources_filter) or errors_only
 
     if not company_id:
         return {
@@ -522,6 +538,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
         if sources_filter:
             events = [e for e in events if event_source_category(e) in sources_filter]
+        if errors_only:
+            events = [e for e in events if event_has_error(e)]
 
         events.sort(key=lambda e: e['created_at'] or '', reverse=True)
         events = events[:limit]

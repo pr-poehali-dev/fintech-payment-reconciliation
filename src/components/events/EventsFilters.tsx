@@ -10,6 +10,8 @@ interface EventsFiltersProps {
   setDateFilter: (value: DateFilter | null) => void;
   sourceFilter: EventSource[];
   setSourceFilter: (value: EventSource[]) => void;
+  errorsOnly: boolean;
+  setErrorsOnly: (value: boolean) => void;
 }
 
 const EventsFilters = ({
@@ -18,7 +20,9 @@ const EventsFilters = ({
   dateFilter,
   setDateFilter,
   sourceFilter,
-  setSourceFilter
+  setSourceFilter,
+  errorsOnly,
+  setErrorsOnly
 }: EventsFiltersProps) => {
   return (
     <div className="flex items-center gap-3 overflow-x-auto pl-0.5 pr-2 pt-2 pb-0.5">
@@ -35,6 +39,7 @@ const EventsFilters = ({
           options={EVENT_SOURCE_OPTIONS}
           value={sourceFilter}
           onChange={setSourceFilter}
+          extraToggle={{ label: 'Только ошибки', icon: 'CircleAlert', checked: errorsOnly, onChange: setErrorsOnly }}
         />
       </div>
     </div>
