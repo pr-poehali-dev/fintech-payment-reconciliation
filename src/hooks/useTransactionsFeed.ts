@@ -150,7 +150,25 @@ export const useTransactionsFeed = (
     return () => clearTimeout(timer);
   }, [companyId, dateKey, searchQuery, showUnmatchedOnly, typesKey, reload]);
 
+  // Все записи под текущими фильтрами (для выгрузки) - порциями, пока сервер
+  // не скажет, что больше нет.
+  const fetchAllFiltered = useCallback(async (): Promise<Transaction[] | null> => {
+    if (!companyId) return null;
+    const all: Transaction[] = [];
+    let offset = 0;
+    for (let i = 0; i < 200; i++) {
+      const data = await request(offset, 500);
+      if (!data) return null;
+      all.push(...(data.transactions || []));
+      if (!data.has_more) break;
+      offset = data.next_offset || 0;
+    }
+    return all;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [companyId]);
+
   return {
+    fetchAllFiltered,
     transactions,
     contextTransactions,
     totalsByType,

@@ -13,6 +13,8 @@ import TransactionsRegistryCard from '@/components/transactions/TransactionsRegi
 import { Transaction, TransactionType } from '@/components/transactions/transactionsTypes';
 import { groupTransactions, nodeKey } from '@/lib/transactionGrouping';
 import { useTransactionsFeed } from '@/hooks/useTransactionsFeed';
+import { exportTransactionsToExcel } from '@/lib/exportTransactions';
+import { DEFAULT_TIMEZONE } from '@/lib/formatDate';
 import { TypeFilter } from '@/lib/transactionTypeFilter';
 import functionUrls from '../../backend/func2url.json';
 
@@ -55,6 +57,30 @@ const TransactionsPage = ({ initialDateFilter = null, initialTypeFilter = null }
   );
   const { transactions, contextTransactions, totalsByType, isLoading, isRefreshing } = feed;
   const fetchTransactions = () => feed.reload(true);
+
+  const [isExporting, setIsExporting] = useState(false);
+  const handleExport = async () => {
+    setIsExporting(true);
+    try {
+      const all = await feed.fetchAllFiltered();
+      if (!all) return;
+      if (all.length === 0) {
+        toast({ title: 'Нечего выгружать', description: 'Под выбранные фильтры не попало ни одной записи' });
+        return;
+      }
+      await exportTransactionsToExcel({
+        transactions: all,
+        timezone: currentCompany?.timezone || DEFAULT_TIMEZONE,
+        companyName: currentCompany?.name,
+        dateFilter
+      });
+      toast({ title: 'Файл готов', description: `Выгружено записей: ${all.length}` });
+    } catch {
+      toast({ title: 'Не удалось выгрузить', description: 'Попробуйте ещё раз', variant: 'destructive' });
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   // Список интеграций, доступных для дозагрузки (касса Екомкасса, ОФД,
   // расчётные счета) - вынесено в отдельную функцию, а не только в useEffect
@@ -284,6 +310,8 @@ const TransactionsPage = ({ initialDateFilter = null, initialTypeFilter = null }
         isRefreshing={isRefreshing}
         onOpenBackfill={openBackfillDialog}
         onRefresh={fetchTransactions}
+        onExport={handleExport}
+        isExporting={isExporting}
       />
 
       <TransactionsSummaryCards totalsByType={totalsByType} matchedCountByType={matchedCountByType} isFiltered={isFiltered} />

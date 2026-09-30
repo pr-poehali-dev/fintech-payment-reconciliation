@@ -6,9 +6,11 @@ interface TransactionsPageHeaderProps {
   isRefreshing: boolean;
   onOpenBackfill: () => void;
   onRefresh: () => void;
+  onExport: () => void;
+  isExporting: boolean;
 }
 
-const TransactionsPageHeader = ({ backfillPhase, isRefreshing, onOpenBackfill, onRefresh }: TransactionsPageHeaderProps) => {
+const TransactionsPageHeader = ({ backfillPhase, isRefreshing, onOpenBackfill, onRefresh, onExport, isExporting }: TransactionsPageHeaderProps) => {
   return (
     <div className="flex items-center justify-between">
       <div>
@@ -18,6 +20,10 @@ const TransactionsPageHeader = ({ backfillPhase, isRefreshing, onOpenBackfill, o
         </p>
       </div>
       <div className="flex items-center gap-2">
+        <Button onClick={onExport} variant="outline" className="gap-2" disabled={isExporting} title="Выгрузить записи по текущим фильтрам">
+          <Icon name={isExporting ? 'Loader2' : 'FileSpreadsheet'} size={16} className={isExporting ? 'animate-spin' : ''} />
+          {isExporting ? 'Готовлю файл…' : 'Excel'}
+        </Button>
         <Button onClick={onOpenBackfill} variant="outline" className="gap-2">
           <Icon name={backfillPhase === 'running' ? 'Loader2' : 'Download'} size={16} className={backfillPhase === 'running' ? 'animate-spin' : ''} />
           {backfillPhase === 'running' ? 'Загрузка идёт…' : 'Загрузить'}
