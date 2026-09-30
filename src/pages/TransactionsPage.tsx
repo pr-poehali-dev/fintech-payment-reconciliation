@@ -246,7 +246,7 @@ const TransactionsPage = ({ initialDateFilter = null, initialTypeFilter = null }
     [allKnown, visibleKeys]
   );
 
-  const isFiltered = Boolean(dateFilter) || showUnmatchedOnly || searchQuery.trim() !== '';
+  const isFiltered = Boolean(dateFilter) || showUnmatchedOnly || searchQuery.trim() !== '' || typeFilter.length > 0;
 
   const matchedCountByType = useMemo(() => {
     const counts: Partial<Record<string, number>> = {};

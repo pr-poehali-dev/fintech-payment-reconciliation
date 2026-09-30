@@ -28,9 +28,8 @@ const TransactionsSummaryCards = ({ totalsByType, matchedCountByType, isFiltered
               <Icon name={card.icon} size={14} />
               {card.title}
               {isFiltered && (
-                <span className="ml-auto flex items-center gap-1 text-xs font-normal text-primary">
-                  <Icon name="Filter" size={11} />
-                  по фильтру
+                <span className="ml-auto flex items-center text-primary" title="Итоги по выбранным фильтрам">
+                  <Icon name="Filter" size={14} />
                 </span>
               )}
             </CardTitle>
