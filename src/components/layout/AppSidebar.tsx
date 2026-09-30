@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import Icon from '@/components/ui/icon';
@@ -11,6 +12,8 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { useAuth, Company } from '@/contexts/AuthContext';
 import { APP_MODULES } from '@/config/modules';
+import ProfileDialog from '@/components/profile/ProfileDialog';
+import SubscriptionDialog from '@/components/profile/SubscriptionDialog';
 
 interface AppSidebarProps {
   activeModule: string;
@@ -66,8 +69,19 @@ const CompanySwitcher = ({ companies, currentCompany, onSelect }: {
   );
 };
 
-const UserProfileMenu = () => {
+const formatPhone = (phone?: string) => {
+  const d = (phone || '').replace(/\D/g, '');
+  if (d.length !== 11) return phone || '';
+  return `+${d[0]} ${d.slice(1, 4)} ${d.slice(4, 7)}-${d.slice(7, 9)}-${d.slice(9, 11)}`;
+};
+
+const UserProfileMenu = ({ onOpenSettings }: { onOpenSettings: () => void }) => {
   const { user, currentCompany, logout } = useAuth();
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [subscriptionOpen, setSubscriptionOpen] = useState(false);
+  const displayName = user?.full_name || formatPhone(user?.phone) || 'Пользователь';
+
+  const itemClass = 'gap-3 px-3 py-2.5 text-[15px] cursor-pointer';
 
   return (
     <div className="absolute bottom-4 left-4 right-4">
@@ -80,28 +94,57 @@ const UserProfileMenu = () => {
                   <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center shrink-0">
                     <Icon name="User" size={20} className="text-primary" />
                   </div>
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-sidebar-foreground truncate">
-                      {user?.full_name || user?.phone || 'Пользователь'}
-                    </p>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-sidebar-foreground truncate">{displayName}</p>
                     <p className="text-xs text-sidebar-foreground/60 truncate">
                       {currentCompany?.role_name || 'Без роли'}
                     </p>
                   </div>
+                  <Icon name="ChevronsUpDown" size={14} className="text-sidebar-foreground/40 shrink-0" />
                 </div>
               </CardContent>
             </Card>
           </button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" className="w-56">
-          <DropdownMenuLabel>{user?.phone}</DropdownMenuLabel>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={logout} className="text-destructive focus:text-destructive">
-            <Icon name="LogOut" size={14} className="mr-2" />
-            Выйти
-          </DropdownMenuItem>
+        <DropdownMenuContent side="top" align="start" sideOffset={8} className="w-72 p-0">
+          <div className="flex items-center gap-3 px-4 py-4">
+            <div className="w-11 h-11 rounded-xl bg-primary/20 flex items-center justify-center shrink-0">
+              <Icon name="User" size={22} className="text-primary" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[15px] font-semibold truncate">{displayName}</p>
+              <p className="text-sm text-muted-foreground truncate">
+                {user?.full_name ? formatPhone(user?.phone) : currentCompany?.name || ''}
+              </p>
+            </div>
+          </div>
+          <DropdownMenuSeparator className="m-0" />
+          <div className="p-1.5">
+            <DropdownMenuItem className={itemClass} onSelect={() => setProfileOpen(true)}>
+              <Icon name="User" size={18} className="text-muted-foreground" />
+              Профиль
+            </DropdownMenuItem>
+            <DropdownMenuItem className={itemClass} onSelect={() => setSubscriptionOpen(true)}>
+              <Icon name="CreditCard" size={18} className="text-muted-foreground" />
+              Подписка
+            </DropdownMenuItem>
+            <DropdownMenuItem className={itemClass} onSelect={onOpenSettings}>
+              <Icon name="Settings" size={18} className="text-muted-foreground" />
+              Настройки
+            </DropdownMenuItem>
+          </div>
+          <DropdownMenuSeparator className="m-0" />
+          <div className="p-1.5">
+            <DropdownMenuItem onSelect={logout} className={`${itemClass} text-destructive focus:text-destructive`}>
+              <Icon name="LogOut" size={18} />
+              Выйти
+            </DropdownMenuItem>
+          </div>
         </DropdownMenuContent>
       </DropdownMenu>
+
+      <ProfileDialog open={profileOpen} onOpenChange={setProfileOpen} />
+      <SubscriptionDialog open={subscriptionOpen} onOpenChange={setSubscriptionOpen} />
     </div>
   );
 };
@@ -126,7 +169,7 @@ const AppSidebar = ({ activeModule, onModuleChange }: AppSidebarProps) => {
       />
 
       <nav className="space-y-2">
-        {APP_MODULES.map((module) => (
+        {APP_MODULES.filter((module) => !module.hidden).map((module) => (
           <button
             key={module.id}
             onClick={() => onModuleChange(module.id)}
@@ -142,7 +185,7 @@ const AppSidebar = ({ activeModule, onModuleChange }: AppSidebarProps) => {
         ))}
       </nav>
 
-      <UserProfileMenu />
+      <UserProfileMenu onOpenSettings={() => onModuleChange('settings')} />
     </aside>
   );
 };

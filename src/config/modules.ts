@@ -2,6 +2,7 @@ export interface AppModule {
   id: string;
   name: string;
   icon: string;
+  hidden?: boolean;
 }
 
 export const APP_MODULES: AppModule[] = [
@@ -11,5 +12,5 @@ export const APP_MODULES: AppModule[] = [
   { id: 'transactions', name: 'Транзакции', icon: 'ArrowLeftRight' },
   { id: 'integrations', name: 'Интеграции', icon: 'Plug' },
   { id: 'access', name: 'Доступ', icon: 'Users' },
-  { id: 'settings', name: 'Настройки', icon: 'Settings' }
+  { id: 'settings', name: 'Настройки', icon: 'Settings', hidden: true }
 ];

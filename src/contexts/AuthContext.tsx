@@ -34,6 +34,7 @@ interface AuthContextValue {
   setCurrentCompanyId: (id: number) => void;
   loginWithPhone: (phone: string, fullName?: string) => Promise<AuthUser>;
   refreshCompanies: () => Promise<void>;
+  updateUser: (patch: Partial<Pick<AuthUser, 'full_name' | 'email'>>) => void;
   logout: () => void;
 }
 
@@ -129,6 +130,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  const updateUser = (patch: Partial<Pick<AuthUser, 'full_name' | 'email'>>) => {
+    setUser((prev) => {
+      if (!prev) return prev;
+      const next = { ...prev, ...patch };
+      localStorage.setItem(STORAGE_USER_KEY, JSON.stringify(next));
+      return next;
+    });
+  };
+
   const setCurrentCompanyId = (id: number) => {
     setCurrentCompanyIdState(id);
     localStorage.setItem(STORAGE_COMPANY_KEY, String(id));
@@ -157,6 +167,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setCurrentCompanyId,
         loginWithPhone,
         refreshCompanies,
+        updateUser,
         logout
       }}
     >
