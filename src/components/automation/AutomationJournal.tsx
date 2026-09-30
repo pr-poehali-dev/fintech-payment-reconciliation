@@ -24,7 +24,8 @@ const FILTERS: { value: string; label: string }[] = [
   { value: '', label: 'Все' },
   { value: 'error', label: 'Повтор' },
   { value: 'failed', label: 'Не удалось' },
-  { value: 'ready', label: 'Готовы' }
+  { value: 'done', label: 'Выполнены' },
+  { value: 'ready', label: 'Собраны' }
 ];
 
 const AutomationJournal = ({ open, onOpenChange }: AutomationJournalProps) => {

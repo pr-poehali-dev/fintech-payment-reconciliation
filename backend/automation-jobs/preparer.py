@@ -1,6 +1,8 @@
 import json
 from typing import Any, Dict, Optional, Tuple
 
+from ecomkassa_client import company_cash_register, get_receipt_atol
+
 SCHEMA = 't_p83864310_fintech_payment_reco'
 
 # Задержка следующей попытки (минуты) по номеру попытки; после последней - статус failed.
@@ -100,6 +102,38 @@ def prepare(cur, job: Dict[str, Any], scenario: Dict[str, Any]) -> Tuple[str, Di
         return 'ready', data, (
             f"Корзина от {provider_name}: {len(cart['items'])} поз. на {cart['items_total']:.2f} ₽ "
             f"(платёж #{payment['payment_id']}{note})"
+        )
+
+    if payment['provider_slug'] == 'ecomkassa_gateway':
+        # Платёж через шлюз Екомкассы (Точка и др.): идентификатор платежа = номер
+        # документа в Екомкассе, корзину читаем оттуда же в формате АТОЛ Онлайн.
+        kassa = company_cash_register(cur, job['company_id'])
+        if not kassa:
+            return 'error', data, 'Не найдена активная касса Екомкассы для чтения корзины'
+        atol, err = get_receipt_atol(kassa, str(payment['payment_id']))
+        if not atol:
+            return 'error', data, err
+        receipt = atol['receipt']
+        items = receipt.get('items') or []
+        if not items:
+            return 'error', data, f"В документе Екомкассы #{payment['payment_id']} нет товаров"
+        client = receipt.get('client') or {}
+        data['items'] = items
+        data['items_format'] = 'atol'
+        data['payments'] = receipt.get('payments') or []
+        data['items_source'] = 'Екомкасса'
+        data['source_company'] = receipt.get('company') or {}
+        data['taxation'] = (receipt.get('company') or {}).get('sno')
+        data['customer'] = {
+            'email': client.get('email') or payment['customer_email'],
+            'phone': client.get('phone') or payment['customer_phone'],
+            'name': client.get('name'), 'inn': client.get('inn')
+        }
+        total = round(sum(float(i.get('sum') or 0) for i in items), 2)
+        diff = round(total - payment['amount'], 2)
+        note = f', расхождение с платежом {diff:+.2f} ₽' if abs(diff) >= 0.01 else ''
+        return 'ready', data, (
+            f"Корзина из Екомкассы: {len(items)} поз. на {total:.2f} ₽ (платёж #{payment['payment_id']}{note})"
         )
 
     return 'ready', data, f"Собраны данные платежа #{payment['payment_id']} на {payment['amount']:.2f} ₽"

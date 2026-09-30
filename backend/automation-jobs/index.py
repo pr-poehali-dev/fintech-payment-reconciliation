@@ -4,6 +4,7 @@ import psycopg2
 from typing import Dict, Any, List
 
 from preparer import prepare, retry_delay, log
+from actions import ACTIONS
 
 SCHEMA = 't_p83864310_fintech_payment_reco'
 BATCH = 20
@@ -46,9 +47,10 @@ def claim_jobs(cur, company_id=None, job_id=None) -> List[Dict[str, Any]]:
             ORDER BY j.next_attempt_at LIMIT {BATCH}
             FOR UPDATE SKIP LOCKED
         )
-        RETURNING id, scenario_id, source_type, source_id, attempts
+        RETURNING id, scenario_id, source_type, source_id, attempts, company_id, step, prepared_data
     ''', args)
-    return [{'id': r[0], 'scenario_id': r[1], 'source_type': r[2], 'source_id': r[3], 'attempts': r[4]}
+    return [{'id': r[0], 'scenario_id': r[1], 'source_type': r[2], 'source_id': r[3], 'attempts': r[4],
+             'company_id': r[5], 'step': r[6], 'prepared_data': r[7]}
             for r in cur.fetchall()]
 
 
@@ -63,6 +65,8 @@ def process_job(cur, job: Dict[str, Any]) -> str:
 
     if r[7] is not None:
         status, data, message = 'skipped', {}, 'Сценарий удалён'
+    elif job['step'] == 'action' and job['prepared_data']:
+        return run_action(cur, job, scenario, job['prepared_data'])
     else:
         try:
             status, data, message = prepare(cur, job, scenario)
@@ -93,6 +97,48 @@ def process_job(cur, job: Dict[str, Any]) -> str:
     ''', (status, json.dumps(data, ensure_ascii=False, default=str),
           'action' if status == 'ready' else 'prepare', job['id']))
     log(cur, job['id'], 'info', message)
+    if status == 'ready' and scenario['action_type'] in ACTIONS:
+        return run_action(cur, job, scenario, data)
+    return status
+
+
+def fail_or_retry(cur, job: Dict[str, Any], message: str) -> str:
+    delay = retry_delay(job['attempts'])
+    if delay is None:
+        cur.execute(f'''
+            UPDATE {SCHEMA}.automation_jobs SET status = 'failed', last_error = %s, locked_until = NULL, updated_at = NOW()
+            WHERE id = %s
+        ''', (message, job['id']))
+        log(cur, job['id'], 'error', f'{message}. Попытки исчерпаны ({job["attempts"]})')
+        return 'failed'
+    cur.execute(f'''
+        UPDATE {SCHEMA}.automation_jobs SET status = 'error', last_error = %s, locked_until = NULL,
+               next_attempt_at = NOW() + (%s || ' minutes')::interval, updated_at = NOW()
+        WHERE id = %s
+    ''', (message, str(delay), job['id']))
+    log(cur, job['id'], 'error', f'{message}. Повтор через {delay} мин (попытка {job["attempts"]})')
+    return 'error'
+
+
+def run_action(cur, job: Dict[str, Any], scenario: Dict[str, Any], data: Dict[str, Any]) -> str:
+    '''Шаг 2: действие в кассе по собранным данным. Повтор идёт с этого шага, без повторного сбора.'''
+    action = ACTIONS.get(scenario['action_type'])
+    if not action:
+        return 'ready'
+    try:
+        status, result, message = action(cur, job, scenario, data)
+    except Exception as e:
+        status, result, message = 'error', {}, f'Сбой действия: {e}'
+    if status == 'error':
+        cur.execute(f'UPDATE {SCHEMA}.automation_jobs SET step = %s WHERE id = %s', ('action', job['id']))
+        log(cur, job['id'], 'error', message, result or None)
+        return fail_or_retry(cur, job, message)
+    cur.execute(f'''
+        UPDATE {SCHEMA}.automation_jobs SET status = %s, step = 'done', last_error = NULL, locked_until = NULL,
+               payload = payload || %s::jsonb, updated_at = NOW()
+        WHERE id = %s
+    ''', (status, json.dumps({'action_result': result}, ensure_ascii=False, default=str), job['id']))
+    log(cur, job['id'], 'info', message, result)
     return status
 
 

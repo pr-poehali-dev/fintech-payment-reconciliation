@@ -2,7 +2,7 @@ export type TriggerType = 'new_payment' | 'crm_order' | 'discrepancy';
 export type ActionType = 'create_receipt' | 'create_order';
 export type ActionTemplate = 'regular' | 'correction' | 'closing' | 'paid_order' | 'unpaid_order';
 export type ScenarioStatus = 'active' | 'stopped';
-export type JobStatus = 'new' | 'processing' | 'ready' | 'skipped' | 'error' | 'failed';
+export type JobStatus = 'new' | 'processing' | 'ready' | 'done' | 'skipped' | 'error' | 'failed';
 
 export interface Scenario {
   id: number;
@@ -77,7 +77,8 @@ export const MAPPING_FIELDS: { key: string; label: string; placeholder: string; 
 export const JOB_STATUS: Record<JobStatus, { label: string; className: string }> = {
   new: { label: 'В очереди', className: 'bg-muted text-muted-foreground border-border' },
   processing: { label: 'Собирается', className: 'bg-info/15 text-info border-info/30' },
-  ready: { label: 'Готов', className: 'bg-success/15 text-success border-success/30' },
+  ready: { label: 'Данные собраны', className: 'bg-info/15 text-info border-info/30' },
+  done: { label: 'Выполнено', className: 'bg-success/15 text-success border-success/30' },
   skipped: { label: 'Пропущен', className: 'bg-muted text-muted-foreground border-border' },
   error: { label: 'Ошибка, повтор', className: 'bg-warning/15 text-warning border-warning/30' },
   failed: { label: 'Не удалось', className: 'bg-destructive/15 text-destructive border-destructive/30' }
