@@ -10,7 +10,7 @@ import BackfillDialog from '@/components/transactions/BackfillDialog';
 import TransactionsPageHeader from '@/components/transactions/TransactionsPageHeader';
 import TransactionsSummaryCards from '@/components/transactions/TransactionsSummaryCards';
 import TransactionsRegistryCard from '@/components/transactions/TransactionsRegistryCard';
-import { Transaction } from '@/components/transactions/transactionsTypes';
+import { Transaction, TransactionType } from '@/components/transactions/transactionsTypes';
 import { groupTransactions, nodeKey } from '@/lib/transactionGrouping';
 import { useTransactionsFeed } from '@/hooks/useTransactionsFeed';
 import { TypeFilter } from '@/lib/transactionTypeFilter';
@@ -34,7 +34,7 @@ const TransactionsPage = ({ initialDateFilter = null, initialTypeFilter = null }
   const [searchQuery, setSearchQuery] = useState('');
   const [showUnmatchedOnly, setShowUnmatchedOnly] = useState(false);
   const [dateFilter, setDateFilter] = useState<DateFilter | null>(initialDateFilter);
-  const [typeFilter, setTypeFilter] = useState<TypeFilter | null>(initialTypeFilter);
+  const [typeFilter, setTypeFilter] = useState<TransactionType[]>(initialTypeFilter?.types ?? []);
   const [ecomkassaIntegrations, setEcomkassaIntegrations] = useState<{ id: number; name: string }[]>([]);
   const [ofdIntegrations, setOfdIntegrations] = useState<{ id: number; name: string }[]>([]);
   const [bankIntegrations, setBankIntegrations] = useState<{ id: number; name: string }[]>([]);
@@ -50,7 +50,7 @@ const TransactionsPage = ({ initialDateFilter = null, initialTypeFilter = null }
 
   const feed = useTransactionsFeed(
     companyId,
-    { dateFilter, searchQuery, showUnmatchedOnly, types: typeFilter?.types ?? null },
+    { dateFilter, searchQuery, showUnmatchedOnly, types: typeFilter },
     (message) => toast({ title: 'Ошибка загрузки', description: message, variant: 'destructive' })
   );
   const { transactions, contextTransactions, totalsByType, isLoading, isRefreshing } = feed;
@@ -295,7 +295,7 @@ const TransactionsPage = ({ initialDateFilter = null, initialTypeFilter = null }
         dateFilter={dateFilter}
         setDateFilter={setDateFilter}
         typeFilter={typeFilter}
-        onClearTypeFilter={() => setTypeFilter(null)}
+        setTypeFilter={setTypeFilter}
         showUnmatchedOnly={showUnmatchedOnly}
         setShowUnmatchedOnly={setShowUnmatchedOnly}
         selectedTxByKey={selectedTxByKey}

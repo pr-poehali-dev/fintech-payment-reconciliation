@@ -4,17 +4,17 @@ import { Button } from '@/components/ui/button';
 import Icon from '@/components/ui/icon';
 import TransactionsTable from '@/components/transactions/TransactionsTable';
 import TransactionsFilters, { DateFilter } from '@/components/transactions/TransactionsFilters';
-import { Transaction } from '@/components/transactions/transactionsTypes';
+import { Transaction, TransactionType } from '@/components/transactions/transactionsTypes';
 import { TransactionGroup } from '@/lib/transactionGrouping';
-import { TypeFilter } from '@/lib/transactionTypeFilter';
+import TransactionTypeFilterButton from '@/components/transactions/TransactionTypeFilterButton';
 
 interface TransactionsRegistryCardProps {
   groups: TransactionGroup[];
   searchQuery: string;
   setSearchQuery: (value: string) => void;
   dateFilter: DateFilter | null;
-  typeFilter?: TypeFilter | null;
-  onClearTypeFilter?: () => void;
+  typeFilter: TransactionType[];
+  setTypeFilter: (value: TransactionType[]) => void;
   setDateFilter: (value: DateFilter | null) => void;
   showUnmatchedOnly: boolean;
   setShowUnmatchedOnly: (value: boolean) => void;
@@ -41,7 +41,7 @@ const TransactionsRegistryCard = ({
   dateFilter,
   setDateFilter,
   typeFilter,
-  onClearTypeFilter,
+  setTypeFilter,
   showUnmatchedOnly,
   setShowUnmatchedOnly,
   selectedTxByKey,
@@ -83,19 +83,7 @@ const TransactionsRegistryCard = ({
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="flex items-center gap-3 overflow-x-auto p-0.5">
-          {typeFilter && (
-            <Button
-              size="sm"
-              className="gap-1.5 shrink-0"
-              onClick={onClearTypeFilter}
-              title="Показать все виды записей"
-            >
-              <Icon name="Filter" size={14} />
-              Только: {typeFilter.label}
-              <Icon name="X" size={14} />
-            </Button>
-          )}
+        <div className="flex items-center gap-3 overflow-x-auto pl-0.5 pr-2 pt-2 pb-0.5">
           <TransactionsFilters
             searchQuery={searchQuery}
             dateFilter={dateFilter}
@@ -104,6 +92,7 @@ const TransactionsRegistryCard = ({
             showUnmatchedOnly={showUnmatchedOnly}
             setShowUnmatchedOnly={setShowUnmatchedOnly}
           />
+          <TransactionTypeFilterButton value={typeFilter} onChange={setTypeFilter} />
           {selectedTxByKey.size > 0 && (
             <div className="flex items-center gap-2 ml-auto shrink-0">
               <span className="text-sm text-muted-foreground whitespace-nowrap">Выбрано: {selectedTxByKey.size}</span>
