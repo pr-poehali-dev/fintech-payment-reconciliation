@@ -33,13 +33,21 @@ const EventsFilters = ({
           onChange={(e) => setSearchQuery(e.target.value)}
           className="flex-1 min-w-[180px] max-w-md w-auto"
         />
-        <DateRangeFilter value={dateFilter} onChange={setDateFilter} />
         <MultiSelectFilterButton
           title="Источники"
           options={EVENT_SOURCE_OPTIONS}
           value={sourceFilter}
           onChange={setSourceFilter}
           extraToggle={{ label: 'Только ошибки', icon: 'CircleAlert', checked: errorsOnly, onChange: setErrorsOnly }}
+        />
+        <DateRangeFilter
+          value={dateFilter}
+          onChange={setDateFilter}
+          onReset={() => {
+            setDateFilter(null);
+            setSourceFilter([]);
+            setErrorsOnly(false);
+          }}
         />
       </div>
     </div>
