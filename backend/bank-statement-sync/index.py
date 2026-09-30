@@ -13,6 +13,7 @@ from datetime import datetime, timedelta
 from tbank_oauth import fetch_statement as fetch_tbank_statement
 from purpose_classifier import matches_keywords, get_purpose_keywords, operation_purpose_text
 from ru_trusted_ca import build_ssl_context
+from acquiring_settlement import process_acquiring_settlements
 
 # enter.tochka.com отдаёт TLS-сертификат, подписанный НУЦ Минцифры РФ (ГОСТ) -
 # системное доверенное хранилище Python его не знает без этого контекста.
@@ -401,6 +402,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             )
             inserted_count = len(inserted_ids)
 
+        commission_rows = process_acquiring_settlements(cur, integration_id, company_id, provider_slug)
+
         cur.execute('''
             UPDATE t_p83864310_fintech_payment_reco.user_integrations
             SET last_synced_at = NOW(), updated_at = NOW()
@@ -415,7 +418,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             'body': json.dumps({
                 'success': True,
                 'total_transactions': len(transactions),
-                'inserted': inserted_count
+                'inserted': inserted_count,
+                'commission_rows': commission_rows
             }),
             'isBase64Encoded': False
         }

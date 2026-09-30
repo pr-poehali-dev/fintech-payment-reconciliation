@@ -392,14 +392,37 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     ui.integration_name AS integration_name,
                     bst.external_transaction_id AS reference,
                     bst.raw_data AS raw_data,
-                    CASE WHEN wpm.id IS NOT NULL THEN 'payment' WHEN mm.id IS NOT NULL THEN 'money' END AS linked_type,
-                    CASE WHEN wpm.id IS NOT NULL THEN wpm.provider_slug WHEN mm.id IS NOT NULL THEN mm.provider_slug END AS linked_source,
-                    COALESCE(wpm.id, mm.id) AS linked_id,
-                    CASE WHEN wpm.id IS NOT NULL THEN wpm.match_method WHEN mm.id IS NOT NULL THEN 'qr_id' END AS match_method,
+                    CASE
+                        WHEN bst.parent_transaction_id IS NOT NULL THEN 'money'
+                        WHEN lp.id IS NOT NULL OR wpm.id IS NOT NULL THEN 'payment'
+                        WHEN mm.id IS NOT NULL THEN 'money'
+                    END AS linked_type,
+                    CASE
+                        WHEN bst.parent_transaction_id IS NOT NULL THEN bst.provider_slug
+                        WHEN lp.id IS NOT NULL THEN lp.provider_slug
+                        WHEN wpm.id IS NOT NULL THEN wpm.provider_slug
+                        WHEN mm.id IS NOT NULL THEN mm.provider_slug
+                    END AS linked_source,
+                    COALESCE(bst.parent_transaction_id, lp.id, wpm.id, mm.id) AS linked_id,
+                    CASE
+                        WHEN bst.parent_transaction_id IS NOT NULL THEN 'acquiring_commission'
+                        WHEN lp.id IS NOT NULL THEN 'settlement_date'
+                        WHEN wpm.id IS NOT NULL THEN wpm.match_method
+                        WHEN mm.id IS NOT NULL THEN 'qr_id'
+                    END AS match_method,
                     NULL::text AS group_key,
                     NULL::text AS linked_ofd_status
                 FROM {SCHEMA}.bank_statement_transactions bst
                 JOIN {SCHEMA}.user_integrations ui ON ui.id = bst.integration_id
+                -- Связь зачисления эквайринга с платежом, проставленная при
+                -- синхронизации выписки (bank-statement-sync/acquiring_settlement).
+                LEFT JOIN LATERAL (
+                    SELECT lwp.id, lp_p.slug AS provider_slug
+                    FROM {SCHEMA}.webhook_payments lwp
+                    JOIN {SCHEMA}.user_integrations lp_ui ON lp_ui.id = lwp.integration_id
+                    JOIN {SCHEMA}.integration_providers lp_p ON lp_p.id = lp_ui.provider_id
+                    WHERE lwp.id = bst.linked_payment_id
+                ) lp ON true
                 LEFT JOIN LATERAL (
                     -- Банковская выписка сама по себе не содержит номер заказа -
                     -- назначение платежа (purpose) единственная зацепка. У платежей

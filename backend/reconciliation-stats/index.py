@@ -296,7 +296,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         # на случай, если реестра нет (как сейчас).
         cur.execute(f'''
             SELECT
-                bst.operation_date::date AS op_date,
+                COALESCE(bst.settlement_date, bst.operation_date::date) AS op_date,
                 bst.amount,
                 bst.direction,
                 bst.purpose,
@@ -311,7 +311,13 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             JOIN {SCHEMA}.integration_categories c ON c.id = p.category_id
             WHERE bst.company_id = %s AND c.slug = 'banks'
               AND bst.removed_at IS NULL
-              AND bst.operation_date::date BETWEEN %s AND %s
+              -- Расчётная строка комиссии эквайринга (создаётся при синхронизации
+              -- для наглядности в группе) - не реальное списание со счёта, её
+              -- сумма уже учтена через commission_amount самого зачисления.
+              AND bst.parent_transaction_id IS NULL
+              -- Зачисление эквайринга относится к дню продаж ("за ДД.ММ.ГГГГ"
+              -- в назначении), а не к дню поступления денег.
+              AND COALESCE(bst.settlement_date, bst.operation_date::date) BETWEEN %s AND %s
         ''', (company_id, date_from, date_to))
 
         bank_rows = cur.fetchall()
@@ -343,7 +349,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             commission_f = 0.0
             if is_in and commission_amount and float(commission_amount) > 0:
                 commission_f = float(commission_amount)
-                if commission_source == 'registry':
+                if commission_source in ('registry', 'purpose'):
                     bank_with_known_commission += 1
             elif is_in and acquiring_commission_text:
                 # (а) классический эквайринг - сумма комиссии написана в purpose
