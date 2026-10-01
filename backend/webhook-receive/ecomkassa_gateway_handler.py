@@ -180,6 +180,23 @@ def save_receipt_from_report(cur, integration_id: int, company_id: int, uid: str
     return receipt_id, float(total_sum) if total_sum else 0.0, payment_provider
 
 
+def link_automation_document(cur, cash_integration_id: int, uid: str, data: Dict[str, Any],
+                             receipt_row_id: Optional[int], status: str) -> None:
+    '''
+    Документ, созданный нашим сценарием, находим по UUID кассы или по нашему
+    external_id и прописываем ему пробитый чек и статус (wait/done/fail).
+    '''
+    external_id = data.get('external_id')
+    cur.execute('''
+        UPDATE t_p83864310_fintech_payment_reco.automation_documents
+        SET ecom_uuid = COALESCE(ecom_uuid, %s),
+            receipt_id = COALESCE(%s, receipt_id),
+            status = CASE WHEN status = 'done' THEN status ELSE %s END,
+            updated_at = NOW()
+        WHERE kassa_integration_id = %s AND (ecom_uuid = %s OR external_id = %s)
+    ''', (str(uid), receipt_row_id, status, cash_integration_id, str(uid), str(external_id or uid)))
+
+
 def save_pending_order(cur, integration_id: int, company_id: int, uid: str,
                        data: Dict[str, Any], total_sum: Optional[float] = None) -> Optional[int]:
     '''
@@ -301,17 +318,18 @@ def process(cur, integration_id: int, company_id: int, config: Dict[str, Any],
         # за report() (чек и так уже пробит, раз status="done"). Чек привязываем
         # к интеграции кассы (slug=ecomkassa), а не шлюза - так же, как это
         # делает try_resolve_receipt, чтобы обе ветки писали чек в одно место.
-        if raw_status.lower() == 'wait' and order_type == 'CORD':
-            cash_integration = find_cash_register_integration(cur, company_id)
-            if cash_integration:
-                save_pending_order(cur, cash_integration[0], company_id, uid, webhook_data)
-        if raw_status.lower() == 'done':
-            cash_integration = find_cash_register_integration(cur, company_id)
-            if cash_integration:
-                cash_integration_id, _ = cash_integration
-                receipt_id, amount, payment_provider = save_receipt_from_report(
-                    cur, cash_integration_id, company_id, uid, webhook_data
-                )
+        cash_integration = find_cash_register_integration(cur, company_id)
+        if raw_status.lower() == 'wait' and order_type == 'CORD' and cash_integration:
+            pending_id = save_pending_order(cur, cash_integration[0], company_id, uid, webhook_data)
+            link_automation_document(cur, cash_integration[0], uid, webhook_data, pending_id, 'wait')
+        if raw_status.lower() == 'done' and cash_integration:
+            cash_integration_id, _ = cash_integration
+            receipt_id, amount, payment_provider = save_receipt_from_report(
+                cur, cash_integration_id, company_id, uid, webhook_data
+            )
+            link_automation_document(cur, cash_integration_id, uid, webhook_data, receipt_id, 'done')
+        if raw_status.lower() == 'fail' and cash_integration:
+            link_automation_document(cur, cash_integration[0], uid, webhook_data, None, 'fail')
         # VCHR - платежа не бывает никогда. INVC/CORD - платёж создаём только
         # если payment_provider реально пришёл (invoice_payload.provider) -
         # иначе это чек без электронной оплаты (например, заказ, оплаченный

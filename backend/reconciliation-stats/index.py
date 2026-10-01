@@ -34,7 +34,7 @@ def classify_receipt_sign(operation_type: Optional[str]) -> int:
     if not operation_type:
         return 1
     t = operation_type.strip().lower()
-    is_refund = 'возврат' in t or 'refund' in t
+    is_refund = 'возврат' in t or 'refund' in t or 'return' in t
     is_expense = 'расход' in t or 'expense' in t
     if is_refund and is_expense:
         return 1
@@ -217,7 +217,9 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             SELECT
                 ekr.doc_datetime::date AS receipt_date,
                 ekr.total_sum,
-                om.operation_type AS linked_ofd_status,
+                COALESCE(om.operation_type,
+                         CASE WHEN adv.operation LIKE 'sell_refund%%' THEN 'Refund Income' END,
+                         ekr.raw_data->'payload'->>'operation_type') AS linked_ofd_status,
                 COALESCE(adv.advance_sum, 0) AS advance_sum
             FROM {SCHEMA}.ecomkassa_receipts ekr
             LEFT JOIN LATERAL (
@@ -234,20 +236,12 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 LIMIT 1
             ) om ON true
             LEFT JOIN LATERAL (
-                -- Закрывающий чек заказа, созданного сценарием по платежу (external_id = auto-<задание>):
-                -- оплаты типа 2 (зачёт аванса) денег не приносят - их уже учёл чек оплаты.
-                SELECT SUM((pay->>'sum')::numeric) AS advance_sum
-                FROM {SCHEMA}.automation_jobs j
-                JOIN {SCHEMA}.automation_job_log l ON l.job_id = j.id AND l.details ? 'request'
-                CROSS JOIN LATERAL jsonb_array_elements(l.details->'request'->'receipt'->'payments') pay
-                WHERE ekr.order_type = 'CORD'
-                  AND (ekr.raw_data->>'external_id') LIKE 'auto-%%'
-                  AND j.id::text = substring(ekr.raw_data->>'external_id' from 6)
-                  AND j.company_id = ekr.company_id AND j.source_type = 'payment'
-                  AND l.id = (SELECT MAX(l2.id) FROM {SCHEMA}.automation_job_log l2
-                              WHERE l2.job_id = j.id AND l2.details ? 'request')
-                  AND jsonb_typeof(l.details->'request'->'receipt'->'payments') = 'array'
-                  AND (pay->>'type') = '2'
+                -- Документ создан сценарием (реестр документов автоматизации): часть суммы,
+                -- оплаченная зачётом аванса, денег не приносит - её уже учёл чек оплаты.
+                SELECT MAX(d.advance_sum) AS advance_sum, MAX(d.operation) AS operation
+                FROM {SCHEMA}.automation_documents d
+                WHERE d.company_id = ekr.company_id AND d.kassa_integration_id = ekr.integration_id
+                  AND (d.receipt_id = ekr.id OR d.ecom_uuid = ekr.order_id)
             ) adv ON true
             WHERE ekr.company_id = %s
               AND ekr.removed_at IS NULL

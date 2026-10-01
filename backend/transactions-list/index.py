@@ -59,7 +59,7 @@ def classify_receipt_sign(operation_type: Optional[str]) -> int:
     if not operation_type:
         return 1
     t = operation_type.strip().lower()
-    is_refund = 'возврат' in t or 'refund' in t
+    is_refund = 'возврат' in t or 'refund' in t or 'return' in t
     is_expense = 'расход' in t or 'expense' in t
     if is_refund and is_expense:
         return 1
@@ -338,20 +338,32 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     ekr.total_sum AS amount,
                     ekr.status AS status,
                     ('Чек #' || COALESCE(ekr.doc_number, ekr.order_id, ekr.id::text)) AS title,
-                    CASE WHEN ekr.order_type = 'CORD' THEN 'Закрывающий чек заказа'
+                    CASE WHEN ekr.order_type = 'CORD' AND ad.operation LIKE 'sell_refund%%' THEN 'Закрывающий чек возврата'
+                         WHEN ekr.order_type = 'CORD' THEN 'Закрывающий чек заказа'
+                         WHEN ad.operation LIKE 'sell_refund%%' OR rp.id IS NOT NULL THEN 'Чек возврата'
                          ELSE COALESCE(ekr.payment_provider, 'Касса') END AS subtitle,
                     ui.integration_name AS integration_name,
                     ekr.order_id AS reference,
                     ekr.raw_data AS raw_data,
+                    -- Закрывающий чек заказа -> его заказ; чек, пробитый сценарием без заказа, или
+                    -- чек возврата Т-Банка -> платёж-основание; иначе -> чек ОФД (чек ОФД и сам
+                    -- ищет чек кассы по фискальным реквизитам, поэтому в группу попадёт всегда).
                     CASE WHEN ekr.order_type = 'CORD' THEN 'receipt_order'
+                         WHEN ad.payment_row_id IS NOT NULL OR rp.id IS NOT NULL THEN 'payment'
                          WHEN om.id IS NOT NULL THEN 'receipt_ofd' END AS linked_type,
                     CASE WHEN ekr.order_type = 'CORD' THEN 'ecomkassa'
+                         WHEN ad.payment_row_id IS NOT NULL OR rp.id IS NOT NULL THEN COALESCE(ad.payment_source, rp.source)
                          WHEN om.id IS NOT NULL THEN 'ofd' END AS linked_source,
-                    CASE WHEN ekr.order_type = 'CORD' THEN ekr.id ELSE om.id END AS linked_id,
+                    CASE WHEN ekr.order_type = 'CORD' THEN ekr.id
+                         ELSE COALESCE(ad.payment_row_id, rp.id, om.id) END AS linked_id,
                     CASE WHEN ekr.order_type = 'CORD' THEN 'order_receipt'
+                         WHEN ad.payment_row_id IS NOT NULL THEN 'automation'
+                         WHEN rp.id IS NOT NULL THEN 'refund_receipt'
                          WHEN om.id IS NOT NULL THEN 'fiscal_triplet' END AS match_method,
                     NULL::text AS group_key,
-                    om.operation_type AS linked_ofd_status
+                    COALESCE(om.operation_type,
+                             CASE WHEN ad.operation LIKE 'sell_refund%%' THEN 'Refund Income' END,
+                             ekr.raw_data->'payload'->>'operation_type') AS linked_ofd_status
                 FROM {SCHEMA}.ecomkassa_receipts ekr
                 JOIN {SCHEMA}.user_integrations ui ON ui.id = ekr.integration_id
                 LEFT JOIN LATERAL (
@@ -367,6 +379,28 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                       AND (ofd.raw_data->>'DecimalFiscalSign') = (ekr.raw_data->'payload'->>'fiscal_document_attribute')
                     LIMIT 1
                 ) om ON true
+                LEFT JOIN LATERAL (
+                    SELECT d.payment_row_id, d.operation, pp.slug AS payment_source
+                    FROM {SCHEMA}.automation_documents d
+                    LEFT JOIN {SCHEMA}.webhook_payments wp ON wp.id = d.payment_row_id AND wp.removed_at IS NULL
+                    LEFT JOIN {SCHEMA}.user_integrations pui ON pui.id = wp.integration_id
+                    LEFT JOIN {SCHEMA}.integration_providers pp ON pp.id = pui.provider_id
+                    WHERE d.receipt_id = ekr.id AND d.company_id = ekr.company_id
+                    ORDER BY d.id DESC LIMIT 1
+                ) ad ON true
+                LEFT JOIN LATERAL (
+                    -- Чек возврата от Т-Банка: платёж-основание по PaymentId из уведомления.
+                    SELECT wp.id, pp.slug AS source
+                    FROM {SCHEMA}.webhook_payments wp
+                    JOIN {SCHEMA}.user_integrations pui ON pui.id = wp.integration_id
+                    JOIN {SCHEMA}.integration_providers pp ON pp.id = pui.provider_id
+                    WHERE ekr.source = 'tbank'
+                      AND lower(COALESCE(ekr.raw_data->'payload'->>'operation_type', 'income')) <> 'income'
+                      AND wp.integration_id = ekr.integration_id
+                      AND wp.payment_id = ekr.raw_data->'tbank_notification'->>'PaymentId'
+                      AND wp.removed_at IS NULL
+                    ORDER BY wp.id LIMIT 1
+                ) rp ON true
                 WHERE ekr.company_id = %(company_id)s AND ekr.removed_at IS NULL
                   -- Закрывающий чек заказа (CORD) - отдельная строка, связанная со своим заказом;
                   -- чек ОФД привязывается к нему сам по фискальным реквизитам.
@@ -385,7 +419,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     ekr.total_sum AS amount,
                     ekr.status AS status,
                     ('Заказ #' || COALESCE(ekr.order_id, ekr.id::text)) AS title,
-                    COALESCE(ekr.payment_provider, 'Курьерский заказ') AS subtitle,
+                    CASE WHEN aj.operation LIKE 'sell_refund%%' THEN 'Заказ на возврат'
+                         ELSE COALESCE(ekr.payment_provider, 'Курьерский заказ') END AS subtitle,
                     ui.integration_name AS integration_name,
                     ekr.order_id AS reference,
                     ekr.raw_data AS raw_data,
@@ -394,7 +429,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     aj.payment_row_id AS linked_id,
                     CASE WHEN aj.payment_row_id IS NOT NULL THEN 'automation' END AS match_method,
                     NULL::text AS group_key,
-                    om.operation_type AS linked_ofd_status
+                    COALESCE(CASE WHEN aj.operation LIKE 'sell_refund%%' THEN 'Refund Income' END,
+                             om.operation_type) AS linked_ofd_status
                 FROM {SCHEMA}.ecomkassa_receipts ekr
                 JOIN {SCHEMA}.user_integrations ui ON ui.id = ekr.integration_id
                 LEFT JOIN LATERAL (
@@ -411,17 +447,16 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     LIMIT 1
                 ) om ON true
                 LEFT JOIN LATERAL (
-                    -- Заказ создан сценарием автоматизации: external_id = auto-<id задания>,
-                    -- задание знает платёж, из которого заказ появился.
-                    SELECT wp.id AS payment_row_id, pp.slug AS payment_source
-                    FROM {SCHEMA}.automation_jobs j
-                    JOIN {SCHEMA}.webhook_payments wp ON wp.id::text = j.source_id AND wp.removed_at IS NULL
+                    -- Заказ создан сценарием: реестр документов автоматизации хранит
+                    -- платёж-основание, наш external_id и UUID заказа в кассе.
+                    SELECT d.payment_row_id, d.operation, pp.slug AS payment_source
+                    FROM {SCHEMA}.automation_documents d
+                    JOIN {SCHEMA}.webhook_payments wp ON wp.id = d.payment_row_id AND wp.removed_at IS NULL
                     JOIN {SCHEMA}.user_integrations pui ON pui.id = wp.integration_id AND pui.status != 'deleted'
                     JOIN {SCHEMA}.integration_providers pp ON pp.id = pui.provider_id
-                    WHERE (ekr.raw_data->>'external_id') LIKE 'auto-%%'
-                      AND j.id::text = substring(ekr.raw_data->>'external_id' from 6)
-                      AND j.company_id = ekr.company_id AND j.source_type = 'payment'
-                    LIMIT 1
+                    WHERE d.company_id = ekr.company_id AND d.kassa_integration_id = ekr.integration_id
+                      AND (d.ecom_uuid = ekr.order_id OR d.external_id = (ekr.raw_data->>'external_id'))
+                    ORDER BY d.id DESC LIMIT 1
                 ) aj ON true
                 WHERE ekr.company_id = %(company_id)s AND ekr.removed_at IS NULL
                   AND ekr.order_type = 'CORD'

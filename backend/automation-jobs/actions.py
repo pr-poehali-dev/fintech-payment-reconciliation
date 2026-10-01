@@ -135,6 +135,42 @@ def save_pending_order(cur, integration_id: int, company_id: Optional[int], orde
     ''', (integration_id, company_id, order_id, order_id, total, json.dumps(raw, ensure_ascii=False)))
 
 
+def register_document(cur, job: Dict[str, Any], scenario: Dict[str, Any], kassa_id: int, external_id: str,
+                      operation: str, total: float, advance: float, ecom_uuid: Optional[str] = None,
+                      doc_kind: str = 'order') -> None:
+    '''
+    Реестр документов автоматизации: каждый документ, отправленный нами в кассу,
+    связан с платежом-основанием через external_id (наш номер) и UUID кассы.
+    По ним колбэк кассы довязывает пробитый чек, реестр транзакций собирает
+    цепочку, а сверка знает, какая часть суммы - зачёт аванса.
+    operation: sell / sell_refund (+ _correction); doc_kind: order (заказ) / receipt (чек).
+    '''
+    if cur is None or not job.get('company_id'):
+        return
+    payment_row_id = int(job['source_id']) if job.get('source_type') == 'payment' and str(job.get('source_id') or '').isdigit() else None
+    cur.execute(f'''
+        INSERT INTO {SCHEMA}.automation_documents
+            (company_id, job_id, scenario_id, payment_row_id, kassa_integration_id, doc_kind, operation,
+             external_id, ecom_uuid, total_sum, advance_sum)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        ON CONFLICT (kassa_integration_id, external_id) DO UPDATE SET
+            ecom_uuid = COALESCE(EXCLUDED.ecom_uuid, {SCHEMA}.automation_documents.ecom_uuid),
+            total_sum = EXCLUDED.total_sum, advance_sum = EXCLUDED.advance_sum,
+            operation = EXCLUDED.operation, updated_at = NOW()
+    ''', (job['company_id'], job.get('id'), scenario.get('id'), payment_row_id, kassa_id, doc_kind, operation,
+          external_id, ecom_uuid, total, advance))
+    if ecom_uuid:
+        # Колбэк кассы мог прийти раньше - сразу довязываем уже сохранённый чек.
+        cur.execute(f'''
+            UPDATE {SCHEMA}.automation_documents d
+            SET receipt_id = ekr.id, status = ekr.status, updated_at = NOW()
+            FROM {SCHEMA}.ecomkassa_receipts ekr
+            WHERE d.kassa_integration_id = %s AND d.external_id = %s
+              AND ekr.integration_id = d.kassa_integration_id AND ekr.order_id = d.ecom_uuid
+              AND ekr.removed_at IS NULL
+        ''', (kassa_id, external_id))
+
+
 def create_order(cur, job: Dict[str, Any], scenario: Dict[str, Any], data: Dict[str, Any]) -> Tuple[str, Dict[str, Any], str]:
     '''
     Создаёт заказ в Екомкассе (POST /api/mobile/v1/courier/:storeId/create/:operation).
@@ -190,10 +226,13 @@ def create_order(cur, job: Dict[str, Any], scenario: Dict[str, Any], data: Dict[
     notify_url = callback_url(cur, job.get('company_id'))
     if notify_url:
         body['service'] = {'callback_url': notify_url}
+    advance = round(sum(float(p['sum']) for p in body['receipt']['payments'] if int(p['type']) == 2), 2)
+    register_document(cur, job, scenario, kassa['id'], external_id, operation, total, advance)
     result, err = create_courier_order(kassa, operation, body)
     if not result:
         return 'error', {'request': body}, err
     order_id = str(result.get('uuid'))
+    register_document(cur, job, scenario, kassa['id'], external_id, operation, total, advance, order_id)
     save_pending_order(cur, kassa['id'], job.get('company_id'), order_id, {
         'uuid': order_id, 'external_id': external_id, 'kind': 'COURIER_ORDER',
         'permalink': result.get('permalink'), 'timestamp': result.get('timestamp'),

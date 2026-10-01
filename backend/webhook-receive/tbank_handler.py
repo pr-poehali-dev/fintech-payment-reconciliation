@@ -90,6 +90,11 @@ def save_fiscal_receipt(cur, integration_id: int, company_id: int, webhook_data:
     Returns: id основного чека (Екомкассы, если слит, иначе Т-Банка).
     '''
     payment_id = str(webhook_data.get('PaymentId'))
+    operation_type = str(webhook_data.get('Type') or 'Income')
+    is_sale = operation_type.lower() == 'income'
+    # Чек продажи хранится под номером платежа, остальные (возврат и т.п.) - под
+    # своим ключом с номером ФД, иначе возврат перезаписал бы чек продажи.
+    receipt_key = payment_id if is_sale else f"{payment_id}:{operation_type}:{webhook_data.get('FiscalDocumentNumber')}"
     total = float(webhook_data.get('Amount') or 0) / 100
     payload = {
         'total': total,
@@ -117,13 +122,17 @@ def save_fiscal_receipt(cur, integration_id: int, company_id: int, webhook_data:
             raw_data = EXCLUDED.raw_data
         RETURNING id, merged_into_id
     ''', (
-        integration_id, company_id, payment_id, webhook_data.get('OrderId'), total,
+        integration_id, company_id, receipt_key, webhook_data.get('OrderId'), total,
         str(webhook_data.get('FiscalDocumentNumber')), _parse_datetime(webhook_data.get('ReceiptDatetime')),
         json.dumps(raw, ensure_ascii=False)
     ))
     row = cur.fetchone()
     receipt_id = row[1] or row[0]
     receipt_id = merge_after_tbank(cur, row[0]) or receipt_id
+    if not is_sale:
+        # Чек возврата к платежу привязывает реестр транзакций (по PaymentId),
+        # основной чек платежа остаётся чеком продажи.
+        return receipt_id
 
     cur.execute(f'''
         UPDATE {SCHEMA}.webhook_payments SET receipt_id = %s, updated_at = NOW()
@@ -174,6 +183,9 @@ def save_cart(cur, integration_id: int, company_id: int, webhook_data: Dict[str,
     fiscal = {k: webhook_data.get(k) for k in fiscal_keys if webhook_data.get(k) is not None}
     fiscalized = _is_fiscalized(webhook_data)
     receipt_id = save_fiscal_receipt(cur, integration_id, company_id, webhook_data) if fiscalized else None
+    if str(webhook_data.get('Type') or 'Income').lower() != 'income':
+        # Корзина возврата не должна заменить корзину продажи (из неё сценарии собирают заказ).
+        return True
     cur.execute('''
         INSERT INTO t_p83864310_fintech_payment_reco.payment_carts
             (company_id, integration_id, payment_id, order_id, source, items, receipt, items_total, fiscal_data,
