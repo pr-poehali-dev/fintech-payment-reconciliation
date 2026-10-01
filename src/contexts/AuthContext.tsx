@@ -19,6 +19,7 @@ export interface Company {
   tariff_modules?: string[] | null;
   max_integrations?: number | null;
   max_automations?: number | null;
+  platform_admin?: boolean;
 }
 
 interface AuthUser {
@@ -161,7 +162,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const currentCompany = companies.find(c => c.id === currentCompanyId) || null;
-  const isPlatformAdmin = Boolean(user?.is_platform_admin);
+  // Админка - только владельцу компании платформы и только когда выбрана эта компания.
+  const isPlatformAdmin = Boolean(user?.is_platform_admin && currentCompany?.platform_admin);
 
   return (
     <AuthContext.Provider

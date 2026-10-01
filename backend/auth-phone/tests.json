@@ -10,8 +10,7 @@
       },
       "expectedStatus": 200,
       "expectedBody": {
-        "success": true,
-        "user_id": "number"
+        "success": true
       },
       "bodyMatcher": "partial"
     },

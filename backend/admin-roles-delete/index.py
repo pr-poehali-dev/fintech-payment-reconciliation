@@ -58,6 +58,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             SELECT 1 FROM company_users cu
             JOIN companies c ON c.id = cu.company_id
             WHERE cu.user_id = %s AND cu.status = 'active' AND c.is_platform_admin = true
+              AND cu.role_id = (SELECT id FROM roles WHERE slug = 'owner' LIMIT 1)
         ''', (requester_user_id,))
 
         if not cur.fetchone():

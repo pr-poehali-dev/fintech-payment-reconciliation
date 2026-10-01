@@ -95,7 +95,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 'role_color': c_row[5],
                 'timezone': c_row[7] or 'Europe/Moscow'
             })
-            if c_row[6]:
+            # Админка - только владельцу компании платформы.
+            if c_row[6] and c_row[3] == 'owner':
                 is_platform_admin = True
 
         return {

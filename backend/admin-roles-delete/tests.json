@@ -30,7 +30,7 @@
       "method": "DELETE",
       "path": "/",
       "body": {
-        "requester_user_id": 1,
+        "requester_user_id": 3,
         "role_id": 2
       },
       "expectedStatus": 400,

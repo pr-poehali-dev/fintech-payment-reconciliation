@@ -31,6 +31,7 @@ def is_admin(cur, user_id) -> bool:
         SELECT 1 FROM {SCHEMA}.company_users cu
         JOIN {SCHEMA}.companies c ON c.id = cu.company_id
         WHERE cu.user_id = %s AND cu.status = 'active' AND c.is_platform_admin = true
+          AND cu.role_id IN (SELECT id FROM {SCHEMA}.roles WHERE slug = 'owner')
     ''', (user_id,))
     return cur.fetchone() is not None
 
