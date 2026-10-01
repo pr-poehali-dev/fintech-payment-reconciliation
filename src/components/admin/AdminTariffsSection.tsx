@@ -20,6 +20,7 @@ interface Tariff {
   price: number;
   is_active: boolean;
   modules: string[];
+  max_companies: number | null;
   max_users: number | null;
   max_integrations: number | null;
   max_automations: number | null;
@@ -28,7 +29,8 @@ interface Tariff {
   companies_count: number;
 }
 
-const LIMITS: { key: 'max_users' | 'max_integrations' | 'max_automations'; label: string; icon: string }[] = [
+const LIMITS: { key: 'max_companies' | 'max_users' | 'max_integrations' | 'max_automations'; label: string; icon: string }[] = [
+  { key: 'max_companies', label: 'Компании', icon: 'Building2' },
   { key: 'max_users', label: 'Пользователи', icon: 'Users' },
   { key: 'max_integrations', label: 'Интеграции', icon: 'Plug' },
   { key: 'max_automations', label: 'Автоматизации', icon: 'Workflow' }

@@ -75,6 +75,30 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 'isBase64Encoded': False
             }
 
+        # Лимит компаний: берём лучший тариф среди компаний, которыми владеет пользователь.
+        cur.execute('''
+            SELECT COUNT(*),
+                   BOOL_OR(t.id IS NOT NULL AND t.max_companies IS NULL),
+                   MAX(t.max_companies)
+            FROM company_users cu
+            JOIN roles r ON r.id = cu.role_id AND r.slug = 'owner'
+            LEFT JOIN subscriptions s ON s.company_id = cu.company_id
+            LEFT JOIN tariffs t ON t.id = s.tariff_id
+            WHERE cu.user_id = %s AND cu.status = 'active'
+        ''', (user_id,))
+        owned, unlimited, max_companies = cur.fetchone()
+        if owned and not unlimited and max_companies is not None and owned >= max_companies:
+            return {
+                'statusCode': 403,
+                'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+                'body': json.dumps({
+                    'error': f'Лимит компаний по тарифу исчерпан ({max_companies}). Перейдите на тариф с большим числом компаний.',
+                    'error_code': 'limit_reached',
+                    'max_companies': max_companies
+                }),
+                'isBase64Encoded': False
+            }
+
         cur.execute(
             '''INSERT INTO companies (name, inn, kpp, ogrn, full_name, legal_address, status, created_by)
                VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING id, name''',

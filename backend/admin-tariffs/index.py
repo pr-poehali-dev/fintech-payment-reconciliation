@@ -14,7 +14,7 @@ CORS_HEADERS = {
 }
 
 MODULES = {'reconciliation', 'events', 'transactions', 'automation', 'integrations', 'access', 'settings'}
-LIMITS = ('max_users', 'max_integrations', 'max_automations')
+LIMITS = ('max_companies', 'max_users', 'max_integrations', 'max_automations')
 
 
 def respond(status: int, payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -39,7 +39,7 @@ def list_tariffs(cur):
     cur.execute(f'''
         SELECT t.id, t.slug, t.name, t.description, t.price, t.billing_period, t.is_active,
                t.modules, t.max_users, t.max_integrations, t.max_automations,
-               t.period_days, t.yearly_discount_percent,
+               t.period_days, t.yearly_discount_percent, t.max_companies,
                (SELECT COUNT(*) FROM {SCHEMA}.subscriptions s WHERE s.tariff_id = t.id)
         FROM {SCHEMA}.tariffs t ORDER BY t.sort_order, t.id
     ''')
@@ -47,7 +47,8 @@ def list_tariffs(cur):
         'id': r[0], 'slug': r[1], 'name': r[2], 'description': r[3], 'price': float(r[4]),
         'billing_period': r[5], 'is_active': r[6], 'modules': r[7] or [],
         'max_users': r[8], 'max_integrations': r[9], 'max_automations': r[10],
-        'period_days': r[11], 'yearly_discount_percent': float(r[12]), 'companies_count': r[13]
+        'period_days': r[11], 'yearly_discount_percent': float(r[12]), 'max_companies': r[13],
+        'companies_count': r[14]
     } for r in cur.fetchall()]
 
 
@@ -66,7 +67,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     Тарифы платформы для админки (только администраторы платформы).
     GET ?requester_user_id= - тарифы с модулями и лимитами
     POST {action: "save", requester_user_id, id, name, price, is_active, modules[],
-          max_users, max_integrations, max_automations, period_days, yearly_discount_percent}
+          max_companies, max_users, max_integrations, max_automations, period_days, yearly_discount_percent}
           - пустой лимит = без ограничения; period_days - срок действия (пробный - дни триала)
     POST {action: "set_company_tariff", requester_user_id, company_id, tariff_id} - сменить тариф компании
     '''
@@ -124,7 +125,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             modules = [m for m in body.get('modules') or [] if m in MODULES]
             cur.execute(f'''
                 UPDATE {SCHEMA}.tariffs SET name = %s, price = %s, is_active = %s, modules = %s,
-                       max_users = %s, max_integrations = %s, max_automations = %s,
+                       max_companies = %s, max_users = %s, max_integrations = %s, max_automations = %s,
                        period_days = %s, yearly_discount_percent = %s, updated_at = NOW()
                 WHERE id = %s RETURNING id
             ''', (name, price, bool(body.get('is_active', True)), json.dumps(modules), *limits,

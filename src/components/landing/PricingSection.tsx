@@ -10,9 +10,9 @@ export interface Tariff {
   description: string;
   price: number;
   billing_period: string;
-  max_companies: number;
-  max_users: number;
-  max_integrations: number;
+  max_companies: number | null;
+  max_users: number | null;
+  max_integrations: number | null;
   features: string[];
   period_days?: number;
   yearly_discount_percent?: number;
@@ -145,15 +145,15 @@ const PricingSection = ({ onCtaClick, trialDays, tariffs: loaded }: { onCtaClick
                   <ul className="space-y-3 mb-6">
                     <li className="flex items-center gap-2 text-sm text-muted-foreground">
                       <Icon name="Check" size={16} className="text-primary shrink-0" />
-                      До {tariff.max_companies} {tariff.max_companies === 1 ? 'компании' : 'компаний'}
+                      {tariff.max_companies == null ? 'Без ограничения компаний' : `До ${tariff.max_companies} ${tariff.max_companies === 1 ? 'компании' : 'компаний'}`}
                     </li>
                     <li className="flex items-center gap-2 text-sm text-muted-foreground">
                       <Icon name="Check" size={16} className="text-primary shrink-0" />
-                      До {tariff.max_users} пользователей
+                      {tariff.max_users == null ? 'Без ограничения пользователей' : `До ${tariff.max_users} пользователей`}
                     </li>
                     <li className="flex items-center gap-2 text-sm text-muted-foreground">
                       <Icon name="Check" size={16} className="text-primary shrink-0" />
-                      До {tariff.max_integrations} интеграций
+                      {tariff.max_integrations == null ? 'Без ограничения интеграций' : `До ${tariff.max_integrations} интеграций`}
                     </li>
                     {tariff.features.map((feature) => (
                       <li key={feature} className="flex items-center gap-2 text-sm text-muted-foreground">
