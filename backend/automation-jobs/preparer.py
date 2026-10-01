@@ -169,8 +169,9 @@ def prepare_crm(cur, job: Dict[str, Any], scenario: Dict[str, Any]) -> Tuple[str
     main = record[entity]
     if not bitrix_crm.stage_matches(mapping, entity, main):
         return 'skipped', {'crm': {'entity': entity, 'id': job['source_id']}}, (
-            f"{noun} #{job['source_id']} на стадии {main.get(bitrix_crm.STAGE_FIELD[entity])} - "
-            f"ждём стадию {mapping.get('stage')}, задание оживёт при следующем хуке"
+            f"{noun} #{job['source_id']} в воронке {main.get('CATEGORY_ID', '-')}, на стадии {main.get(bitrix_crm.STAGE_FIELD[entity])} - "
+            f"ждём {'стадию ' + mapping['stage'] if mapping.get('stage') else 'воронку ' + str(mapping.get('pipeline'))}, "
+            f"задание оживёт при следующем хуке"
         )
     data, err, note = bitrix_crm.build_data(record, entity, mapping)
     if err:

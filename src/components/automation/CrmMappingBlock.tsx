@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import Icon from '@/components/ui/icon';
 import functionUrls from '../../../backend/func2url.json';
 import CrmFieldPicker from './CrmFieldPicker';
@@ -82,7 +82,7 @@ const CrmMappingBlock = ({ companyId, integrationId, mapping, onChange }: CrmMap
 
   const setEntity = (value: CrmEntity) => {
     const swap = (ref: unknown) => (typeof ref === 'string' && ref.startsWith(`${entity}.`) ? ref.replace(`${entity}.`, `${value}.`) : ref);
-    const next: Record<string, unknown> = { ...mapping, entity: value, stage: '' };
+    const next: Record<string, unknown> = { ...mapping, entity: value, pipeline: '', stage: '' };
     MAPPING_FIELDS.forEach((f) => { next[f.key] = swap(mapping[f.key]); });
     if (value === 'lead' && next.order_id === 'lead.ID') next.single_item_name = 'Оплата по заявке №{ID}';
     onChange(next);
@@ -128,11 +128,23 @@ const CrmMappingBlock = ({ companyId, integrationId, mapping, onChange }: CrmMap
   }
 
   const entities = [entity, 'contact', 'company'];
-  const stageGroups = meta.stages[entity].reduce<Record<string, typeof meta.stages.deal>>((acc, s) => {
-    const g = s.group || 'Статусы';
-    (acc[g] = acc[g] || []).push(s);
-    return acc;
-  }, {});
+  // Воронки сделок - из стадий (group_id - номер воронки в Битрикс24). У лидов воронок нет.
+  const pipelines = entity === 'deal'
+    ? meta.stages.deal.reduce<{ id: string; name: string; count: number }[]>((acc, s) => {
+        const id = s.group_id || '0';
+        const found = acc.find((p) => p.id === id);
+        if (found) found.count += 1;
+        else acc.push({ id, name: s.group || `Воронка ${id}`, count: 1 });
+        return acc;
+      }, [])
+    : [];
+  const pipeline = String(mapping.pipeline || '');
+  // Сценарий, настроенный до выбора воронки: воронку берём по сохранённой стадии.
+  const stagePipeline = meta.stages.deal.find((s) => s.value === stages[0])?.group_id || '';
+  const activePipeline = pipeline || stagePipeline;
+  const stageOptions = entity === 'deal'
+    ? meta.stages.deal.filter((s) => (s.group_id || '0') === activePipeline)
+    : meta.stages.lead;
 
   return (
     <div className="space-y-4">
@@ -159,27 +171,48 @@ const CrmMappingBlock = ({ companyId, integrationId, mapping, onChange }: CrmMap
           ))}
         </div>
 
+        {entity === 'deal' && (
+          <div className="space-y-1.5">
+            <span className="text-sm">Воронка</span>
+            <Select value={activePipeline || undefined} onValueChange={(v) => set({ pipeline: v, stage: '' })}>
+              <SelectTrigger className="h-9">
+                <SelectValue placeholder="Выберите воронку" />
+              </SelectTrigger>
+              <SelectContent className="max-h-80">
+                {pipelines.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>
+                    {p.name} <span className="ml-1 text-[10px] text-muted-foreground">{p.count} стад.</span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+
         <div className="space-y-1.5">
           <span className="text-sm">Стадия для запуска</span>
-          <Select value={stages[0] || '__any__'} onValueChange={(v) => set({ stage: v === '__any__' ? '' : v })}>
+          <Select
+            value={stages[0] || '__any__'}
+            onValueChange={(v) => set({ stage: v === '__any__' ? '' : v, ...(entity === 'deal' ? { pipeline: activePipeline } : {}) })}
+            disabled={entity === 'deal' && !activePipeline}
+          >
             <SelectTrigger className="h-9">
-              <SelectValue />
+              <SelectValue placeholder={entity === 'deal' && !activePipeline ? 'Сначала выберите воронку' : undefined} />
             </SelectTrigger>
             <SelectContent className="max-h-80">
-              <SelectItem value="__any__">Любая стадия</SelectItem>
-              {Object.entries(stageGroups).map(([group, list]) => (
-                <SelectGroup key={group}>
-                  <SelectLabel>{group}</SelectLabel>
-                  {list.map((s) => (
-                    <SelectItem key={s.value} value={s.value}>
-                      {s.label} <span className="ml-1 font-mono text-[10px] text-muted-foreground">{s.value}</span>
-                    </SelectItem>
-                  ))}
-                </SelectGroup>
+              <SelectItem value="__any__">{entity === 'deal' ? 'Любая стадия воронки' : 'Любой статус'}</SelectItem>
+              {stageOptions.map((s) => (
+                <SelectItem key={s.value} value={s.value}>
+                  {s.label} <span className="ml-1 font-mono text-[10px] text-muted-foreground">{s.value}</span>
+                </SelectItem>
               ))}
             </SelectContent>
           </Select>
-          <p className="text-xs text-muted-foreground">Чек создаётся, когда {entity === 'deal' ? 'сделка' : 'лид'} приходит в хуке на этой стадии</p>
+          <p className="text-xs text-muted-foreground">
+            {entity === 'deal'
+              ? 'Документ создаётся, когда сделка из этой воронки приходит в хуке на выбранной стадии'
+              : 'Документ создаётся, когда лид приходит в хуке с выбранным статусом'}
+          </p>
         </div>
       </div>
 

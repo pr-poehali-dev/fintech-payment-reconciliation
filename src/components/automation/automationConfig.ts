@@ -88,6 +88,7 @@ export const MAPPING_FIELDS: { key: string; label: string; required?: boolean; h
 
 export const DEFAULT_CRM_MAPPING: Record<string, unknown> = {
   entity: 'deal',
+  pipeline: '',
   stage: '',
   order_id: 'deal.ID',
   amount: 'deal.OPPORTUNITY',
@@ -133,6 +134,7 @@ export interface CrmStage {
   value: string;
   label: string;
   group?: string;
+  group_id?: string;
 }
 
 export interface CrmMeta {
