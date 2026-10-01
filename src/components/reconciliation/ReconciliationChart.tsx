@@ -79,10 +79,10 @@ const ReconciliationChart = ({ daily, onDayClick }: ReconciliationChartProps) =>
               type="monotone"
               dataKey="revenue"
               name="Выручка"
-              stroke="hsl(var(--foreground))"
+              stroke="#f472b6"
               strokeWidth={1.5}
-              dot={{ fill: 'hsl(var(--foreground))', r: 4 }}
-              activeDot={{ r: 6 }}
+              dot={{ fill: '#f472b6', r: 2 }}
+              activeDot={{ r: 3 }}
             />
           </ComposedChart>
         </ResponsiveContainer>
