@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import Icon from '@/components/ui/icon';
 import ReceiptFieldsBlock from './ReceiptFieldsBlock';
 import DeliveryFieldsBlock from './DeliveryFieldsBlock';
-import { ACTION_TYPE_OPTIONS, ActionTemplateForm, CashProvider, correctionValid } from './actionTemplatesConfig';
+import { ACTION_TYPE_OPTIONS, ActionTemplateForm, CashProvider, correctionValid, agentValid } from './actionTemplatesConfig';
 
 interface ActionTemplateDialogProps {
   open: boolean;
@@ -26,7 +26,7 @@ const ActionTemplateDialog = ({ open, onOpenChange, form, onChange, onSubmit, is
   const emailValid = !form.default_email.trim() || /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(form.default_email.trim());
   const refundCorrectionV4 = form.receipt_type === 'correction' && form.operation === 'sell_refund' && form.protocol_version === 'v4';
   const canSave =
-    !!form.name.trim() && (isEditing || codeValid) && !!form.provider_id && emailValid && !refundCorrectionV4 && correctionValid(form) && !isSaving;
+    !!form.name.trim() && (isEditing || codeValid) && !!form.provider_id && emailValid && !refundCorrectionV4 && correctionValid(form) && agentValid(form) && !isSaving;
   const typeLocked = isEditing && scenariosCount > 0;
 
   return (

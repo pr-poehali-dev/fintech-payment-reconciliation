@@ -2,6 +2,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import ReceiptFieldSelect from './ReceiptFieldSelect';
 import CorrectionFieldsBlock from './CorrectionFieldsBlock';
+import AgentFieldsBlock from './AgentFieldsBlock';
 import {
   ActionTemplateForm,
   CashProvider,
@@ -49,6 +50,7 @@ const ReceiptFieldsBlock = ({ form, providers, onChange }: ReceiptFieldsBlockPro
       )}
 
       {form.receipt_type === 'correction' && <CorrectionFieldsBlock form={form} onChange={onChange} />}
+      {form.receipt_type === 'agent' && <AgentFieldsBlock form={form} onChange={onChange} />}
 
       <ReceiptFieldSelect label="Признак расчёта" value={form.payment_method} options={PAYMENT_METHOD_OPTIONS} onChange={set('payment_method')} />
 

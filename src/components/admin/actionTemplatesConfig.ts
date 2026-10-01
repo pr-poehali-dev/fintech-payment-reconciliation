@@ -23,6 +23,7 @@ export interface ActionTemplateRow {
   correction_base_number: string | null;
   auto_deliver: boolean;
   cashier_name: string | null;
+  agent_settings: Partial<AgentSettingsRow> | null;
   scenarios_count: number;
 }
 
@@ -48,6 +49,7 @@ export interface ActionTemplateForm {
   correction_base_number: string;
   auto_deliver: boolean;
   cashier_name: string;
+  agent_settings: AgentSettings;
 }
 
 export interface CashProvider {
@@ -73,8 +75,70 @@ export const PROTOCOL_OPTIONS: Option[] = [
 
 export const RECEIPT_TYPE_OPTIONS: Option[] = [
   { value: 'regular', label: 'Обычный' },
-  { value: 'correction', label: 'Коррекция' }
+  { value: 'correction', label: 'Коррекция' },
+  { value: 'agent', label: 'Агентский' }
 ];
+
+// Агентский чек АТОЛ Онлайн. В форме телефоны - строкой через запятую.
+export interface AgentSettings {
+  agent_type: string;
+  paying_agent_operation: string;
+  paying_agent_phones: string;
+  receive_payments_operator_phones: string;
+  money_transfer_operator_name: string;
+  money_transfer_operator_inn: string;
+  money_transfer_operator_address: string;
+  money_transfer_operator_phones: string;
+  supplier_name: string;
+  supplier_inn: string;
+  supplier_phones: string;
+}
+
+type PhoneKey = 'paying_agent_phones' | 'receive_payments_operator_phones' | 'money_transfer_operator_phones' | 'supplier_phones';
+export type AgentSettingsRow = Omit<AgentSettings, PhoneKey> & Record<PhoneKey, string[]>;
+const PHONE_KEYS: PhoneKey[] = ['paying_agent_phones', 'receive_payments_operator_phones', 'money_transfer_operator_phones', 'supplier_phones'];
+
+export const EMPTY_AGENT: AgentSettings = {
+  agent_type: 'commission_agent',
+  paying_agent_operation: '',
+  paying_agent_phones: '',
+  receive_payments_operator_phones: '',
+  money_transfer_operator_name: '',
+  money_transfer_operator_inn: '',
+  money_transfer_operator_address: '',
+  money_transfer_operator_phones: '',
+  supplier_name: '',
+  supplier_inn: '',
+  supplier_phones: ''
+};
+
+// Теги 1057 (v4) / 1222 (v5) - признак агента, коды одинаковые.
+export const AGENT_TYPE_OPTIONS: Option[] = [
+  { value: 'commission_agent', label: 'Комиссионер', hint: 'commission_agent' },
+  { value: 'attorney', label: 'Поверенный', hint: 'attorney' },
+  { value: 'paying_agent', label: 'Платёжный агент', hint: 'paying_agent' },
+  { value: 'paying_subagent', label: 'Платёжный субагент', hint: 'paying_subagent' },
+  { value: 'bank_paying_agent', label: 'Банковский платёжный агент', hint: 'bank_paying_agent' },
+  { value: 'bank_paying_subagent', label: 'Банковский платёжный субагент', hint: 'bank_paying_subagent' },
+  { value: 'another', label: 'Другой агент', hint: 'another' }
+];
+
+export const isPayingAgent = (t: string) => ['paying_agent', 'paying_subagent', 'bank_paying_agent', 'bank_paying_subagent'].includes(t);
+export const isBankAgent = (t: string) => ['bank_paying_agent', 'bank_paying_subagent'].includes(t);
+
+const innOk = (v: string) => !v || /^(\d{10}|\d{12})$/.test(v);
+const phonesOk = (v: string) =>
+  v.split(',').every((p) => !p.trim() || /^\+?\d{10,19}$/.test(p.replace(/[\s()-]/g, '')));
+
+export const agentValid = (f: ActionTemplateForm) => {
+  if (f.receipt_type !== 'agent') return true;
+  const a = f.agent_settings;
+  if (!a.agent_type) return false;
+  if (!innOk(a.supplier_inn) || !innOk(a.money_transfer_operator_inn)) return false;
+  if (!PHONE_KEYS.every((k) => phonesOk(a[k]))) return false;
+  if (f.protocol_version === 'v5' && (!a.supplier_name.trim() || !a.supplier_inn)) return false;
+  return true;
+};
 
 export const OPERATION_OPTIONS: Option[] = [
   { value: 'sell', label: 'Приход' },
@@ -140,7 +204,8 @@ export const EMPTY_TEMPLATE: ActionTemplateForm = {
   correction_base_date: '',
   correction_base_number: '',
   auto_deliver: false,
-  cashier_name: ''
+  cashier_name: '',
+  agent_settings: EMPTY_AGENT
 };
 
 export const DATE_SOURCE_OPTIONS: Option[] = [
@@ -180,11 +245,24 @@ export const templateToForm = (t: ActionTemplateRow): ActionTemplateForm => ({
   correction_base_date: t.correction_base_date ? t.correction_base_date.slice(0, 10) : '',
   correction_base_number: t.correction_base_number || '',
   auto_deliver: !!t.auto_deliver,
-  cashier_name: t.cashier_name || ''
+  cashier_name: t.cashier_name || '',
+  agent_settings: agentToForm(t.agent_settings)
 });
+
+const agentToForm = (a: Partial<AgentSettingsRow> | null): AgentSettings => {
+  const result: AgentSettings = { ...EMPTY_AGENT };
+  if (!a) return result;
+  (Object.keys(EMPTY_AGENT) as (keyof AgentSettings)[]).forEach((k) => {
+    const v = a[k];
+    if (Array.isArray(v)) result[k] = v.join(', ');
+    else if (typeof v === 'string' && v) result[k] = v;
+  });
+  return result;
+};
 
 export const formToPayload = (f: ActionTemplateForm) => ({
   ...f,
   payment_type: f.payment_type === NO_PAYMENT ? null : Number(f.payment_type),
-  default_email: f.default_email.trim() || null
+  default_email: f.default_email.trim() || null,
+  agent_settings: f.receipt_type === 'agent' ? f.agent_settings : null
 });

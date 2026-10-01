@@ -91,6 +91,60 @@ def correction_info(template: Dict[str, Any], data: Dict[str, Any]) -> Tuple[Opt
     return info, ''
 
 
+def agent_blocks(template: Dict[str, Any]) -> Tuple[Optional[Dict[str, Any]], Optional[Dict[str, Any]]]:
+    '''
+    Агентский чек по АТОЛ Онлайн: agent_info (признак агента + платёжный агент,
+    оператор по приёму платежей, оператор перевода) и supplier_info (поставщик).
+    Returns: (agent_info, supplier_info) - пустые блоки и поля не передаём.
+    '''
+    a = template.get('agent_settings')
+    if template.get('receipt_type') != 'agent' or not isinstance(a, dict) or not a.get('agent_type'):
+        return None, None
+    clean = lambda d: {k: v for k, v in d.items() if v}
+    agent = {'type': a['agent_type']}
+    paying = clean({'operation': a.get('paying_agent_operation'), 'phones': a.get('paying_agent_phones')})
+    if paying:
+        agent['paying_agent'] = paying
+    receive = clean({'phones': a.get('receive_payments_operator_phones')})
+    if receive:
+        agent['receive_payments_operator'] = receive
+    transfer = clean({'phones': a.get('money_transfer_operator_phones'), 'name': a.get('money_transfer_operator_name'),
+                      'address': a.get('money_transfer_operator_address'), 'inn': a.get('money_transfer_operator_inn')})
+    if transfer:
+        agent['money_transfer_operator'] = transfer
+    supplier = clean({'phones': a.get('supplier_phones'), 'name': a.get('supplier_name'), 'inn': a.get('supplier_inn')})
+    return agent, supplier or None
+
+
+def apply_agent(receipt: Dict[str, Any], template: Dict[str, Any]) -> None:
+    '''
+    Раскладывает агентские данные по версии протокола:
+    v4 (ФФД 1.05) - agent_info и телефоны поставщика общие на весь чек (receipt.agent_info,
+        receipt.supplier_info), наименование и ИНН поставщика - в supplier_info каждой позиции;
+    v5 (ФФД 1.2) - agent_info и supplier_info (телефоны, наименование, ИНН) в каждой позиции.
+    '''
+    agent, supplier = agent_blocks(template)
+    if not agent:
+        return
+    supplier = supplier or {}
+    if template.get('protocol_version') == 'v5':
+        for item in receipt['items']:
+            item['agent_info'] = agent
+            if supplier:
+                item['supplier_info'] = supplier
+        return
+    receipt['agent_info'] = agent
+    if supplier.get('phones'):
+        receipt['supplier_info'] = {'phones': supplier['phones']}
+    item_supplier = {k: v for k, v in supplier.items() if k in ('name', 'inn')}
+    for item in receipt['items']:
+        item.pop('agent_info', None)
+        if item_supplier:
+            item['supplier_info'] = item_supplier
+        else:
+            item.pop('supplier_info', None)
+
+
 WEBHOOK_RECEIVE_URL = 'https://functions.poehali.dev/a923b457-57a6-4eb2-b566-9a9d65cb04e8'
 
 
@@ -223,6 +277,7 @@ def create_order(cur, job: Dict[str, Any], scenario: Dict[str, Any], data: Dict[
     }
     if correction:
         body['receipt']['correction_info'] = correction
+    apply_agent(body['receipt'], template)
     notify_url = callback_url(cur, job.get('company_id'))
     if notify_url:
         body['service'] = {'callback_url': notify_url}

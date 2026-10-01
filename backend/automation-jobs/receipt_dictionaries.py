@@ -4,7 +4,7 @@
 '''
 
 PROTOCOLS = {'v4', 'v5'}
-RECEIPT_TYPES = {'regular', 'correction'}
+RECEIPT_TYPES = {'regular', 'correction', 'agent'}
 # Операция (тип документа в URL запроса): приход / возврат прихода.
 OPERATIONS = {'sell', 'sell_refund'}
 
@@ -36,3 +36,10 @@ PAYMENT_TYPES = {0, 1, 2}
 CORRECTION_TYPE = 'self'
 # Откуда брать correction_info.base_date: дата платежа или фиксированная дата из шаблона.
 DATE_SOURCES = {'payment', 'fixed'}
+
+# Агентский чек (теги 1057/1222 - признак агента, ФФД 1.05 и 1.2).
+AGENT_TYPES = {'bank_paying_agent', 'bank_paying_subagent', 'paying_agent', 'paying_subagent',
+               'attorney', 'commission_agent', 'another'}
+# Для каких признаков агента нужны данные платёжного агента и оператора перевода.
+PAYING_AGENT_TYPES = {'bank_paying_agent', 'bank_paying_subagent', 'paying_agent', 'paying_subagent'}
+MONEY_TRANSFER_TYPES = {'bank_paying_agent', 'bank_paying_subagent'}

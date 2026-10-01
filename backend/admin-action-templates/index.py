@@ -5,7 +5,8 @@ import psycopg2
 from typing import Dict, Any, Optional
 
 from dictionaries import (PROTOCOLS, RECEIPT_TYPES, OPERATIONS, PAYMENT_METHODS,
-                          PAYMENT_OBJECTS_V5, MEASURES, PAYMENT_TYPES, DATE_SOURCES)
+                          PAYMENT_OBJECTS_V5, MEASURES, PAYMENT_TYPES, DATE_SOURCES,
+                          AGENT_TYPES, PAYING_AGENT_TYPES, MONEY_TRANSFER_TYPES)
 
 SCHEMA = 't_p83864310_fintech_payment_reco'
 
@@ -22,7 +23,7 @@ EMAIL_RE = re.compile(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
 COLUMNS = ['id', 'code', 'action_type', 'name', 'description', 'operation', 'paid', 'is_active', 'sort_order',
            'provider_id', 'protocol_version', 'receipt_type', 'payment_method', 'payment_object', 'measure',
            'payment_type', 'default_email', 'correction_type', 'correction_date_source', 'correction_base_date',
-           'correction_base_number', 'auto_deliver', 'cashier_name']
+           'correction_base_number', 'auto_deliver', 'cashier_name', 'agent_settings']
 EDITABLE = COLUMNS[2:]
 
 
@@ -73,7 +74,7 @@ def normalize(cur, body: Dict[str, Any], creating: bool):
     checks = [
         ('action_type', ACTION_TYPES, 'Неизвестный тип действия'),
         ('protocol_version', PROTOCOLS, 'Версия протокола: v4 или v5'),
-        ('receipt_type', RECEIPT_TYPES, 'Тип чека: обычный или коррекция'),
+        ('receipt_type', RECEIPT_TYPES, 'Тип чека: обычный, коррекция или агентский'),
         ('operation', OPERATIONS, 'Операция: приход или возврат прихода'),
         ('payment_method', PAYMENT_METHODS, 'Неизвестный признак расчёта'),
         ('payment_object', PAYMENT_OBJECTS_V5, 'Неизвестный предмет расчёта'),
@@ -87,6 +88,9 @@ def normalize(cur, body: Dict[str, Any], creating: bool):
         return None, 'Коррекция возврата прихода есть только в протоколе v5'
 
     correction, error = normalize_correction(body)
+    if error:
+        return None, error
+    agent, error = normalize_agent(body)
     if error:
         return None, error
 
@@ -140,6 +144,7 @@ def normalize(cur, body: Dict[str, Any], creating: bool):
         'default_email': email,
         **correction,
         **delivery,
+        'agent_settings': json.dumps(agent, ensure_ascii=False) if agent else None,
     }, None
 
 
@@ -172,6 +177,75 @@ def normalize_correction(body: Dict[str, Any]):
             return None, 'Номер документа основания - не больше 32 символов'
     return {'correction_type': 'self', 'correction_date_source': source,
             'correction_base_date': base_date, 'correction_base_number': number}, None
+
+
+PHONE_RE = re.compile(r'^\+\d{1,19}$')
+
+
+def parse_phones(raw, label: str):
+    """Телефоны через запятую -> список в формате +79991234567. Returns: (list, error)."""
+    if isinstance(raw, list):
+        raw = ','.join(str(x) for x in raw)
+    phones = []
+    for part in str(raw or '').split(','):
+        digits = re.sub(r'[^\d+]', '', part)
+        if not digits:
+            continue
+        if not digits.startswith('+'):
+            digits = '+7' + digits[1:] if digits.startswith('8') and len(digits) == 11 else '+' + digits
+        if not PHONE_RE.match(digits):
+            return None, f'{label}: телефон «{part.strip()}» указан неверно'
+        phones.append(digits)
+    return phones, None
+
+
+def normalize_agent(body: Dict[str, Any]):
+    '''
+    Агентский чек (АТОЛ Онлайн): признак агента, данные платёжного агента, оператора по приёму
+    платежей, оператора перевода и поставщика. В БД хранится одинаково для v4 и v5 -
+    куда класть поля (весь чек или позиции) решается при отправке чека.
+    v5: наименование и ИНН поставщика обязательны (теги 1225, 1226).
+    '''
+    if body.get('receipt_type') != 'agent':
+        return None, None
+    a = body.get('agent_settings') or {}
+    agent_type = a.get('agent_type')
+    if agent_type not in AGENT_TYPES:
+        return None, 'Выберите признак агента'
+    result = {'agent_type': agent_type}
+    phone_fields = [('paying_agent_phones', 'Телефон платёжного агента'),
+                    ('receive_payments_operator_phones', 'Телефон оператора по приёму платежей'),
+                    ('money_transfer_operator_phones', 'Телефон оператора перевода'),
+                    ('supplier_phones', 'Телефон поставщика')]
+    for key, label in phone_fields:
+        phones, error = parse_phones(a.get(key), label)
+        if error:
+            return None, error
+        result[key] = phones
+    text_fields = [('paying_agent_operation', 'Операция платёжного агента', 24),
+                   ('money_transfer_operator_name', 'Наименование оператора перевода', 64),
+                   ('money_transfer_operator_address', 'Адрес оператора перевода', 243),
+                   ('supplier_name', 'Наименование поставщика', 239)]
+    for key, label, limit in text_fields:
+        value = (a.get(key) or '').strip()
+        if len(value) > limit:
+            return None, f'{label} - не больше {limit} символов'
+        result[key] = value
+    for key, label in [('money_transfer_operator_inn', 'ИНН оператора перевода'), ('supplier_inn', 'ИНН поставщика')]:
+        value = re.sub(r'\D', '', str(a.get(key) or ''))
+        if value and len(value) not in (10, 12):
+            return None, f'{label} - 10 или 12 цифр'
+        result[key] = value
+    if agent_type not in PAYING_AGENT_TYPES:
+        for key in ('paying_agent_operation', 'paying_agent_phones', 'receive_payments_operator_phones'):
+            result[key] = [] if key.endswith('phones') else ''
+    if agent_type not in MONEY_TRANSFER_TYPES:
+        for key in ('money_transfer_operator_phones', 'money_transfer_operator_name',
+                    'money_transfer_operator_address', 'money_transfer_operator_inn'):
+            result[key] = [] if key.endswith('phones') else ''
+    if body.get('protocol_version') == 'v5' and not (result['supplier_name'] and result['supplier_inn']):
+        return None, 'Для v5 укажите наименование и ИНН поставщика - они обязательны в агентской позиции'
+    return result, None
 
 
 def usage(cur, template_id) -> Optional[tuple]:
