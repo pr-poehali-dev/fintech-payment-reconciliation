@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import Icon from '@/components/ui/icon';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
+import { GOALS, reachGoal } from '@/lib/metrika';
 import functionUrls from '../../backend/func2url.json';
 import { sanitizeInn, isValidInn, getInnHint } from '@/lib/formatters';
 
@@ -87,6 +88,7 @@ const CreateCompany = () => {
       const data = await response.json();
 
       if (response.ok && data.success) {
+        if (data.trial_started) reachGoal(GOALS.trialStarted);
         await refreshCompanies();
         setCurrentCompanyId(data.company_id);
         toast({ title: 'Компания создана', description: data.name });

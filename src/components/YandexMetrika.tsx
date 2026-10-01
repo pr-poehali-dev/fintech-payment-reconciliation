@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import functionUrls from '../../backend/func2url.json';
+import { setMetrikaCounter } from '@/lib/metrika';
 
 type Ym = ((id: number, method: string, ...args: unknown[]) => void) & { a?: unknown[]; l?: number };
 
@@ -8,6 +9,7 @@ declare global {
   interface Window {
     ym?: Ym;
     dataLayer?: Record<string, unknown>[];
+    __ymCounterId?: number;
   }
 }
 
@@ -54,6 +56,7 @@ const YandexMetrika = () => {
           accurateTrackBounce: true,
           trackLinks: true
         });
+        setMetrikaCounter(id);
       })
       .catch(() => {});
   }, []);

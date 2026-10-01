@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
+import { GOALS, reachGoal } from '@/lib/metrika';
 import functionUrls from '../../backend/func2url.json';
 import RoleCard from '@/components/access/RoleCard';
 import InviteUserDialog from '@/components/access/InviteUserDialog';
@@ -157,6 +158,7 @@ const AccessManagement = () => {
         });
         return;
       }
+      reachGoal(GOALS.userInvited, { role: newUser.role });
 
       const link = `${window.location.origin}/invite/${inviteData.token}`;
       setInviteLink(link);

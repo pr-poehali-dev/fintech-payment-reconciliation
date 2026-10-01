@@ -61,6 +61,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         cur.execute('SELECT id, phone, full_name, email FROM app_users WHERE phone = %s', (phone,))
         row = cur.fetchone()
 
+        is_new = not row
         if row:
             user_id = row[0]
             cur.execute('UPDATE app_users SET last_login_at = now() WHERE id = %s', (user_id,))
@@ -109,6 +110,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 'full_name': row[2],
                 'email': row[3],
                 'is_platform_admin': is_platform_admin,
+                'is_new': is_new,
                 'companies': companies
             }),
             'isBase64Encoded': False

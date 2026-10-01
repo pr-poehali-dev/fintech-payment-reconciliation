@@ -171,7 +171,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 'name': company_name,
                 'role_slug': 'owner',
                 'role_name': role_name,
-                'role_color': role_color
+                'role_color': role_color,
+                'trial_started': bool(tariff_row)
             }),
             'isBase64Encoded': False
         }

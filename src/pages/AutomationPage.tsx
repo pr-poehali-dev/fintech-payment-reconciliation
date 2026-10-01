@@ -21,6 +21,7 @@ import ScenarioDialog, { ScenarioForm } from '@/components/automation/ScenarioDi
 import AutomationJournal from '@/components/automation/AutomationJournal';
 import CopyScenarioDialog from '@/components/automation/CopyScenarioDialog';
 import { ACTIONS, ActionTemplateOption, IntegrationOption, Scenario, TRIGGERS } from '@/components/automation/automationConfig';
+import { GOALS, reachGoal } from '@/lib/metrika';
 import functionUrls from '../../backend/func2url.json';
 
 interface IntegrationRow {
@@ -110,7 +111,10 @@ const AutomationPage = () => {
     setIsSaving(true);
     try {
       if (editing) await call('PUT', { id: editing.id, ...form });
-      else await call('POST', form);
+      else {
+        await call('POST', form);
+        reachGoal(GOALS.scenarioAdded);
+      }
       toast({ title: editing ? 'Сценарий сохранён' : 'Сценарий создан', description: editing ? undefined : 'Он остановлен — запустите переключателем' });
       setDialogOpen(false);
       await load();

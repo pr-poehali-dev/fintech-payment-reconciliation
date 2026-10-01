@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
+import { GOALS, reachGoal } from '@/lib/metrika';
 import functionUrls from '../../../backend/func2url.json';
 import {
   Category,
@@ -149,6 +150,7 @@ const AddIntegrationDialog = ({
         const data = await response.json();
 
         if (response.ok && data.success) {
+          reachGoal(GOALS.integrationAdded, { provider: selectedProvider.slug });
           setWebhookUrl(data.webhook_url || '');
           setStep(3);
           toast({

@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import functionUrls from '../../backend/func2url.json';
+import { GOALS, reachGoal } from '@/lib/metrika';
 
 export interface Company {
   id: number;
@@ -13,6 +14,7 @@ export interface Company {
   trial_ends_at?: string | null;
   current_period_end?: string | null;
   tariff_name?: string | null;
+  tariff_slug?: string | null;
   max_users?: number | null;
   timezone?: string;
   role_modules?: string[];
@@ -49,6 +51,20 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 const STORAGE_USER_KEY = 'ek_user';
 const STORAGE_COMPANY_KEY = 'ek_current_company_id';
 
+// Оплата тарифа: онлайн-оплаты нет, тариф проводит админка. Цель срабатывает у владельца,
+// когда он видит активный платный период впервые (один раз на компанию и период).
+const trackPaidTariffs = (list: Company[]) => {
+  list.forEach((c) => {
+    if (c.role_slug !== 'owner' || c.subscription_status !== 'active' || !c.current_period_end) return;
+    const goal = c.tariff_slug === 'start' ? GOALS.paidStart : c.tariff_slug === 'business' ? GOALS.paidBusiness : null;
+    if (!goal) return;
+    const key = `ym_paid_${c.id}_${c.tariff_slug}_${c.current_period_end.slice(0, 10)}`;
+    if (localStorage.getItem(key)) return;
+    localStorage.setItem(key, '1');
+    reachGoal(goal, { company_id: c.id });
+  });
+};
+
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [cronEnabled, setCronEnabled] = useState(false);
@@ -77,6 +93,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const data = await res.json();
       if (res.ok && data.success) {
         setCompanies(data.companies || []);
+        trackPaidTariffs(data.companies || []);
         setCronEnabled(Boolean(data.cron_enabled));
 
         const storedCompanyId = localStorage.getItem(STORAGE_COMPANY_KEY);
@@ -117,6 +134,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       is_platform_admin: data.is_platform_admin
     };
 
+    if (data.is_new) reachGoal(GOALS.registration);
     setUser(authUser);
     localStorage.setItem(STORAGE_USER_KEY, JSON.stringify(authUser));
     setCompanies(data.companies || []);
