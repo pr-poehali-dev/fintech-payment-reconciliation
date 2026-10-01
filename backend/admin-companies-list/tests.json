@@ -23,7 +23,7 @@
     {
       "name": "Platform admin gets companies list",
       "method": "GET",
-      "path": "/?requester_user_id=1",
+      "path": "/?requester_user_id=3",
       "expectedStatus": 200,
       "expectedBody": {
         "success": true

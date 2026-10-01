@@ -3,6 +3,8 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import Icon from '@/components/ui/icon';
 import { useAuth } from '@/contexts/AuthContext';
+import { useToast } from '@/hooks/use-toast';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import functionUrls from '../../../backend/func2url.json';
 
 interface AdminCompany {
@@ -15,6 +17,7 @@ interface AdminCompany {
   owner_name: string | null;
   owner_phone: string | null;
   tariff_name: string | null;
+  tariff_id: number | null;
   subscription_status: string | null;
   trial_ends_at: string | null;
   current_period_end: string | null;
@@ -33,9 +36,17 @@ const AdminCompaniesSection = () => {
   const [companies, setCompanies] = useState<AdminCompany[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [tariffs, setTariffs] = useState<{ id: number; name: string }[]>([]);
+  const [changingId, setChangingId] = useState<number | null>(null);
+  const { toast } = useToast();
+  const tariffsApi = (functionUrls as Record<string, string>)['admin-tariffs'];
 
   useEffect(() => {
     if (!user) return;
+    fetch(`${tariffsApi}?requester_user_id=${user.user_id}`)
+      .then((res) => res.json())
+      .then((data) => setTariffs(data.tariffs || []))
+      .catch(() => {});
 
     fetch(`${functionUrls['admin-companies-list']}?requester_user_id=${user.user_id}`)
       .then((res) => res.json())
@@ -49,6 +60,28 @@ const AdminCompaniesSection = () => {
       .catch(() => setError('Проблема с подключением к серверу'))
       .finally(() => setIsLoading(false));
   }, [user]);
+
+  const changeTariff = async (company: AdminCompany, tariffId: number) => {
+    setChangingId(company.id);
+    try {
+      const res = await fetch(tariffsApi, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'set_company_tariff', requester_user_id: user?.user_id, company_id: company.id, tariff_id: tariffId })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setCompanies((prev) => prev.map((c) => (c.id === company.id
+          ? { ...c, tariff_id: tariffId, tariff_name: data.tariff_name, subscription_status: data.subscription_status }
+          : c)));
+        toast({ title: `«${company.name}» переведена на тариф «${data.tariff_name}»` });
+      } else {
+        toast({ title: 'Ошибка', description: data.error, variant: 'destructive' });
+      }
+    } finally {
+      setChangingId(null);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -131,7 +164,22 @@ const AdminCompaniesSection = () => {
                         <p className="text-foreground">{company.owner_name || '—'}</p>
                         <p className="text-xs text-muted-foreground">{company.owner_phone}</p>
                       </td>
-                      <td className="p-4 text-foreground">{company.tariff_name || '—'}</td>
+                      <td className="p-4">
+                        <Select
+                          value={company.tariff_id ? String(company.tariff_id) : undefined}
+                          onValueChange={(v) => changeTariff(company, Number(v))}
+                          disabled={changingId === company.id || tariffs.length === 0}
+                        >
+                          <SelectTrigger className="h-8 w-36">
+                            <SelectValue placeholder={company.tariff_name || 'Без тарифа'} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {tariffs.map((t) => (
+                              <SelectItem key={t.id} value={String(t.id)}>{t.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </td>
                       <td className="p-4">
                         <Badge variant="outline" className={statusInfo.className}>
                           {statusInfo.label}

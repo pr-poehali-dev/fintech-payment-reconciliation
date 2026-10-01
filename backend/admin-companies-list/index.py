@@ -70,7 +70,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             SELECT
                 c.id, c.name, c.inn, c.status, c.created_at, c.is_platform_admin,
                 owner.full_name, owner.phone,
-                t.name, s.status, s.trial_ends_at, s.current_period_end,
+                t.name, s.status, s.trial_ends_at, s.current_period_end, s.tariff_id,
                 (SELECT COUNT(*) FROM company_users WHERE company_id = c.id AND status = 'active')
             FROM companies c
             LEFT JOIN LATERAL (
@@ -101,7 +101,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 'subscription_status': row[9],
                 'trial_ends_at': row[10].isoformat() if row[10] else None,
                 'current_period_end': row[11].isoformat() if row[11] else None,
-                'users_count': row[12]
+                'tariff_id': row[12],
+                'users_count': row[13]
             })
 
         return {

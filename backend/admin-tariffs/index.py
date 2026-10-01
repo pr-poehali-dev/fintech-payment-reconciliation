@@ -65,6 +65,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     GET ?requester_user_id= - тарифы с модулями и лимитами
     POST {action: "save", requester_user_id, id, name, price, is_active, modules[],
           max_users, max_integrations, max_automations} - пустой лимит = без ограничения
+    POST {action: "set_company_tariff", requester_user_id, company_id, tariff_id} - сменить тариф компании
     '''
     method = event.get('httpMethod', 'GET')
     if method == 'OPTIONS':
@@ -79,6 +80,26 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     try:
         if not requester or not is_admin(cur, requester):
             return respond(403, {'error': 'Доступно только администраторам платформы'})
+
+        if method == 'POST' and body.get('action') == 'set_company_tariff':
+            # Смена тарифа компании. Пробный -> статус trial, платный -> active.
+            company_id, tariff_id = body.get('company_id'), body.get('tariff_id')
+            cur.execute(f'SELECT slug, name FROM {SCHEMA}.tariffs WHERE id = %s', (tariff_id,))
+            tariff = cur.fetchone()
+            if not company_id or not tariff:
+                return respond(400, {'error': 'Укажите компанию и тариф'})
+            status = 'trial' if tariff[0] == 'trial' else 'active'
+            cur.execute(f'''
+                UPDATE {SCHEMA}.subscriptions SET tariff_id = %s, status = %s, updated_at = NOW()
+                WHERE company_id = %s RETURNING id
+            ''', (tariff_id, status, company_id))
+            if not cur.fetchone():
+                cur.execute(f'''
+                    INSERT INTO {SCHEMA}.subscriptions (company_id, tariff_id, status, current_period_end)
+                    VALUES (%s, %s, %s, NOW() + INTERVAL '30 days')
+                ''', (company_id, tariff_id, status))
+            conn.commit()
+            return respond(200, {'success': True, 'tariff_name': tariff[1], 'subscription_status': status})
 
         if method == 'POST':
             if body.get('action') != 'save' or not body.get('id'):
