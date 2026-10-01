@@ -39,13 +39,15 @@ def list_tariffs(cur):
     cur.execute(f'''
         SELECT t.id, t.slug, t.name, t.description, t.price, t.billing_period, t.is_active,
                t.modules, t.max_users, t.max_integrations, t.max_automations,
+               t.period_days, t.yearly_discount_percent,
                (SELECT COUNT(*) FROM {SCHEMA}.subscriptions s WHERE s.tariff_id = t.id)
         FROM {SCHEMA}.tariffs t ORDER BY t.sort_order, t.id
     ''')
     return [{
         'id': r[0], 'slug': r[1], 'name': r[2], 'description': r[3], 'price': float(r[4]),
         'billing_period': r[5], 'is_active': r[6], 'modules': r[7] or [],
-        'max_users': r[8], 'max_integrations': r[9], 'max_automations': r[10], 'companies_count': r[11]
+        'max_users': r[8], 'max_integrations': r[9], 'max_automations': r[10],
+        'period_days': r[11], 'yearly_discount_percent': float(r[12]), 'companies_count': r[13]
     } for r in cur.fetchall()]
 
 
@@ -64,7 +66,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     Тарифы платформы для админки (только администраторы платформы).
     GET ?requester_user_id= - тарифы с модулями и лимитами
     POST {action: "save", requester_user_id, id, name, price, is_active, modules[],
-          max_users, max_integrations, max_automations} - пустой лимит = без ограничения
+          max_users, max_integrations, max_automations, period_days, yearly_discount_percent}
+          - пустой лимит = без ограничения; period_days - срок действия (пробный - дни триала)
     POST {action: "set_company_tariff", requester_user_id, company_id, tariff_id} - сменить тариф компании
     '''
     method = event.get('httpMethod', 'GET')
@@ -110,14 +113,22 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             try:
                 limits = [parse_limit(body.get(k)) for k in LIMITS]
                 price = float(body.get('price') or 0)
+                period_days = int(body.get('period_days') or 0)
+                discount = float(body.get('yearly_discount_percent') or 0)
             except (TypeError, ValueError):
-                return respond(400, {'error': 'Лимиты и цена - целые неотрицательные числа'})
+                return respond(400, {'error': 'Лимиты, цена, срок и скидка - неотрицательные числа'})
+            if period_days < 1:
+                return respond(400, {'error': 'Срок действия - не меньше 1 дня'})
+            if not 0 <= discount < 100:
+                return respond(400, {'error': 'Скидка за год - от 0 до 99%'})
             modules = [m for m in body.get('modules') or [] if m in MODULES]
             cur.execute(f'''
                 UPDATE {SCHEMA}.tariffs SET name = %s, price = %s, is_active = %s, modules = %s,
-                       max_users = %s, max_integrations = %s, max_automations = %s, updated_at = NOW()
+                       max_users = %s, max_integrations = %s, max_automations = %s,
+                       period_days = %s, yearly_discount_percent = %s, updated_at = NOW()
                 WHERE id = %s RETURNING id
-            ''', (name, price, bool(body.get('is_active', True)), json.dumps(modules), *limits, body['id']))
+            ''', (name, price, bool(body.get('is_active', True)), json.dumps(modules), *limits,
+                  period_days, discount, body['id']))
             if not cur.fetchone():
                 return respond(404, {'error': 'Тариф не найден'})
             conn.commit()

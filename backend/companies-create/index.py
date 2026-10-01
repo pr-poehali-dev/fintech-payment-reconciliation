@@ -92,14 +92,15 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             (company_id, user_id, role_id, 'active')
         )
 
-        cur.execute("SELECT id FROM tariffs WHERE slug = 'trial'")
+        cur.execute("SELECT id, period_days FROM tariffs WHERE slug = 'trial'")
         tariff_row = cur.fetchone()
 
         if tariff_row:
+            # Срок пробного периода - из настроек тарифа в админке.
             cur.execute(
                 '''INSERT INTO subscriptions (company_id, tariff_id, status, trial_ends_at, current_period_start, current_period_end)
-                   VALUES (%s, %s, 'trial', now() + interval '14 days', now(), now() + interval '14 days')''',
-                (company_id, tariff_row[0])
+                   VALUES (%s, %s, 'trial', now() + make_interval(days => %s), now(), now() + make_interval(days => %s))''',
+                (company_id, tariff_row[0], tariff_row[1], tariff_row[1])
             )
 
         conn.commit()
