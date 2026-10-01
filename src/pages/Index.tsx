@@ -13,7 +13,7 @@ import SettingsPlaceholder from './SettingsPlaceholder';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAutomationHeartbeat } from '@/hooks/useAutomationHeartbeat';
 import { useNotifications, AppNotification } from '@/hooks/useNotifications';
-import { canOpenModule, defaultModuleFor } from '@/config/modules';
+import { canOpenModule, defaultModuleFor, effectiveModules } from '@/config/modules';
 import SubscriptionDialog from '@/components/profile/SubscriptionDialog';
 import { DateFilter } from '@/components/filters/DateRangeFilter';
 import { TYPE_FILTERS, TypeFilter, TypeFilterKey } from '@/lib/transactionTypeFilter';
@@ -56,7 +56,7 @@ const Index = () => {
     if (n.link_module) handleModuleChange(n.link_module);
   };
 
-  const roleModules = currentCompany?.role_modules;
+  const roleModules = effectiveModules(currentCompany);
   // «Настройки» открыты всем: там личные уведомления, а общие настройки компании
   // страница сама скрывает от ролей без этого раздела.
   const canOpen = (id: string) => id === 'settings' || canOpenModule(roleModules, id);

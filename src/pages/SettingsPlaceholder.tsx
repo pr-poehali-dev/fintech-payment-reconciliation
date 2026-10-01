@@ -8,7 +8,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { TIMEZONE_OPTIONS, DEFAULT_TIMEZONE } from '@/lib/formatDate';
 import functionUrls from '../../backend/func2url.json';
 import NotificationPreferences from '@/components/settings/NotificationPreferences';
-import { canOpenModule } from '@/config/modules';
+import { canOpenModule, effectiveModules } from '@/config/modules';
 
 const SettingsPlaceholder = () => {
   const { currentCompany, refreshCompanies } = useAuth();
@@ -18,7 +18,7 @@ const SettingsPlaceholder = () => {
 
   // Часовой пояс - настройка компании, доступна ролям с разделом «Настройки».
   // «Мои уведомления» - личные, видны всем сотрудникам.
-  const canEditCompany = canOpenModule(currentCompany?.role_modules, 'settings');
+  const canEditCompany = canOpenModule(effectiveModules(currentCompany), 'settings');
   const hasChanges = timezone !== (currentCompany?.timezone || DEFAULT_TIMEZONE);
 
   const handleSave = async () => {

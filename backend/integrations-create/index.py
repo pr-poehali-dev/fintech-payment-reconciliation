@@ -77,7 +77,26 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             }
         
         provider_id = provider_row[0]
-        
+
+        # Лимит интеграций по тарифу (пусто - без ограничения).
+        cur.execute('''
+            SELECT t.max_integrations,
+                   (SELECT COUNT(*) FROM user_integrations ui WHERE ui.company_id = %s AND ui.status != 'deleted')
+            FROM subscriptions s JOIN tariffs t ON t.id = s.tariff_id
+            WHERE s.company_id = %s
+        ''', (company_id, company_id))
+        limit_row = cur.fetchone()
+        if limit_row and limit_row[0] is not None and limit_row[1] >= limit_row[0]:
+            return {
+                'statusCode': 403,
+                'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+                'body': json.dumps({
+                    'error': f'Лимит интеграций по тарифу исчерпан ({limit_row[0]}). Смените тариф или удалите неиспользуемую интеграцию.',
+                    'error_code': 'limit_reached'
+                }, ensure_ascii=False),
+                'isBase64Encoded': False
+            }
+
         cur.execute('''
             INSERT INTO user_integrations 
             (company_id, provider_id, integration_name, webhook_token, config, webhook_settings, forward_url, sync_interval_hours, status)

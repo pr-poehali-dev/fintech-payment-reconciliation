@@ -143,6 +143,20 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             error = validate(cur, company_id, body)
             if error:
                 return respond(400, {'error': error})
+            # Лимит автоматизаций (сценариев) по тарифу; пусто - без ограничения.
+            cur.execute(f'''
+                SELECT t.max_automations,
+                       (SELECT COUNT(*) FROM {SCHEMA}.automation_scenarios a
+                        WHERE a.company_id = %s AND a.removed_at IS NULL)
+                FROM {SCHEMA}.subscriptions s JOIN {SCHEMA}.tariffs t ON t.id = s.tariff_id
+                WHERE s.company_id = %s
+            ''', (company_id, company_id))
+            limit_row = cur.fetchone()
+            if limit_row and limit_row[0] is not None and limit_row[1] >= limit_row[0]:
+                return respond(403, {
+                    'error': f'Лимит автоматизаций по тарифу исчерпан ({limit_row[0]}). Смените тариф или удалите ненужный сценарий.',
+                    'error_code': 'limit_reached'
+                })
             cur.execute(f'''
                 INSERT INTO {SCHEMA}.automation_scenarios
                     (company_id, name, trigger_type, source_integration_id, action_type,

@@ -5,6 +5,7 @@ import AdminCompaniesSection from '@/components/admin/AdminCompaniesSection';
 import AdminRolesSection from '@/components/admin/AdminRolesSection';
 import AdminActionTemplatesSection from '@/components/admin/AdminActionTemplatesSection';
 import AdminSettingsSection from '@/components/admin/AdminSettingsSection';
+import AdminTariffsSection from '@/components/admin/AdminTariffsSection';
 
 const Admin = () => {
   const [activeSection, setActiveSection] = useState('companies');
@@ -18,9 +19,7 @@ const Admin = () => {
         {activeSection === 'roles' && <AdminRolesSection />}
         {activeSection === 'action_templates' && <AdminActionTemplatesSection />}
         {activeSection === 'settings' && <AdminSettingsSection />}
-        {activeSection === 'tariffs' && (
-          <AdminPlaceholder icon="Tag" title="Тарифы" description="Управление тарифами и их лимитами" />
-        )}
+        {activeSection === 'tariffs' && <AdminTariffsSection />}
         {activeSection === 'subscriptions' && (
           <AdminPlaceholder icon="CreditCard" title="Подписки" description="Статус подписок компаний" />
         )}

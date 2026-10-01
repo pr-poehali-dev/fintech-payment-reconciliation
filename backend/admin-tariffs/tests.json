@@ -1,0 +1,4 @@
+{"tests": [
+  {"name": "No requester", "method": "GET", "path": "/", "expectedStatus": 403, "bodyMatcher": "partial"},
+  {"name": "Admin list", "method": "GET", "path": "/?requester_user_id=3", "expectedStatus": 200, "expectedBody": {"success": true}, "bodyMatcher": "partial"}
+]}

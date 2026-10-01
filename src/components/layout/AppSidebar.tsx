@@ -11,7 +11,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useAuth, Company } from '@/contexts/AuthContext';
-import { allowedModules } from '@/config/modules';
+import { allowedModules, effectiveModules } from '@/config/modules';
 import ProfileDialog from '@/components/profile/ProfileDialog';
 import SubscriptionDialog from '@/components/profile/SubscriptionDialog';
 
@@ -169,7 +169,7 @@ const AppSidebar = ({ activeModule, onModuleChange }: AppSidebarProps) => {
       />
 
       <nav className="space-y-2">
-        {allowedModules(currentCompany?.role_modules).filter((module) => !module.hidden).map((module) => (
+        {allowedModules(effectiveModules(currentCompany)).filter((module) => !module.hidden).map((module) => (
           <button
             key={module.id}
             onClick={() => onModuleChange(module.id)}

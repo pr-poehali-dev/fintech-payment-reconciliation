@@ -1,0 +1,107 @@
+import json
+import os
+from typing import Any, Dict
+
+import psycopg2
+
+SCHEMA = 't_p83864310_fintech_payment_reco'
+
+CORS_HEADERS = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Max-Age': '86400'
+}
+
+MODULES = {'reconciliation', 'events', 'transactions', 'automation', 'integrations', 'access', 'settings'}
+LIMITS = ('max_users', 'max_integrations', 'max_automations')
+
+
+def respond(status: int, payload: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        'statusCode': status,
+        'headers': {**CORS_HEADERS, 'Content-Type': 'application/json'},
+        'body': json.dumps(payload, ensure_ascii=False, default=str),
+        'isBase64Encoded': False
+    }
+
+
+def is_admin(cur, user_id) -> bool:
+    cur.execute(f'''
+        SELECT 1 FROM {SCHEMA}.company_users cu
+        JOIN {SCHEMA}.companies c ON c.id = cu.company_id
+        WHERE cu.user_id = %s AND cu.status = 'active' AND c.is_platform_admin = true
+    ''', (user_id,))
+    return cur.fetchone() is not None
+
+
+def list_tariffs(cur):
+    cur.execute(f'''
+        SELECT t.id, t.slug, t.name, t.description, t.price, t.billing_period, t.is_active,
+               t.modules, t.max_users, t.max_integrations, t.max_automations,
+               (SELECT COUNT(*) FROM {SCHEMA}.subscriptions s WHERE s.tariff_id = t.id)
+        FROM {SCHEMA}.tariffs t ORDER BY t.sort_order, t.id
+    ''')
+    return [{
+        'id': r[0], 'slug': r[1], 'name': r[2], 'description': r[3], 'price': float(r[4]),
+        'billing_period': r[5], 'is_active': r[6], 'modules': r[7] or [],
+        'max_users': r[8], 'max_integrations': r[9], 'max_automations': r[10], 'companies_count': r[11]
+    } for r in cur.fetchall()]
+
+
+def parse_limit(value):
+    '''Пусто - без ограничения (NULL), иначе целое >= 0.'''
+    if value in (None, ''):
+        return None
+    n = int(value)
+    if n < 0:
+        raise ValueError
+    return n
+
+
+def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
+    '''
+    Тарифы платформы для админки (только администраторы платформы).
+    GET ?requester_user_id= - тарифы с модулями и лимитами
+    POST {action: "save", requester_user_id, id, name, price, is_active, modules[],
+          max_users, max_integrations, max_automations} - пустой лимит = без ограничения
+    '''
+    method = event.get('httpMethod', 'GET')
+    if method == 'OPTIONS':
+        return {'statusCode': 200, 'headers': CORS_HEADERS, 'body': '', 'isBase64Encoded': False}
+
+    params = event.get('queryStringParameters') or {}
+    body = json.loads(event.get('body') or '{}') if method == 'POST' else {}
+    requester = body.get('requester_user_id') or params.get('requester_user_id')
+
+    conn = psycopg2.connect(os.environ['DATABASE_URL'])
+    cur = conn.cursor()
+    try:
+        if not requester or not is_admin(cur, requester):
+            return respond(403, {'error': 'Доступно только администраторам платформы'})
+
+        if method == 'POST':
+            if body.get('action') != 'save' or not body.get('id'):
+                return respond(400, {'error': 'Unknown action'})
+            name = (body.get('name') or '').strip()
+            if not name:
+                return respond(400, {'error': 'Укажите название тарифа'})
+            try:
+                limits = [parse_limit(body.get(k)) for k in LIMITS]
+                price = float(body.get('price') or 0)
+            except (TypeError, ValueError):
+                return respond(400, {'error': 'Лимиты и цена - целые неотрицательные числа'})
+            modules = [m for m in body.get('modules') or [] if m in MODULES]
+            cur.execute(f'''
+                UPDATE {SCHEMA}.tariffs SET name = %s, price = %s, is_active = %s, modules = %s,
+                       max_users = %s, max_integrations = %s, max_automations = %s, updated_at = NOW()
+                WHERE id = %s RETURNING id
+            ''', (name, price, bool(body.get('is_active', True)), json.dumps(modules), *limits, body['id']))
+            if not cur.fetchone():
+                return respond(404, {'error': 'Тариф не найден'})
+            conn.commit()
+
+        return respond(200, {'success': True, 'tariffs': list_tariffs(cur)})
+    finally:
+        cur.close()
+        conn.close()

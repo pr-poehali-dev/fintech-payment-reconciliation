@@ -29,3 +29,14 @@ export const defaultModuleFor = (roleModules?: string[] | null): string | null =
   const first = allowedModules(roleModules).find((m) => !m.hidden) ?? allowedModules(roleModules)[0];
   return first ? first.id : null;
 };
+
+// Разделы, доступные сотруднику: входят и в его роль, и в тариф компании.
+// «Настройки» - исключение: там личные уведомления, они нужны всем.
+export const effectiveModules = (company?: { role_modules?: string[]; tariff_modules?: string[] | null } | null) => {
+  const role = company?.role_modules;
+  const tariff = company?.tariff_modules;
+  if (!role && !tariff) return undefined;
+  return APP_MODULES.map((m) => m.id).filter(
+    (id) => (!role || role.includes(id)) && (!tariff || tariff.includes(id))
+  );
+};
