@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import Icon from '@/components/ui/icon';
 import { useToast } from '@/hooks/use-toast';
@@ -18,6 +19,7 @@ interface PlatformSettings {
   cron_token: string;
   cron_last_tick_at: string | null;
   cron_last_result: { companies: number; failed: number } | null;
+  metrika_counter_id: string | null;
 }
 
 interface CompanyOption {
@@ -35,6 +37,7 @@ const AdminSettingsSection = () => {
   const [interval, setIntervalMin] = useState(1);
   const [managingId, setManagingId] = useState<string>('');
   const [cronEnabled, setCronEnabled] = useState(false);
+  const [metrikaId, setMetrikaId] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -45,6 +48,7 @@ const AdminSettingsSection = () => {
     setIntervalMin(data.cron_interval_min || 1);
     setManagingId(data.settings.managing_company_id ? String(data.settings.managing_company_id) : '');
     setCronEnabled(data.settings.cron_enabled);
+    setMetrikaId(data.settings.metrika_counter_id || '');
   };
 
   const load = useCallback(async () => {
@@ -70,7 +74,8 @@ const AdminSettingsSection = () => {
           action: 'save',
           requester_user_id: user.user_id,
           managing_company_id: managingId ? Number(managingId) : null,
-          cron_enabled: cronEnabled
+          cron_enabled: cronEnabled,
+          metrika_counter_id: metrikaId || null
         })
       });
       const data = await res.json();
@@ -104,7 +109,8 @@ const AdminSettingsSection = () => {
   }
 
   const hasChanges = (managingId || '') !== (settings.managing_company_id ? String(settings.managing_company_id) : '')
-    || cronEnabled !== settings.cron_enabled;
+    || cronEnabled !== settings.cron_enabled
+    || metrikaId !== (settings.metrika_counter_id || '');
   const tickCommand = `curl -s -X POST ${api} -H 'Content-Type: application/json' -H 'X-Cron-Token: ${settings.cron_token}' -d '{"action":"tick"}'`;
 
   return (
@@ -139,6 +145,30 @@ const AdminSettingsSection = () => {
               </SelectContent>
             </Select>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card className="border-border bg-card">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Icon name="BarChart3" size={20} />
+            Яндекс Метрика
+          </CardTitle>
+          <CardDescription>
+            Номер счётчика из кабинета Метрики — сайт подключит его на всех страницах. Пусто — счётчик выключен.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          <Input
+            value={metrikaId}
+            onChange={(e) => setMetrikaId(e.target.value.replace(/\D/g, '').slice(0, 20))}
+            placeholder="Например, 12345678"
+            inputMode="numeric"
+            className="max-w-xs font-mono"
+          />
+          <p className="text-xs text-muted-foreground">
+            Номер — цифры в названии счётчика на metrika.yandex.ru. Применится у посетителей после обновления страницы.
+          </p>
         </CardContent>
       </Card>
 

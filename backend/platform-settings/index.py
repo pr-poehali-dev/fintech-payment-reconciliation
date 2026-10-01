@@ -1,4 +1,5 @@
 import json
+import re
 import os
 import socket
 import urllib.error
@@ -50,7 +51,7 @@ def is_admin(cur, user_id) -> bool:
 def load_settings(cur) -> Dict[str, Any]:
     cur.execute(f'''
         SELECT s.managing_company_id, c.name, c.inn, s.cron_enabled, s.cron_token,
-               s.cron_last_tick_at, s.cron_last_result, s.updated_at
+               s.cron_last_tick_at, s.cron_last_result, s.updated_at, s.metrika_counter_id
         FROM {SCHEMA}.platform_settings s
         LEFT JOIN {SCHEMA}.companies c ON c.id = s.managing_company_id
         WHERE s.id = 1
@@ -59,7 +60,7 @@ def load_settings(cur) -> Dict[str, Any]:
     return {
         'managing_company_id': r[0], 'managing_company_name': r[1], 'managing_company_inn': r[2],
         'cron_enabled': r[3], 'cron_token': r[4], 'cron_last_tick_at': r[5],
-        'cron_last_result': r[6], 'updated_at': r[7]
+        'cron_last_result': r[6], 'updated_at': r[7], 'metrika_counter_id': r[8]
     }
 
 
@@ -175,7 +176,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     Настройки платформы (только для администраторов платформы) и точка запуска
     фоновых задач по расписанию.
     GET ?requester_user_id= - настройки + список компаний для выбора управляющей
-    POST {action: "save", requester_user_id, managing_company_id, cron_enabled}
+    GET ?public=1 - номер счётчика Яндекс Метрики (без авторизации)
+    POST {action: "save", requester_user_id, managing_company_id, cron_enabled, metrika_counter_id}
     GET ?requester_user_id=&section=admins - сотрудники компании платформы и доступ к админке
     POST {action: "set_admin", requester_user_id, user_id, enabled} - дать/забрать доступ (только владелец)
     POST {action: "tick"} + заголовок X-Cron-Token - шаг планировщика по всем компаниям
@@ -201,6 +203,10 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             if not settings['cron_enabled']:
                 return respond(409, {'error': 'Автоматический режим (cron) выключен в настройках платформы'})
             return respond(200, {'success': True, **tick(cur, conn, settings)})
+
+        # Публично: номер счётчика Яндекс Метрики - сайт подключает его при загрузке.
+        if method == 'GET' and params.get('public') == '1':
+            return respond(200, {'success': True, 'metrika_counter_id': settings.get('metrika_counter_id')})
 
         requester = body.get('requester_user_id') or params.get('requester_user_id')
         if not requester or not is_admin(cur, requester):
@@ -235,11 +241,13 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 cur.execute(f'SELECT 1 FROM {SCHEMA}.companies WHERE id = %s', (company_id,))
                 if not cur.fetchone():
                     return respond(400, {'error': 'Компания не найдена'})
+            metrika = re.sub(r'\D', '', str(body.get('metrika_counter_id') or ''))[:20] or None
             cur.execute(f'''
                 UPDATE {SCHEMA}.platform_settings
-                SET managing_company_id = %s, cron_enabled = %s, updated_by = %s, updated_at = NOW()
+                SET managing_company_id = %s, cron_enabled = %s, metrika_counter_id = %s,
+                    updated_by = %s, updated_at = NOW()
                 WHERE id = 1
-            ''', (company_id or None, bool(body.get('cron_enabled')), requester))
+            ''', (company_id or None, bool(body.get('cron_enabled')), metrika, requester))
             conn.commit()
             settings = load_settings(cur)
 

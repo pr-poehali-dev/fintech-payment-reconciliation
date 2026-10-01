@@ -1,5 +1,38 @@
-{"tests": [
-  {"name": "No requester", "method": "GET", "path": "/", "expectedStatus": 403, "bodyMatcher": "partial"},
-  {"name": "Not admin", "method": "GET", "path": "/?requester_user_id=999999", "expectedStatus": 403, "bodyMatcher": "partial"},
-  {"name": "Tick without token", "method": "POST", "path": "/", "body": {"action": "tick"}, "expectedStatus": 403, "bodyMatcher": "partial"}
-]}
+{
+ "tests": [
+  {
+   "name": "No requester",
+   "method": "GET",
+   "path": "/",
+   "expectedStatus": 403,
+   "bodyMatcher": "partial"
+  },
+  {
+   "name": "Not admin",
+   "method": "GET",
+   "path": "/?requester_user_id=999999",
+   "expectedStatus": 403,
+   "bodyMatcher": "partial"
+  },
+  {
+   "name": "Tick without token",
+   "method": "POST",
+   "path": "/",
+   "body": {
+    "action": "tick"
+   },
+   "expectedStatus": 403,
+   "bodyMatcher": "partial"
+  },
+  {
+   "name": "Public metrika",
+   "method": "GET",
+   "path": "/?public=1",
+   "expectedStatus": 200,
+   "expectedBody": {
+    "success": true
+   },
+   "bodyMatcher": "partial"
+  }
+ ]
+}
