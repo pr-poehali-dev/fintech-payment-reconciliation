@@ -219,16 +219,16 @@ def run(cur, conn, company_id=None, job_id=None) -> Dict[str, int]:
     return result
 
 
-def signal_notifications(company_id=None):
-    '''Сигнал отправщику уведомлений: разошлёт дубли в мессенджеры/почту.'''
+def signal_notifications(company_id=None, daily: bool = False):
+    '''Сигнал отправщику уведомлений: разошлёт дубли в мессенджеры/почту (+ ежедневная проверка).'''
     try:
         req = urllib.request.Request(
             NOTIFICATIONS_URL,
-            data=json.dumps({'action': 'dispatch', 'company_id': company_id}).encode('utf-8'),
+            data=json.dumps({'action': 'dispatch', 'company_id': company_id, 'daily': daily}).encode('utf-8'),
             headers={'Content-Type': 'application/json'},
             method='POST'
         )
-        urllib.request.urlopen(req, timeout=1.5).close()
+        urllib.request.urlopen(req, timeout=3 if daily else 1.5).close()
     except Exception:
         pass
 
@@ -254,7 +254,25 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             body = json.loads(event.get('body') or '{}')
             action = body.get('action')
             if action == 'run':
-                return respond(200, {'success': True, 'processed': run(cur, conn, body.get('company_id'))})
+                processed = run(cur, conn, body.get('company_id'))
+                if body.get('heartbeat') and body.get('company_id'):
+                    # Сигнал из открытого кабинета: заодно - неотправленные дубли
+                    # уведомлений и ежедневная проверка «платежи без чека за вчера»,
+                    # только если по компании есть что делать (без лишних вызовов).
+                    cur.execute(f'''
+                        SELECT
+                            EXISTS (SELECT 1 FROM {SCHEMA}.notification_deliveries d
+                                    JOIN {SCHEMA}.notifications n ON n.id = d.notification_id
+                                    WHERE n.company_id = %s AND d.status = 'pending'),
+                            NOT EXISTS (SELECT 1 FROM {SCHEMA}.notification_checks c
+                                        WHERE c.company_id = %s AND c.kind = 'missing_receipts'
+                                          AND c.period = to_char((NOW() AT TIME ZONE COALESCE(
+                                              (SELECT timezone FROM {SCHEMA}.companies WHERE id = %s), 'Europe/Moscow'))::date - 1, 'YYYY-MM-DD'))
+                    ''', (body['company_id'], body['company_id'], body['company_id']))
+                    pending, daily_due = cur.fetchone()
+                    if pending or daily_due:
+                        signal_notifications(body['company_id'], daily=daily_due)
+                return respond(200, {'success': True, 'processed': processed})
             if action == 'retry':
                 if not body.get('company_id') or not body.get('job_id'):
                     return respond(400, {'error': 'company_id and job_id required'})

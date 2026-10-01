@@ -15,7 +15,7 @@ export interface AppNotification {
   read: boolean;
 }
 
-const POLL_MS = 60_000;
+const POLL_MS = 2 * 60_000;
 const api = (functionUrls as Record<string, string>)['notifications'];
 
 export const useNotifications = (companyId?: number, userId?: number) => {

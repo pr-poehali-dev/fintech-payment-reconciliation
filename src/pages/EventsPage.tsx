@@ -11,6 +11,7 @@ import { DateFilter } from '@/components/filters/DateRangeFilter';
 import EventDetailsDialog from '@/components/events/EventDetailsDialog';
 import { AppEvent, EventSource } from '@/components/events/eventsTypes';
 import functionUrls from '../../backend/func2url.json';
+import { resyncGateway } from '@/lib/gatewayResync';
 
 const EventsPage = () => {
   const [events, setEvents] = useState<AppEvent[]>([]);
@@ -67,20 +68,11 @@ const EventsPage = () => {
   useEffect(() => {
     if (!companyId) return;
 
-    // В платформе нет cron-планировщика для фоновых задач, поэтому дозагрузка
-    // чеков шлюза Екомкассы (для платежей, чек которых ещё не был пробит на
-    // момент вебхука) запускается автоматически при каждом открытии страницы -
-    // без участия пользователя. Событие обновится само, если что-то довязалось.
-    fetch(functionUrls['ecomkassa-gateway-resync'], {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ company_id: companyId })
-    })
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.resolved > 0) fetchEvents();
-      })
-      .catch(() => {});
+    resyncGateway(companyId).then((changed) => {
+      if (changed) {
+        fetchEvents();
+      }
+    });
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [companyId]);

@@ -17,6 +17,7 @@ import { exportTransactionsToExcel } from '@/lib/exportTransactions';
 import { DEFAULT_TIMEZONE } from '@/lib/formatDate';
 import { TypeFilter } from '@/lib/transactionTypeFilter';
 import functionUrls from '../../backend/func2url.json';
+import { resyncGateway } from '@/lib/gatewayResync';
 
 interface IntegrationRow {
   id: number;
@@ -115,20 +116,11 @@ const TransactionsPage = ({ initialDateFilter = null, initialTypeFilter = null, 
   useEffect(() => {
     if (!companyId) return;
 
-    // В платформе нет cron-планировщика для фоновых задач, поэтому дозагрузка
-    // чеков шлюза Екомкассы (для платежей, чек которых ещё не был пробит на
-    // момент вебхука) запускается автоматически при каждом открытии страницы -
-    // без участия пользователя. Список обновится сам, если что-то довязалось.
-    fetch(functionUrls['ecomkassa-gateway-resync'], {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ company_id: companyId })
-    })
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.resolved > 0) fetchTransactions();
-      })
-      .catch(() => {});
+    resyncGateway(companyId).then((changed) => {
+      if (changed) {
+        fetchTransactions();
+      }
+    });
 
     fetchBackfillSources();
     // eslint-disable-next-line react-hooks/exhaustive-deps

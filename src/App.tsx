@@ -15,7 +15,6 @@ import CreateCompany from "./pages/CreateCompany";
 import Admin from "./pages/Admin";
 import NotFound from "./pages/NotFound";
 import WebhookLogsPage from "./pages/WebhookLogsPage";
-import WebhookTestPage from "./pages/WebhookTestPage";
 import InvitePage from "./pages/InvitePage";
 
 const queryClient = new QueryClient();
