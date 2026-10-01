@@ -8,6 +8,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { TIMEZONE_OPTIONS, DEFAULT_TIMEZONE } from '@/lib/formatDate';
 import functionUrls from '../../backend/func2url.json';
 import NotificationPreferences from '@/components/settings/NotificationPreferences';
+import { canOpenModule } from '@/config/modules';
 
 const SettingsPlaceholder = () => {
   const { currentCompany, refreshCompanies } = useAuth();
@@ -15,6 +16,9 @@ const SettingsPlaceholder = () => {
   const [timezone, setTimezone] = useState(currentCompany?.timezone || DEFAULT_TIMEZONE);
   const [isSaving, setIsSaving] = useState(false);
 
+  // Часовой пояс - настройка компании, доступна ролям с разделом «Настройки».
+  // «Мои уведомления» - личные, видны всем сотрудникам.
+  const canEditCompany = canOpenModule(currentCompany?.role_modules, 'settings');
   const hasChanges = timezone !== (currentCompany?.timezone || DEFAULT_TIMEZONE);
 
   const handleSave = async () => {
@@ -52,42 +56,44 @@ const SettingsPlaceholder = () => {
         <p className="text-muted-foreground">Конфигурация системы и параметры</p>
       </div>
 
-      <Card className="border-border bg-card">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Icon name="Clock" size={20} />
-            Часовой пояс
-          </CardTitle>
-          <CardDescription>
-            Влияет на отображение даты и времени во всех разделах — событиях, чеках, логах вебхуков
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="max-w-sm">
-            <Select value={timezone} onValueChange={setTimezone}>
-              <SelectTrigger>
-                <SelectValue placeholder="Выберите часовой пояс" />
-              </SelectTrigger>
-              <SelectContent>
-                {TIMEZONE_OPTIONS.map((tz) => (
-                  <SelectItem key={tz.value} value={tz.value}>
-                    {tz.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+      {canEditCompany && (
+        <Card className="border-border bg-card">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Icon name="Clock" size={20} />
+              Часовой пояс
+            </CardTitle>
+            <CardDescription>
+              Влияет на отображение даты и времени во всех разделах — событиях, чеках, логах вебхуков
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="max-w-sm">
+              <Select value={timezone} onValueChange={setTimezone}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Выберите часовой пояс" />
+                </SelectTrigger>
+                <SelectContent>
+                  {TIMEZONE_OPTIONS.map((tz) => (
+                    <SelectItem key={tz.value} value={tz.value}>
+                      {tz.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
-          <Button onClick={handleSave} disabled={!hasChanges || isSaving}>
-            {isSaving ? (
-              <Icon name="Loader2" className="animate-spin mr-2" size={16} />
-            ) : (
-              <Icon name="Check" size={16} className="mr-2" />
-            )}
-            Сохранить
-          </Button>
-        </CardContent>
-      </Card>
+            <Button onClick={handleSave} disabled={!hasChanges || isSaving}>
+              {isSaving ? (
+                <Icon name="Loader2" className="animate-spin mr-2" size={16} />
+              ) : (
+                <Icon name="Check" size={16} className="mr-2" />
+              )}
+              Сохранить
+            </Button>
+          </CardContent>
+        </Card>
+      )}
       <NotificationPreferences />
     </div>
   );

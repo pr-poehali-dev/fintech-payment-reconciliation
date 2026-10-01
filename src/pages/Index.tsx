@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import Icon from '@/components/ui/icon';
 import NotificationCenter from '@/components/NotificationCenter';
 import AppHeader from '@/components/layout/AppHeader';
 import AppSidebar from '@/components/layout/AppSidebar';
@@ -12,6 +13,7 @@ import SettingsPlaceholder from './SettingsPlaceholder';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAutomationHeartbeat } from '@/hooks/useAutomationHeartbeat';
 import { useNotifications, AppNotification } from '@/hooks/useNotifications';
+import { canOpenModule, defaultModuleFor } from '@/config/modules';
 import SubscriptionDialog from '@/components/profile/SubscriptionDialog';
 import { DateFilter } from '@/components/filters/DateRangeFilter';
 import { TYPE_FILTERS, TypeFilter, TypeFilterKey } from '@/lib/transactionTypeFilter';
@@ -54,6 +56,15 @@ const Index = () => {
     if (n.link_module) handleModuleChange(n.link_module);
   };
 
+  const roleModules = currentCompany?.role_modules;
+  // «Настройки» открыты всем: там личные уведомления, а общие настройки компании
+  // страница сама скрывает от ролей без этого раздела.
+  const canOpen = (id: string) => id === 'settings' || canOpenModule(roleModules, id);
+  // Раздел, недоступный роли (ссылка из уведомления, смена компании), не открываем -
+  // показываем стартовый раздел роли.
+  const shownModule = canOpen(activeModule) ? activeModule : defaultModuleFor(roleModules);
+  const canOpenTransactions = canOpen('transactions');
+
   const handleModuleChange = (id: string) => {
     setTransactionsUnmatchedOnly(false);
     setTransactionsDateFilter(null);
@@ -93,16 +104,25 @@ const Index = () => {
 
       <SubscriptionDialog open={subscriptionOpen} onOpenChange={setSubscriptionOpen} />
 
-      <AppSidebar activeModule={activeModule} onModuleChange={handleModuleChange} />
+      <AppSidebar activeModule={shownModule ?? ''} onModuleChange={handleModuleChange} />
 
       <main className="ml-64 mt-16 p-8">
-        {activeModule === 'reconciliation' && <ReconciliationPage onOpenTransactions={openTransactionsForPeriod} />}
-        {activeModule === 'events' && <EventsPage />}
-        {activeModule === 'transactions' && <TransactionsPage key={transactionsNavKey} initialDateFilter={transactionsDateFilter} initialTypeFilter={transactionsTypeFilter} initialUnmatchedOnly={transactionsUnmatchedOnly} />}
-        {activeModule === 'automation' && <AutomationPage />}
-        {activeModule === 'integrations' && <IntegrationsPage />}
-        {activeModule === 'access' && <AccessManagement />}
-        {activeModule === 'settings' && <SettingsPlaceholder />}
+        {shownModule === 'reconciliation' && (
+          <ReconciliationPage onOpenTransactions={canOpenTransactions ? openTransactionsForPeriod : undefined} />
+        )}
+        {shownModule === 'events' && <EventsPage />}
+        {shownModule === 'transactions' && <TransactionsPage key={transactionsNavKey} initialDateFilter={transactionsDateFilter} initialTypeFilter={transactionsTypeFilter} initialUnmatchedOnly={transactionsUnmatchedOnly} />}
+        {shownModule === 'automation' && <AutomationPage />}
+        {shownModule === 'integrations' && <IntegrationsPage />}
+        {shownModule === 'access' && <AccessManagement />}
+        {shownModule === 'settings' && <SettingsPlaceholder />}
+        {!shownModule && (
+          <div className="mx-auto mt-24 max-w-md text-center text-muted-foreground">
+            <Icon name="Lock" size={40} className="mx-auto mb-4" />
+            <p className="font-medium text-foreground">Нет доступных разделов</p>
+            <p className="mt-1 text-sm">В вашей роли не включён ни один раздел. Обратитесь к владельцу компании.</p>
+          </div>
+        )}
       </main>
     </div>
   );

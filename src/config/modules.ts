@@ -14,3 +14,18 @@ export const APP_MODULES: AppModule[] = [
   { id: 'access', name: 'Доступ', icon: 'Users' },
   { id: 'settings', name: 'Настройки', icon: 'Settings', hidden: true }
 ];
+
+// Разделы, доступные роли сотрудника в компании, в порядке меню. Если права
+// роли ещё не загрузились (старый кэш входа), ничего не скрываем.
+export const allowedModules = (roleModules?: string[] | null): AppModule[] =>
+  roleModules ? APP_MODULES.filter((m) => roleModules.includes(m.id)) : APP_MODULES;
+
+export const canOpenModule = (roleModules: string[] | null | undefined, id: string) =>
+  !roleModules || roleModules.includes(id);
+
+// Стартовый раздел: «Сверка», если она есть в роли, иначе первый разрешённый пункт меню.
+export const defaultModuleFor = (roleModules?: string[] | null): string | null => {
+  if (canOpenModule(roleModules, 'reconciliation')) return 'reconciliation';
+  const first = allowedModules(roleModules).find((m) => !m.hidden) ?? allowedModules(roleModules)[0];
+  return first ? first.id : null;
+};

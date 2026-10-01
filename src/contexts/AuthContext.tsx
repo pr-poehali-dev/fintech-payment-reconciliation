@@ -15,6 +15,7 @@ export interface Company {
   tariff_name?: string | null;
   max_users?: number | null;
   timezone?: string;
+  role_modules?: string[];
 }
 
 interface AuthUser {
