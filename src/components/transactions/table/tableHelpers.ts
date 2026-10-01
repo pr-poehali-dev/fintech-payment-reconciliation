@@ -16,6 +16,10 @@ export const getStatusDisplay = (tx: { type: string; status: string | null }) =>
   if (tx.type === 'receipt_ofd') {
     return { label: ofdOperationTypeLabel(tx.status), color: ofdOperationTypeColorClass(tx.status) };
   }
+  if (tx.type === 'receipt_order') {
+    if (tx.status === 'wait') return { label: 'В работе', color: 'bg-info' };
+    if (tx.status === 'done') return { label: 'Выполнен', color: 'bg-success' };
+  }
   return { label: transactionStatusLabel(tx.status), color: transactionStatusColor(tx.status) };
 };
 

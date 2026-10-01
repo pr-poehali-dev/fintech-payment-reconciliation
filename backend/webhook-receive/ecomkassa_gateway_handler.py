@@ -180,6 +180,32 @@ def save_receipt_from_report(cur, integration_id: int, company_id: int, uid: str
     return receipt_id, float(total_sum) if total_sum else 0.0, payment_provider
 
 
+def save_pending_order(cur, integration_id: int, company_id: int, uid: str,
+                       data: Dict[str, Any], total_sum: Optional[float] = None) -> Optional[int]:
+    '''
+    Заказ создан, но ещё не закрыт (колбэк status="wait") - сохраняем его со
+    статусом wait ("В работе"), чтобы заказ сразу появился в реестре и в группе
+    с платежом. Уже пробитый заказ (status="done") не откатываем назад.
+    '''
+    raw = {k: data.get(k) for k in ('uuid', 'external_id', 'kind', 'permalink', 'timestamp',
+                                    'group_code', 'callback_url') if data.get(k) is not None}
+    raw['uuid'] = raw.get('uuid') or uid
+    raw['kind'] = raw.get('kind') or 'COURIER_ORDER'
+    raw['status'] = 'wait'
+    cur.execute('''
+        INSERT INTO t_p83864310_fintech_payment_reco.ecomkassa_receipts (
+            integration_id, company_id, order_id, legacy_no, status, total_sum, raw_data, order_type
+        ) VALUES (%s, %s, %s, %s, 'wait', %s, %s, 'CORD')
+        ON CONFLICT (integration_id, order_id) DO UPDATE SET
+            total_sum = COALESCE(EXCLUDED.total_sum, t_p83864310_fintech_payment_reco.ecomkassa_receipts.total_sum),
+            raw_data = t_p83864310_fintech_payment_reco.ecomkassa_receipts.raw_data || EXCLUDED.raw_data
+        WHERE t_p83864310_fintech_payment_reco.ecomkassa_receipts.status = 'wait'
+        RETURNING id
+    ''', (integration_id, company_id, str(uid), str(uid), total_sum, json.dumps(raw)))
+    row = cur.fetchone()
+    return row[0] if row else None
+
+
 def try_resolve_receipt(cur, company_id: int, uid: str) -> Tuple[Optional[int], float, Optional[str]]:
     '''
     Пробует немедленно получить и сохранить чек по uid через report(). Если чек ещё
@@ -275,6 +301,10 @@ def process(cur, integration_id: int, company_id: int, config: Dict[str, Any],
         # за report() (чек и так уже пробит, раз status="done"). Чек привязываем
         # к интеграции кассы (slug=ecomkassa), а не шлюза - так же, как это
         # делает try_resolve_receipt, чтобы обе ветки писали чек в одно место.
+        if raw_status.lower() == 'wait' and order_type == 'CORD':
+            cash_integration = find_cash_register_integration(cur, company_id)
+            if cash_integration:
+                save_pending_order(cur, cash_integration[0], company_id, uid, webhook_data)
         if raw_status.lower() == 'done':
             cash_integration = find_cash_register_integration(cur, company_id)
             if cash_integration:

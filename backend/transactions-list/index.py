@@ -338,14 +338,18 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     ekr.total_sum AS amount,
                     ekr.status AS status,
                     ('Чек #' || COALESCE(ekr.doc_number, ekr.order_id, ekr.id::text)) AS title,
-                    COALESCE(ekr.payment_provider, 'Касса') AS subtitle,
+                    CASE WHEN ekr.order_type = 'CORD' THEN 'Закрывающий чек заказа'
+                         ELSE COALESCE(ekr.payment_provider, 'Касса') END AS subtitle,
                     ui.integration_name AS integration_name,
                     ekr.order_id AS reference,
                     ekr.raw_data AS raw_data,
-                    CASE WHEN om.id IS NOT NULL THEN 'receipt_ofd' END AS linked_type,
-                    CASE WHEN om.id IS NOT NULL THEN 'ofd' END AS linked_source,
-                    om.id AS linked_id,
-                    CASE WHEN om.id IS NOT NULL THEN 'fiscal_triplet' END AS match_method,
+                    CASE WHEN ekr.order_type = 'CORD' THEN 'receipt_order'
+                         WHEN om.id IS NOT NULL THEN 'receipt_ofd' END AS linked_type,
+                    CASE WHEN ekr.order_type = 'CORD' THEN 'ecomkassa'
+                         WHEN om.id IS NOT NULL THEN 'ofd' END AS linked_source,
+                    CASE WHEN ekr.order_type = 'CORD' THEN ekr.id ELSE om.id END AS linked_id,
+                    CASE WHEN ekr.order_type = 'CORD' THEN 'order_receipt'
+                         WHEN om.id IS NOT NULL THEN 'fiscal_triplet' END AS match_method,
                     NULL::text AS group_key,
                     om.operation_type AS linked_ofd_status
                 FROM {SCHEMA}.ecomkassa_receipts ekr
@@ -364,7 +368,10 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     LIMIT 1
                 ) om ON true
                 WHERE ekr.company_id = %(company_id)s AND ekr.removed_at IS NULL
-                  AND (ekr.order_type IS NULL OR ekr.order_type IN ('VCHR', 'INVC'))
+                  -- Закрывающий чек заказа (CORD) - отдельная строка, связанная со своим заказом;
+                  -- чек ОФД привязывается к нему сам по фискальным реквизитам.
+                  AND (ekr.order_type IS NULL OR ekr.order_type IN ('VCHR', 'INVC')
+                       OR (ekr.order_type = 'CORD' AND ekr.status = 'done'))
             ''')
 
         if wants(type_filter, 'receipt_order'):
@@ -373,22 +380,19 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     'receipt_order' AS type,
                     'ecomkassa' AS source,
                     ekr.id AS id,
-                    ekr.doc_datetime AS occurred_at,
+                    LEAST(ekr.created_at, ekr.doc_datetime) AS occurred_at,
                     NULL::date AS settlement_date,
                     ekr.total_sum AS amount,
                     ekr.status AS status,
-                    ('Заказ #' || COALESCE(ekr.doc_number, ekr.order_id, ekr.id::text)) AS title,
+                    ('Заказ #' || COALESCE(ekr.order_id, ekr.id::text)) AS title,
                     COALESCE(ekr.payment_provider, 'Курьерский заказ') AS subtitle,
                     ui.integration_name AS integration_name,
                     ekr.order_id AS reference,
                     ekr.raw_data AS raw_data,
-                    CASE WHEN aj.payment_row_id IS NOT NULL THEN 'payment'
-                         WHEN om.id IS NOT NULL THEN 'receipt_ofd' END AS linked_type,
-                    CASE WHEN aj.payment_row_id IS NOT NULL THEN aj.payment_source
-                         WHEN om.id IS NOT NULL THEN 'ofd' END AS linked_source,
-                    COALESCE(aj.payment_row_id, om.id) AS linked_id,
-                    CASE WHEN aj.payment_row_id IS NOT NULL THEN 'automation'
-                         WHEN om.id IS NOT NULL THEN 'fiscal_triplet' END AS match_method,
+                    CASE WHEN aj.payment_row_id IS NOT NULL THEN 'payment' END AS linked_type,
+                    aj.payment_source AS linked_source,
+                    aj.payment_row_id AS linked_id,
+                    CASE WHEN aj.payment_row_id IS NOT NULL THEN 'automation' END AS match_method,
                     NULL::text AS group_key,
                     om.operation_type AS linked_ofd_status
                 FROM {SCHEMA}.ecomkassa_receipts ekr

@@ -252,6 +252,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             WHERE ekr.company_id = %s
               AND ekr.removed_at IS NULL
               AND ekr.status IS DISTINCT FROM 'cancelled'
+              AND ekr.status IS DISTINCT FROM 'wait'
               AND ekr.doc_datetime::date BETWEEN %s AND %s
         ''', (company_id, date_from, date_to))
 

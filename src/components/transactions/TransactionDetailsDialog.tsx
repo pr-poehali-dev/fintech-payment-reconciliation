@@ -7,8 +7,8 @@ import DetachButton from './DetachButton';
 import { nodeKey } from '@/lib/transactionGrouping';
 import { useAuth } from '@/contexts/AuthContext';
 import { formatDateTime as formatDateTimeTz, DEFAULT_TIMEZONE } from '@/lib/formatDate';
-import { ofdOperationTypeLabel } from '@/lib/ofdOperationType';
 import { transactionStatusLabel } from '@/lib/transactionStatus';
+import { getStatusDisplay } from './table/tableHelpers';
 import { getLinkReason, linkReasonClassName } from '@/lib/linkReason';
 
 interface TransactionDetailsDialogProps {
@@ -70,7 +70,7 @@ const TransactionDetailsDialog = ({ transaction, relatedItems, open, onOpenChang
             <div>
               <div className="text-sm text-muted-foreground mb-1">Статус</div>
               <div className="font-medium">
-                {transaction.type === 'receipt_ofd' ? ofdOperationTypeLabel(transaction.status) : transactionStatusLabel(transaction.status)}
+                {getStatusDisplay(transaction).label}
               </div>
             </div>
 

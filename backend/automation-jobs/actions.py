@@ -1,4 +1,5 @@
 from datetime import date, datetime, timedelta, timezone
+import json
 from typing import Any, Dict, List, Optional, Tuple
 
 from ecomkassa_client import cash_register, create_courier_order, deliver_courier_order, order_status
@@ -112,6 +113,28 @@ def callback_url(cur, company_id: Optional[int]) -> Optional[str]:
     return f'{WEBHOOK_RECEIVE_URL}?token={row[0]}' if row else None
 
 
+def save_pending_order(cur, integration_id: int, company_id: Optional[int], order_id: str,
+                       raw: Dict[str, Any], total: float) -> None:
+    '''
+    Заказ создан в Екомкассе - сразу сохраняем его со статусом wait ("В работе"),
+    не дожидаясь колбэка: так он появляется в реестре в группе с платежом.
+    Пробитый заказ (done) не трогаем. Логика та же, что в webhook-receive.
+    '''
+    if cur is None or not company_id:
+        return
+    raw = {k: v for k, v in raw.items() if v is not None}
+    raw['status'] = 'wait'
+    cur.execute(f'''
+        INSERT INTO {SCHEMA}.ecomkassa_receipts (
+            integration_id, company_id, order_id, legacy_no, status, total_sum, raw_data, order_type
+        ) VALUES (%s, %s, %s, %s, 'wait', %s, %s, 'CORD')
+        ON CONFLICT (integration_id, order_id) DO UPDATE SET
+            total_sum = COALESCE(EXCLUDED.total_sum, {SCHEMA}.ecomkassa_receipts.total_sum),
+            raw_data = {SCHEMA}.ecomkassa_receipts.raw_data || EXCLUDED.raw_data
+        WHERE {SCHEMA}.ecomkassa_receipts.status = 'wait'
+    ''', (integration_id, company_id, order_id, order_id, total, json.dumps(raw, ensure_ascii=False)))
+
+
 def create_order(cur, job: Dict[str, Any], scenario: Dict[str, Any], data: Dict[str, Any]) -> Tuple[str, Dict[str, Any], str]:
     '''
     Создаёт заказ в Екомкассе (POST /api/mobile/v1/courier/:storeId/create/:operation).
@@ -171,6 +194,10 @@ def create_order(cur, job: Dict[str, Any], scenario: Dict[str, Any], data: Dict[
     if not result:
         return 'error', {'request': body}, err
     order_id = str(result.get('uuid'))
+    save_pending_order(cur, kassa['id'], job.get('company_id'), order_id, {
+        'uuid': order_id, 'external_id': external_id, 'kind': 'COURIER_ORDER',
+        'permalink': result.get('permalink'), 'timestamp': result.get('timestamp'),
+    }, total)
     message = (
         f"Заказ создан в Екомкассе: #{order_id} на {total:.2f} ₽, "
         f"шаблон «{template.get('name')}», {'оплаченный' if paid else 'неоплаченный'} ({result.get('permalink', '')})"
