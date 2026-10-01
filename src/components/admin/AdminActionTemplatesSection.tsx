@@ -105,6 +105,36 @@ const AdminActionTemplatesSection = () => {
     }
   };
 
+  // Копия шаблона: новый код (_copy, _copy2...), название «(копия)», выключена - чтобы не попала
+  // клиентам до проверки. После создания сразу открывается на редактирование.
+  const handleCopy = async (t: ActionTemplateRow) => {
+    if (!user) return;
+    const codes = new Set(templates.map((x) => x.code));
+    const base = `${t.code.replace(/_copy\d*$/, '').slice(0, 42)}_copy`;
+    let code = base;
+    for (let i = 2; codes.has(code); i++) code = `${base}${i}`;
+    const copy: ActionTemplateForm = { ...templateToForm(t), code, name: `${t.name} (копия)`.slice(0, 150), is_active: false };
+    try {
+      const res = await fetch(API, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...formToPayload(copy), requester_user_id: user.user_id })
+      });
+      const data = await res.json();
+      if (!data.success) {
+        toast({ title: 'Не удалось скопировать', description: data.error, variant: 'destructive' });
+        return;
+      }
+      toast({ title: 'Копия создана', description: 'Шаблон выключен — проверьте и включите' });
+      await load();
+      setEditing({ ...t, id: data.id, code, name: copy.name, is_active: false, scenarios_count: 0 });
+      setForm(copy);
+      setDialogOpen(true);
+    } catch {
+      toast({ title: 'Ошибка подключения', variant: 'destructive' });
+    }
+  };
+
   const handleDelete = async () => {
     if (!user || !toDelete) return;
     const target = toDelete;
@@ -180,6 +210,18 @@ const AdminActionTemplatesSection = () => {
                           >
                             {t.is_active ? 'Доступен' : 'Выключен'}
                           </Badge>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-muted-foreground hover:text-primary"
+                            title="Копировать"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleCopy(t);
+                            }}
+                          >
+                            <Icon name="Copy" size={16} />
+                          </Button>
                           <Button
                             variant="ghost"
                             size="icon"
