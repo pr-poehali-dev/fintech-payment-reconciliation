@@ -1,7 +1,9 @@
 import json
 import os
 import urllib.request
-from typing import Any, Dict, List
+from datetime import datetime, timedelta
+from typing import Any, Dict, List, Optional
+from zoneinfo import ZoneInfo
 
 import psycopg2
 
@@ -18,7 +20,9 @@ CORS_HEADERS = {
 # Виды уведомлений, на которые сотрудник может подписаться (дубль в мессенджер/почту).
 KINDS = {
     'automation_failed': 'Сценарий автоматизации не выполнен',
+    'missing_receipts': 'Платежи без чека за вчера',
 }
+TRANSACTIONS_URL = 'https://functions.poehali.dev/d977ccf7-aaab-48a4-b418-798c34bc70ec'
 CHANNELS = {'max': 'ek_max', 'whatsapp': 'ek_wa', 'telegram': 'ek_tg', 'email': 'ek_email'}
 SEND_URL = 'https://functions.poehali.dev/ace36e55-b169-41f2-9d2b-546f92221bb7'
 
@@ -88,6 +92,93 @@ def dispatch(cur, conn, company_id=None, limit: int = 5) -> Dict[str, int]:
     return result
 
 
+def notify(cur, company_id, kind: str, level: str, title: str, message: str, link_module: str,
+           entity_type: str, entity_id: str, payload: Dict[str, Any]) -> Optional[int]:
+    '''Уведомление в кабинет (один раз на entity) + дубли подписавшимся сотрудникам.'''
+    cur.execute(f'''
+        INSERT INTO {SCHEMA}.notifications (company_id, kind, level, title, message, link_module, entity_type, entity_id, payload)
+        SELECT %s, %s, %s, %s, %s, %s, %s, %s, %s
+        WHERE NOT EXISTS (
+            SELECT 1 FROM {SCHEMA}.notifications WHERE company_id = %s AND kind = %s AND entity_type = %s AND entity_id = %s
+        )
+        RETURNING id
+    ''', (company_id, kind, level, title, message, link_module, entity_type, entity_id,
+          json.dumps(payload, ensure_ascii=False), company_id, kind, entity_type, entity_id))
+    row = cur.fetchone()
+    if not row:
+        return None
+    cur.execute(f'''
+        INSERT INTO {SCHEMA}.notification_deliveries (notification_id, user_id, channel)
+        SELECT %s, p.user_id, p.channel
+        FROM {SCHEMA}.notification_preferences p
+        JOIN {SCHEMA}.company_users cu ON cu.company_id = p.company_id AND cu.user_id = p.user_id AND cu.status = 'active'
+        WHERE p.company_id = %s AND p.channel IS NOT NULL AND p.kinds ? %s
+        ON CONFLICT (notification_id, user_id) DO NOTHING
+    ''', (row[0], company_id, kind))
+    return row[0]
+
+
+def _plural(n: int) -> str:
+    if n % 10 == 1 and n % 100 != 11:
+        return 'платёж'
+    if 2 <= n % 10 <= 4 and not 12 <= n % 100 <= 14:
+        return 'платежа'
+    return 'платежей'
+
+
+def daily_check(cur, conn, company_id) -> Dict[str, Any]:
+    '''
+    Раз в сутки по компании: оплаченные вчера (по её часовому поясу) платежи без
+    чека. Повторный вызов в тот же день уведомление не дублирует. Нет таких
+    платежей - уведомления нет.
+    '''
+    cur.execute(f'SELECT timezone FROM {SCHEMA}.companies WHERE id = %s', (company_id,))
+    row = cur.fetchone()
+    try:
+        tz = ZoneInfo((row[0] if row else None) or 'Europe/Moscow')
+    except Exception:
+        tz = ZoneInfo('Europe/Moscow')
+    yesterday = (datetime.now(tz).date() - timedelta(days=1)).isoformat()
+    # Занимаем проверку дня атомарно: параллельные вызовы и повторы за день её не повторят.
+    cur.execute(f'''
+        INSERT INTO {SCHEMA}.notification_checks (company_id, kind, period)
+        VALUES (%s, 'missing_receipts', %s)
+        ON CONFLICT (company_id, kind, period) DO NOTHING
+        RETURNING 1
+    ''', (company_id, yesterday))
+    if not cur.fetchone():
+        conn.rollback()
+        return {'date': yesterday, 'checked': False}
+    conn.commit()
+
+    url = f'{TRANSACTIONS_URL}?company_id={company_id}&paged=1&missing_receipts=1&date={yesterday}'
+    with urllib.request.urlopen(url, timeout=20) as resp:
+        data = json.loads(resp.read().decode('utf-8'))
+    count = int(data.get('count') or 0)
+    cur.execute(f'''
+        UPDATE {SCHEMA}.notification_checks SET result_count = %s, checked_at = NOW()
+        WHERE company_id = %s AND kind = 'missing_receipts' AND period = %s
+    ''', (count, company_id, yesterday))
+    conn.commit()
+    if not count:
+        return {'date': yesterday, 'checked': True, 'count': 0}
+    amount = float(data.get('amount') or 0)
+    day_label = datetime.fromisoformat(yesterday).strftime('%d.%m.%Y')
+    examples = ', '.join(p['title'].replace('Платёж ', '') for p in data['payments'][:5])
+    more = f' и ещё {count - 5}' if count > 5 else ''
+    amount_label = f'{amount:,.2f}'.replace(',', ' ').replace('.', ',')
+    notify(
+        cur, company_id, 'missing_receipts', 'warning', 'Платежи без чека',
+        f'За {day_label}: {count} {_plural(count)} без чека на {amount_label} ₽ ({examples}{more}). '
+        f'Проверьте в «Транзакциях» с фильтром «Только без связи».',
+        'transactions', 'day', yesterday,
+        {'date': yesterday, 'count': count, 'amount': amount,
+         'payment_ids': [p['id'] for p in data['payments']]}
+    )
+    conn.commit()
+    return {'date': yesterday, 'checked': True, 'count': count}
+
+
 def respond(status: int, payload: Dict[str, Any]) -> Dict[str, Any]:
     return {
         'statusCode': status,
@@ -106,7 +197,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     GET ?company_id=&user_id=&prefs=1 - мои настройки дублирования (канал, виды)
     POST {action: "save_prefs", company_id, user_id, channel, kinds} - сохранить настройки
     POST {action: "test", company_id, user_id, channel} - тестовое сообщение себе
-    POST {action: "dispatch", company_id?} - отправить ожидающие дубли уведомлений
+    POST {action: "dispatch", company_id?, daily?} - отправить ожидающие дубли уведомлений;
+         daily=true - заодно ежедневная проверка «платежи без чека за вчера» (раз в сутки)
     '''
     method = event.get('httpMethod', 'GET')
     if method == 'OPTIONS':
@@ -119,7 +211,21 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         conn = psycopg2.connect(os.environ['DATABASE_URL'])
         cur = conn.cursor()
         try:
-            return respond(200, {'success': True, **dispatch(cur, conn, body.get('company_id'))})
+            daily = None
+            if body.get('company_id') and body.get('daily'):
+                try:
+                    daily = daily_check(cur, conn, body['company_id'])
+                except Exception as e:
+                    conn.rollback()
+                    # Не удалось проверить (реестр недоступен) - снимаем отметку, повторим позже.
+                    cur.execute(f'''
+                        DELETE FROM {SCHEMA}.notification_checks
+                        WHERE company_id = %s AND kind = 'missing_receipts' AND result_count = 0
+                          AND checked_at > NOW() - INTERVAL '5 minutes'
+                    ''', (body['company_id'],))
+                    conn.commit()
+                    daily = {'error': str(e)[:300]}
+            return respond(200, {'success': True, 'daily': daily, **dispatch(cur, conn, body.get('company_id'))})
         finally:
             cur.close()
             conn.close()

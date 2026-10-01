@@ -6,7 +6,7 @@ from typing import Dict, Any, Optional
 from decimal import Decimal
 from zoneinfo import ZoneInfo
 
-from grouping import group_transactions, node_key, matches_filters, latest_time
+from grouping import group_transactions, node_key, matches_filters, latest_time, local_date
 
 SCHEMA = 't_p83864310_fintech_payment_reco'
 DEFAULT_TZ = 'Europe/Moscow'
@@ -688,6 +688,26 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 pass
 
         all_groups = group_transactions(final_rows)
+
+        if params.get('missing_receipts') == '1':
+            # Проверка для уведомлений: оплаченные платежи за день (по часовому поясу
+            # компании), в группе которых нет ни одного чека - ни кассы, ни ОФД.
+            day = params.get('date')
+            missing = []
+            for g in all_groups:
+                if any(t['type'] in ('receipt_kassa', 'receipt_ofd') for t in g):
+                    continue
+                for t in g:
+                    if t['type'] != 'payment' or t.get('status') not in ('CONFIRMED', 'AUTHORIZED'):
+                        continue
+                    if day and local_date(t.get('occurred_at'), company_tz) != day:
+                        continue
+                    missing.append({'id': t['id'], 'title': t['title'], 'amount': t.get('amount'),
+                                    'integration_name': t.get('integration_name')})
+            return json_ok({'success': True, 'date': day, 'payments': missing,
+                            'count': len(missing),
+                            'amount': round(sum(float(m['amount'] or 0) for m in missing), 2)})
+
         matched = set()
         for g in all_groups:
             if len(g) > 1:

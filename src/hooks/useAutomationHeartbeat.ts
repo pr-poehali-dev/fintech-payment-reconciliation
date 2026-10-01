@@ -21,9 +21,10 @@ export const useAutomationHeartbeat = (companyId?: number) => {
       fetch((functionUrls as Record<string, string>)['notifications'], {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'dispatch', company_id: companyId })
+        body: JSON.stringify({ action: 'dispatch', company_id: companyId, daily: true })
       }).catch(() => {});
     };
+    tick();
     const id = window.setInterval(tick, INTERVAL_MS);
     return () => window.clearInterval(id);
   }, [companyId]);
