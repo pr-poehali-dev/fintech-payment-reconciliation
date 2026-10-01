@@ -29,6 +29,23 @@ def _request(method: str, path: str, token: str, body: Optional[Dict[str, Any]] 
         return status, text
 
 
+def _call(kassa: Dict[str, Any], method: str, path: str, body: Optional[Dict[str, Any]] = None,
+          timeout: float = 15.0) -> Tuple[int, Any]:
+    '''
+    Запрос к Екомкассе от имени кассы. Если касса ответила 401/403 (токен протух или отозван
+    раньше срока), интеграция сама получает новый токен по логину/паролю и повторяет запрос один раз.
+    '''
+    status, data = _request(method, path, kassa['token'], body, timeout)
+    refresh = kassa.get('refresh')
+    if status in (401, 403) and refresh:
+        new_token = refresh()
+        if new_token and new_token != kassa['token']:
+            kassa['token'] = new_token
+            status, data = _request(method, path, new_token, body, timeout)
+            kassa['token_refreshed'] = True
+    return status, data
+
+
 def cash_register(cur, integration_id: int) -> Optional[Dict[str, Any]]:
     '''Касса Екомкассы: рабочий токен (обновляется сам), номер магазина, версия протокола.'''
     cur.execute(f'''
@@ -41,10 +58,11 @@ def cash_register(cur, integration_id: int) -> Optional[Dict[str, Any]]:
         return None
     config = json.loads(row[0]) if isinstance(row[0], str) else (row[0] or {})
     token = ensure_valid_token(cur, integration_id, config)
-    if not token or not config.get('store_id'):
+    if not config.get('store_id'):
         return None
     return {'id': integration_id, 'token': token, 'store_id': str(config['store_id']),
-            'protocol_version': config.get('protocol_version', 'v4')}
+            'protocol_version': config.get('protocol_version', 'v4'),
+            'refresh': lambda: ensure_valid_token(cur, integration_id, config, force=True)}
 
 
 def company_cash_register(cur, company_id: int) -> Optional[Dict[str, Any]]:
@@ -64,7 +82,7 @@ def get_receipt_atol(kassa: Dict[str, Any], order_id: str) -> Tuple[Optional[Dic
     чек по идентификатору в формате АТОЛ Онлайн: корзина, оплаты, организация, клиент.
     '''
     fmt = 'atol-5' if kassa['protocol_version'] == 'v5' else 'atol-4'
-    status, data = _request('GET', f'/api/mobile/v1/orders/{order_id}/{fmt}', kassa['token'])
+    status, data = _call(kassa, 'GET', f'/api/mobile/v1/orders/{order_id}/{fmt}')
     if status == 200 and isinstance(data, dict) and isinstance(data.get('receipt'), dict):
         return data, ''
     return None, f'Екомкасса не отдала чек #{order_id} ({status}: {str(data)[:200]})'
@@ -76,8 +94,8 @@ def create_courier_order(kassa: Dict[str, Any], operation: str, body: Dict[str, 
     создание заказа, тело как у чека продажи АТОЛ Онлайн. Повтор с тем же
     external_id возвращает уже созданный заказ, дубль не появляется.
     '''
-    status, data = _request('POST', f"/api/mobile/v1/courier/{kassa['store_id']}/create/{operation}",
-                            kassa['token'], body, timeout=20.0)
+    status, data = _call(kassa, 'POST', f"/api/mobile/v1/courier/{kassa['store_id']}/create/{operation}",
+                         body, timeout=20.0)
     if status == 200 and isinstance(data, dict) and data.get('uuid') and not data.get('error'):
         return data, ''
     return None, f'Екомкасса не создала заказ ({status}: {str(data)[:300]})'
@@ -90,7 +108,7 @@ def deliver_courier_order(kassa: Dict[str, Any], order_id: str, body: Dict[str, 
     payments в формате АТОЛ 4 - если заказ не был предоплачен; предоплаченный - пустой массив.
     После подтверждения касса пробивает чек и шлёт callback_url заказа.
     '''
-    status, data = _request('POST', f'/api/mobile/v1/courier/{order_id}/deliver', kassa['token'], body, timeout=20.0)
+    status, data = _call(kassa, 'POST', f'/api/mobile/v1/courier/{order_id}/deliver', body, timeout=20.0)
     if status == 200 and isinstance(data, dict) and data.get('errorCode') == 0:
         return data.get('payload') or {}, ''
     return None, f'Екомкасса не подтвердила доставку заказа #{order_id} ({status}: {str(data)[:300]})'
@@ -98,5 +116,5 @@ def deliver_courier_order(kassa: Dict[str, Any], order_id: str, body: Dict[str, 
 
 def order_status(kassa: Dict[str, Any], order_id: str) -> Optional[str]:
     '''GET /api/mobile/v1/orders/:orderId - статус заказа (WAITING, PAID ...).'''
-    status, data = _request('GET', f'/api/mobile/v1/orders/{order_id}', kassa['token'])
+    status, data = _call(kassa, 'GET', f'/api/mobile/v1/orders/{order_id}')
     return data.get('status') if status == 200 and isinstance(data, dict) else None

@@ -50,7 +50,7 @@ def fetch_token(login: str, password: str, protocol_version: str = 'v4') -> Opti
         return None
 
 
-def ensure_valid_token(cur, integration_id: int, config: Dict[str, Any]) -> Optional[str]:
+def ensure_valid_token(cur, integration_id: int, config: Dict[str, Any], force: bool = False) -> Optional[str]:
     '''
     Возвращает рабочий токен Екомкассы: если сохранённый в config токен уже
     истёк или истекает в ближайшие 5 минут, получает новый по сохранённым
@@ -58,7 +58,8 @@ def ensure_valid_token(cur, integration_id: int, config: Dict[str, Any]) -> Opti
     '''
     token = config.get('token')
 
-    if not is_token_expired(token):
+    # force - касса отклонила токен раньше срока (отозван, сменили пароль): берём новый сразу.
+    if not force and not is_token_expired(token):
         return token
 
     login = config.get('login')

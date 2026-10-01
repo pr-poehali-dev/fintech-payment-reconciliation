@@ -236,6 +236,8 @@ def create_order(cur, job: Dict[str, Any], scenario: Dict[str, Any], data: Dict[
     kassa = cash_register(cur, scenario['target_integration_id'])
     if not kassa:
         return 'error', {}, 'Касса сценария не найдена, отключена или без номера магазина'
+    if not kassa['token']:
+        return 'error', {}, 'Нет токена Екомкассы и не удалось получить новый - переподключите кассу (логин и пароль)'
     items = _atol_items(data)
     if not items:
         return 'error', {}, 'В собранных данных нет товаров'
