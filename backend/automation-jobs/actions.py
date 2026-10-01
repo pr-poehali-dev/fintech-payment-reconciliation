@@ -228,23 +228,25 @@ def register_document(cur, job: Dict[str, Any], scenario: Dict[str, Any], kassa_
 
 def make_external_id(job: Dict[str, Any], data: Dict[str, Any], seller_inn: Optional[str], operation: str) -> str:
     '''
-    Номер заказа (external_id) для кассы - по нему потом сверяем чек с платежом/сделкой:
-    - платёж (Точка, Т-Банк и др.): ИНН-номер платежа у провайдера;
-    - сделка/лид CRM: ИНН-номер сделки (номера сделок у разных клиентов совпадают, ИНН делает их уникальными).
-    Возврат/коррекция - с суффиксом операции, чтобы не совпасть с чеком прихода.
-    Нет ИНН или номера - auto-<id задания>, как раньше.
+    Номер заказа (external_id) для кассы - по нему потом сверяем чек с платежом и сделкой:
+    - есть и сделка/лид CRM, и платёж из банка: номер сделки-номер платежа (46480-115014397);
+    - только сделка/лид: ИНН-номер сделки (номера сделок у разных клиентов совпадают, ИНН делает их уникальными);
+    - только платёж: ИНН-номер платежа.
+    Лид - с буквой L (L7). Возврат/коррекция - с суффиксом операции, чтобы не совпасть с чеком прихода.
+    Не из чего собрать - auto-<id задания>, как раньше.
     '''
     inn = re.sub(r'\D', '', seller_inn or '')
     crm = data.get('crm') or {}
-    payment = data.get('payment') or {}
-    if job.get('source_type') in ('crm_deal', 'crm_lead') and crm.get('id'):
-        ref = f"{'L' if crm.get('entity') == 'lead' else ''}{crm['id']}"
+    payment_ref = str((data.get('payment') or {}).get('payment_id') or '').strip()
+    crm_ref = f"{'L' if crm.get('entity') == 'lead' else ''}{crm['id']}" if crm.get('id') else ''
+    if crm_ref and payment_ref:
+        base = f'{crm_ref}-{payment_ref}'
+    elif (crm_ref or payment_ref) and inn:
+        base = f'{inn}-{crm_ref or payment_ref}'
     else:
-        ref = str(payment.get('payment_id') or '')
-    if not inn or not ref:
         return f"auto-{job['id']}"
     suffix = '' if operation == 'sell' else f"-{operation.replace('sell_', '')}"
-    return f'{inn}-{ref}{suffix}'[:128]
+    return f'{base}{suffix}'[:128]
 
 
 def create_order(cur, job: Dict[str, Any], scenario: Dict[str, Any], data: Dict[str, Any]) -> Tuple[str, Dict[str, Any], str]:
