@@ -7,6 +7,7 @@ type Ym = ((id: number, method: string, ...args: unknown[]) => void) & { a?: unk
 declare global {
   interface Window {
     ym?: Ym;
+    dataLayer?: Record<string, unknown>[];
   }
 }
 
@@ -39,11 +40,13 @@ const YandexMetrika = () => {
           script.src = TAG_URL;
           document.head.appendChild(script);
         }
+        window.dataLayer = window.dataLayer || [];
         window.ym(id, 'init', {
           clickmap: true,
           trackLinks: true,
           accurateTrackBounce: true,
-          webvisor: true
+          webvisor: true,
+          ecommerce: 'dataLayer'
         });
       })
       .catch(() => {});

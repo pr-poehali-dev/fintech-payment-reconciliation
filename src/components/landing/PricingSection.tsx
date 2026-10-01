@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { ecomAdd, ecomImpressions } from '@/lib/metrika';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import Icon from '@/components/ui/icon';
@@ -61,6 +62,11 @@ const PricingSection = ({ onCtaClick, trialDays, tariffs: loaded }: { onCtaClick
   // Максимальная скидка за год среди тарифов - для подписи на переключателе.
   const maxDiscount = Math.max(0, ...tariffs.map((t) => t.yearly_discount_percent || 0));
   const fmt = (v: number) => `${Math.round(v).toLocaleString('ru-RU')} ₽`;
+
+  // Электронная коммерция: показ тарифов (при загрузке и смене месяц/год).
+  useEffect(() => {
+    if (loaded) ecomImpressions(loaded, yearly);
+  }, [loaded, yearly]);
 
   return (
     <section id="pricing" className="py-20 sm:py-28 bg-card/30">
@@ -166,7 +172,10 @@ const PricingSection = ({ onCtaClick, trialDays, tariffs: loaded }: { onCtaClick
                   <Button
                     className="w-full"
                     variant={isPopular ? 'default' : 'outline'}
-                    onClick={onCtaClick}
+                    onClick={() => {
+                      ecomAdd(tariff, yearly);
+                      onCtaClick();
+                    }}
                   >
                     Попробовать {trialLabel} бесплатно
                   </Button>
