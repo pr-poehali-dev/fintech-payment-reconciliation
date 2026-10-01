@@ -26,6 +26,29 @@ def respond(status: int, payload: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def mark_failed(cur, job: Dict[str, Any], message: str, attempts: int) -> None:
+    """Задание исчерпало автоповторы: статус «Не удалось» + уведомление в кабинет компании."""
+    cur.execute(f'''
+        UPDATE {SCHEMA}.automation_jobs SET status = 'failed', last_error = %s, locked_until = NULL, updated_at = NOW()
+        WHERE id = %s
+    ''', (message, job['id']))
+    log(cur, job['id'], 'error', f'{message}. Попытки исчерпаны ({attempts})')
+    cur.execute(f'''
+        INSERT INTO {SCHEMA}.notifications (company_id, kind, level, title, message, link_module, entity_type, entity_id, payload)
+        SELECT j.company_id, 'automation_failed', 'error', 'Сценарий не выполнен',
+               'Сценарий «' || COALESCE(s.name, '—') || '», ' ||
+               CASE WHEN j.source_type = 'payment' THEN 'платёж #' || COALESCE(wp.payment_id, j.source_id)
+                    ELSE j.source_type || ' #' || j.source_id END ||
+               ': ' || %s || '. Автоповторы закончились - повторите вручную в журнале автоматизации.',
+               'automation', 'automation_job', j.id::text,
+               jsonb_build_object('job_id', j.id, 'scenario_id', j.scenario_id, 'attempts', %s)
+        FROM {SCHEMA}.automation_jobs j
+        LEFT JOIN {SCHEMA}.automation_scenarios s ON s.id = j.scenario_id
+        LEFT JOIN {SCHEMA}.webhook_payments wp ON j.source_type = 'payment' AND wp.id::text = j.source_id
+        WHERE j.id = %s
+    ''', (message, attempts, job['id']))
+
+
 def claim_jobs(cur, company_id=None, job_id=None) -> List[Dict[str, Any]]:
     '''Занимает задания на 2 минуты (SKIP LOCKED) - параллельный запуск их не возьмёт.'''
     # Задание, зависшее «в работе» (сбой посреди обработки, касса не ответила),
@@ -96,11 +119,7 @@ def process_job(cur, job: Dict[str, Any]) -> str:
     if status == 'error':
         delay = retry_delay(job['attempts'])
         if delay is None:
-            cur.execute(f'''
-                UPDATE {SCHEMA}.automation_jobs SET status = 'failed', last_error = %s, locked_until = NULL, updated_at = NOW()
-                WHERE id = %s
-            ''', (message, job['id']))
-            log(cur, job['id'], 'error', f'{message}. Попытки исчерпаны ({job["attempts"]})')
+            mark_failed(cur, job, message, job['attempts'])
             return 'failed'
         cur.execute(f'''
             UPDATE {SCHEMA}.automation_jobs SET status = 'error', last_error = %s, locked_until = NULL,
@@ -125,11 +144,7 @@ def process_job(cur, job: Dict[str, Any]) -> str:
 def fail_or_retry(cur, job: Dict[str, Any], message: str) -> str:
     delay = retry_delay(job['attempts'])
     if delay is None:
-        cur.execute(f'''
-            UPDATE {SCHEMA}.automation_jobs SET status = 'failed', last_error = %s, locked_until = NULL, updated_at = NOW()
-            WHERE id = %s
-        ''', (message, job['id']))
-        log(cur, job['id'], 'error', f'{message}. Попытки исчерпаны ({job["attempts"]})')
+        mark_failed(cur, job, message, job['attempts'])
         return 'failed'
     cur.execute(f'''
         UPDATE {SCHEMA}.automation_jobs SET status = 'error', last_error = %s, locked_until = NULL,
@@ -173,11 +188,7 @@ def run(cur, conn, company_id=None, job_id=None) -> Dict[str, int]:
         message = 'Обработка прервалась (сбой или касса не ответила)'
         if retry_delay(job['attempts'] - 1) is None and not job_id:
             # Зависало на каждой попытке - лимит исчерпан, дальше только вручную.
-            cur.execute(f'''
-                UPDATE {SCHEMA}.automation_jobs SET status = 'failed', last_error = %s, locked_until = NULL, updated_at = NOW()
-                WHERE id = %s
-            ''', (message, job['id']))
-            log(cur, job['id'], 'error', f'{message}. Попытки исчерпаны ({job["attempts"] - 1})')
+            mark_failed(cur, job, message, job['attempts'] - 1)
             result['failed'] = result.get('failed', 0) + 1
             continue
         log(cur, job['id'], 'error', f'{message} - задание взято в работу повторно')

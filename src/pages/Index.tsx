@@ -13,16 +13,16 @@ import ReconciliationPage from './ReconciliationPage';
 import SettingsPlaceholder from './SettingsPlaceholder';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAutomationHeartbeat } from '@/hooks/useAutomationHeartbeat';
+import { useNotifications } from '@/hooks/useNotifications';
 import SubscriptionDialog from '@/components/profile/SubscriptionDialog';
 import { DateFilter } from '@/components/filters/DateRangeFilter';
 import { TYPE_FILTERS, TypeFilter, TypeFilterKey } from '@/lib/transactionTypeFilter';
 
 const Index = () => {
-  const { currentCompany } = useAuth();
+  const { currentCompany, user } = useAuth();
   const [activeModule, setActiveModule] = useState('dashboard');
   const [mounted, setMounted] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
-  const [unreadCount] = useState(3);
   const [subscriptionOpen, setSubscriptionOpen] = useState(false);
   const [transactionsDateFilter, setTransactionsDateFilter] = useState<DateFilter | null>(null);
   const [transactionsTypeFilter, setTransactionsTypeFilter] = useState<TypeFilter | null>(null);
@@ -44,6 +44,7 @@ const Index = () => {
   const companyId = currentCompany?.id;
   const { stats, reload: reloadDashboardStats } = useDashboardStats(companyId);
   useAutomationHeartbeat(companyId);
+  const notifications = useNotifications(companyId, user?.user_id);
 
   useEffect(() => {
     setMounted(true);
@@ -64,13 +65,25 @@ const Index = () => {
   return (
     <div className="min-h-screen bg-background">
       {showNotifications && (
-        <NotificationCenter onClose={() => setShowNotifications(false)} />
+        <NotificationCenter
+          items={notifications.items}
+          unread={notifications.unread}
+          isLoading={notifications.isLoading}
+          onClose={() => setShowNotifications(false)}
+          onMarkRead={notifications.markRead}
+          onHide={notifications.hide}
+          onReload={notifications.reload}
+          onOpenModule={handleModuleChange}
+        />
       )}
 
       <AppHeader
         onOpenSubscription={() => setSubscriptionOpen(true)}
-        unreadCount={unreadCount}
-        onShowNotifications={() => setShowNotifications(true)}
+        unreadCount={notifications.unread}
+        onShowNotifications={() => {
+          setShowNotifications(true);
+          notifications.reload();
+        }}
       />
 
       <SubscriptionDialog open={subscriptionOpen} onOpenChange={setSubscriptionOpen} />

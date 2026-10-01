@@ -1,0 +1,5 @@
+{"tests": [
+  {"name": "Missing params", "method": "GET", "path": "/", "expectedStatus": 400, "expectedBody": {"error": "company_id and user_id required"}, "bodyMatcher": "partial"},
+  {"name": "List notifications", "method": "GET", "path": "/?company_id=4&user_id=1", "expectedStatus": 200, "expectedBody": {"success": true}, "bodyMatcher": "partial"},
+  {"name": "Unknown action", "method": "POST", "path": "/", "body": {"action": "x", "company_id": 4, "user_id": 1}, "expectedStatus": 400, "bodyMatcher": "partial"}
+]}
