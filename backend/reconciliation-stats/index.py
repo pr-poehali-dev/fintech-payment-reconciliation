@@ -217,7 +217,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             SELECT
                 ekr.doc_datetime::date AS receipt_date,
                 ekr.total_sum,
-                om.operation_type AS linked_ofd_status
+                om.operation_type AS linked_ofd_status,
+                COALESCE(adv.advance_sum, 0) AS advance_sum
             FROM {SCHEMA}.ecomkassa_receipts ekr
             LEFT JOIN LATERAL (
                 SELECT ofd.operation_type
@@ -232,6 +233,22 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                   AND (ofd.raw_data->>'DecimalFiscalSign') = (ekr.raw_data->'payload'->>'fiscal_document_attribute')
                 LIMIT 1
             ) om ON true
+            LEFT JOIN LATERAL (
+                -- Закрывающий чек заказа, созданного сценарием по платежу (external_id = auto-<задание>):
+                -- оплаты типа 2 (зачёт аванса) денег не приносят - их уже учёл чек оплаты.
+                SELECT SUM((pay->>'sum')::numeric) AS advance_sum
+                FROM {SCHEMA}.automation_jobs j
+                JOIN {SCHEMA}.automation_job_log l ON l.job_id = j.id AND l.details ? 'request'
+                CROSS JOIN LATERAL jsonb_array_elements(l.details->'request'->'receipt'->'payments') pay
+                WHERE ekr.order_type = 'CORD'
+                  AND (ekr.raw_data->>'external_id') LIKE 'auto-%%'
+                  AND j.id::text = substring(ekr.raw_data->>'external_id' from 6)
+                  AND j.company_id = ekr.company_id AND j.source_type = 'payment'
+                  AND l.id = (SELECT MAX(l2.id) FROM {SCHEMA}.automation_job_log l2
+                              WHERE l2.job_id = j.id AND l2.details ? 'request')
+                  AND jsonb_typeof(l.details->'request'->'receipt'->'payments') = 'array'
+                  AND (pay->>'type') = '2'
+            ) adv ON true
             WHERE ekr.company_id = %s
               AND ekr.removed_at IS NULL
               AND ekr.status IS DISTINCT FROM 'cancelled'
@@ -243,8 +260,17 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         receipts_count = 0
         daily_receipts: Dict[str, float] = {}
 
-        for receipt_date, total_sum, linked_ofd_status in receipts_rows:
+        advance_offset_total = 0.0
+        advance_offset_count = 0
+        for receipt_date, total_sum, linked_ofd_status, advance_sum in receipts_rows:
             amount_f = float(total_sum) if total_sum else 0.0
+            advance_f = min(float(advance_sum or 0), amount_f)
+            if advance_f > 0:
+                advance_offset_total += advance_f
+                advance_offset_count += 1
+                amount_f -= advance_f
+                if amount_f <= 0:
+                    continue
             signed = amount_f * classify_receipt_sign(linked_ofd_status)
             receipts_total += signed
             receipts_count += 1
@@ -403,6 +429,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             'payments_by_provider': payments_by_provider_rounded,
             'receipts_ofd_total': round(receipts_ofd_total, 2),
             'receipts_ofd_count': receipts_ofd_count,
+            'advance_offset_total': round(advance_offset_total, 2),
+            'advance_offset_count': advance_offset_count,
             'bank_transactions_total': bank_count,
             'bank_transactions_with_registry_commission': bank_with_known_commission,
             'bank_commission_note': (
