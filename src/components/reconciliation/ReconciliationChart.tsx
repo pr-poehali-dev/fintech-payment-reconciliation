@@ -38,9 +38,9 @@ const formatDay = (value: string) => {
 };
 
 const ReconciliationChart = ({ daily, onDayClick }: ReconciliationChartProps) => {
-  // Выручка дня - сумма пробитых чеков кассы (нетто, с учётом возвратов): по 54-ФЗ
-  // именно чек фиксирует продажу.
-  const chartData = daily.map((d) => ({ ...d, revenue: d.receipts, dayLabel: formatDay(d.date) }));
+  // Выручка дня - реально полученные на счёт деньги ДО вычета комиссии банка
+  // (поле bank уже включает комиссию обратно, нетто с учётом возвратов).
+  const chartData = daily.map((d) => ({ ...d, revenue: d.bank, dayLabel: formatDay(d.date) }));
 
   return (
     <Card className="lg:col-span-2 border-border bg-card">
@@ -50,7 +50,7 @@ const ReconciliationChart = ({ daily, onDayClick }: ReconciliationChartProps) =>
           Динамика по дням
         </CardTitle>
         <CardDescription>
-          Платежи, чеки кассы и ОФД, поступления на счёт и комиссия банка; линия — выручка по чекам кассы
+          Платежи, чеки кассы и ОФД, поступления на счёт и комиссия банка; линия — выручка: деньги на счёте до вычета комиссии
           {onDayClick && ' · нажмите на день, чтобы открыть его транзакции'}
         </CardDescription>
       </CardHeader>
