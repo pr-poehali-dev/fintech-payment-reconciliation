@@ -28,6 +28,19 @@ const CreateCompany = () => {
   const [isCreating, setIsCreating] = useState(false);
   const [foundCompany, setFoundCompany] = useState<CompanyLookupData | null>(null);
   const [searchError, setSearchError] = useState<string | null>(null);
+  const [usage, setUsage] = useState<{ owned: number; max_companies: number | null } | null>(null);
+
+  // Сколько компаний уже создано и сколько разрешает тариф.
+  useEffect(() => {
+    if (!user) return;
+    fetch(`${functionUrls['companies-create']}?user_id=${user.user_id}`)
+      .then((res) => res.json())
+      .then((data) => data.success && setUsage({ owned: data.owned, max_companies: data.max_companies }))
+      .catch(() => {});
+  }, [user]);
+
+  const limitReached = !!usage && usage.max_companies !== null && usage.owned >= usage.max_companies;
+  const hasCompanies = !!usage && usage.owned > 0;
 
   const handleSearch = async () => {
     if (!isValidInn(inn)) return;
@@ -117,7 +130,9 @@ const CreateCompany = () => {
             <Icon name="Zap" size={32} className="text-primary" />
             <h1 className="text-3xl font-display font-bold text-foreground">Сверка</h1>
           </a>
-          <p className="text-sm text-muted-foreground">Добавьте свою первую компанию</p>
+          <p className="text-sm text-muted-foreground">
+            {hasCompanies ? 'Добавьте ещё одну компанию' : 'Добавьте свою первую компанию'}
+          </p>
         </div>
 
         <Card className="shadow-2xl border-0 animate-scale-in">
@@ -129,6 +144,40 @@ const CreateCompany = () => {
           </CardHeader>
 
           <CardContent className="space-y-6">
+            {usage && usage.max_companies !== null && (
+              <div
+                className={`rounded-lg border p-3 ${
+                  limitReached ? 'border-warning/30 bg-warning/10' : 'border-border bg-muted/30'
+                }`}
+              >
+                <div className="flex items-center justify-between gap-3 text-sm">
+                  <span className="flex items-center gap-2 text-muted-foreground">
+                    <Icon name="Building2" size={16} />
+                    Компаний по тарифу
+                  </span>
+                  <span className={`font-semibold ${limitReached ? 'text-warning' : 'text-foreground'}`}>
+                    Использовано {usage.owned} из {usage.max_companies}
+                  </span>
+                </div>
+                {limitReached && (
+                  <>
+                    <p className="mt-2 text-sm text-muted-foreground">
+                      Лимит компаний исчерпан. Чтобы добавить новую, перейдите на тариф с большим числом компаний.
+                    </p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="mt-3 w-full"
+                      onClick={() => navigate('/#pricing')}
+                    >
+                      <Icon name="ArrowUpCircle" size={16} className="mr-2" />
+                      Сменить тариф
+                    </Button>
+                  </>
+                )}
+              </div>
+            )}
+
             <div className="space-y-2">
               <Label>ИНН компании</Label>
               <div className="flex gap-2">
@@ -179,7 +228,7 @@ const CreateCompany = () => {
 
             <Button
               onClick={handleCreate}
-              disabled={!foundCompany || isCreating}
+              disabled={!foundCompany || isCreating || limitReached}
               className="w-full h-12 text-base font-semibold"
             >
               {isCreating ? (
@@ -190,9 +239,16 @@ const CreateCompany = () => {
               ) : 'Создать компанию'}
             </Button>
 
-            <Button variant="ghost" onClick={logout} className="w-full text-muted-foreground">
-              Выйти из аккаунта
-            </Button>
+            {hasCompanies ? (
+              <Button variant="ghost" onClick={() => navigate('/app')} className="w-full text-muted-foreground">
+                <Icon name="ArrowLeft" size={16} className="mr-2" />
+                Вернуться к компаниям
+              </Button>
+            ) : (
+              <Button variant="ghost" onClick={logout} className="w-full text-muted-foreground">
+                Выйти из аккаунта
+              </Button>
+            )}
           </CardContent>
         </Card>
       </div>

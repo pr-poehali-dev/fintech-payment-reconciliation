@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import functionUrls from '../../backend/func2url.json';
 import { DEFAULT_TRIAL_DAYS } from '@/lib/trialDays';
 import type { Tariff } from '@/components/landing/PricingSection';
@@ -24,6 +24,15 @@ const Landing = () => {
       })
       .catch(() => {});
   }, []);
+
+  const { hash } = useLocation();
+
+  // Переход по ссылке вида /#pricing (например, «Сменить тариф») - прокручиваем к блоку.
+  useEffect(() => {
+    if (!hash) return;
+    const timer = setTimeout(() => document.querySelector(hash)?.scrollIntoView({ behavior: 'smooth' }), 100);
+    return () => clearTimeout(timer);
+  }, [hash, tariffs]);
 
   const trialDays = tariffs?.find((t) => t.slug === 'trial')?.period_days || DEFAULT_TRIAL_DAYS;
 

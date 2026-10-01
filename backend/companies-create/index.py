@@ -4,6 +4,26 @@ import psycopg2
 from typing import Dict, Any
 
 
+def company_limit(cur, user_id) -> tuple:
+    """Сколько компаний пользователь создал (владелец) и лимит по лучшему из его тарифов (None - без ограничения)."""
+    cur.execute('''
+        SELECT COUNT(*),
+               BOOL_OR(t.id IS NOT NULL AND t.max_companies IS NULL),
+               MAX(t.max_companies)
+        FROM company_users cu
+        JOIN roles r ON r.id = cu.role_id AND r.slug = 'owner'
+        LEFT JOIN subscriptions s ON s.company_id = cu.company_id
+        LEFT JOIN tariffs t ON t.id = s.tariff_id
+        WHERE cu.user_id = %s AND cu.status = 'active'
+    ''', (user_id,))
+    owned, unlimited, max_companies = cur.fetchone()
+    if not owned:
+        cur.execute("SELECT max_companies FROM tariffs WHERE slug = 'trial'")
+        row = cur.fetchone()
+        return 0, row[0] if row else None
+    return owned, None if unlimited else max_companies
+
+
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     '''
     Создание новой компании: создаёт запись компании, назначает создателя
@@ -11,6 +31,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     Args: user_id, name (short_name для отображения), inn (обязателен),
           kpp, ogrn, full_name, legal_address (опционально, из company-lookup-by-inn)
     Returns: company_id, name, role
+    GET ?user_id= - сколько компаний создано и лимит по тарифу: {owned, max_companies}
     '''
 
     method = event.get('httpMethod', 'POST')
@@ -20,11 +41,34 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             'statusCode': 200,
             'headers': {
                 'Access-Control-Allow-Origin': '*',
-                'Access-Control-Allow-Methods': 'POST, OPTIONS',
+                'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
                 'Access-Control-Allow-Headers': 'Content-Type',
                 'Access-Control-Max-Age': '86400'
             },
             'body': '',
+            'isBase64Encoded': False
+        }
+
+    if method == 'GET':
+        uid = (event.get('queryStringParameters') or {}).get('user_id')
+        if not uid or not str(uid).isdigit():
+            return {
+                'statusCode': 400,
+                'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+                'body': json.dumps({'error': 'user_id required'}),
+                'isBase64Encoded': False
+            }
+        conn = psycopg2.connect(os.environ['DATABASE_URL'])
+        cur = conn.cursor()
+        try:
+            owned, max_companies = company_limit(cur, int(uid))
+        finally:
+            cur.close()
+            conn.close()
+        return {
+            'statusCode': 200,
+            'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+            'body': json.dumps({'success': True, 'owned': owned, 'max_companies': max_companies}),
             'isBase64Encoded': False
         }
 
@@ -75,19 +119,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 'isBase64Encoded': False
             }
 
-        # Лимит компаний: берём лучший тариф среди компаний, которыми владеет пользователь.
-        cur.execute('''
-            SELECT COUNT(*),
-                   BOOL_OR(t.id IS NOT NULL AND t.max_companies IS NULL),
-                   MAX(t.max_companies)
-            FROM company_users cu
-            JOIN roles r ON r.id = cu.role_id AND r.slug = 'owner'
-            LEFT JOIN subscriptions s ON s.company_id = cu.company_id
-            LEFT JOIN tariffs t ON t.id = s.tariff_id
-            WHERE cu.user_id = %s AND cu.status = 'active'
-        ''', (user_id,))
-        owned, unlimited, max_companies = cur.fetchone()
-        if owned and not unlimited and max_companies is not None and owned >= max_companies:
+        owned, max_companies = company_limit(cur, user_id)
+        if max_companies is not None and owned >= max_companies:
             return {
                 'statusCode': 403,
                 'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
