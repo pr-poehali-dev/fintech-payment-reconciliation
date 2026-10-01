@@ -13,22 +13,9 @@ def parse_bracket_form(body: str) -> Dict[str, Any]:
     result: Dict[str, Any] = {}
 
     for raw_key, value in pairs:
-        parts = []
-        current = ''
-        in_bracket = False
-        for ch in raw_key:
-            if ch == '[':
-                parts.append(current)
-                current = ''
-                in_bracket = True
-            elif ch == ']':
-                parts.append(current)
-                current = ''
-                in_bracket = False
-            else:
-                current += ch
-        if current:
-            parts.append(current)
+        # a[b][c] -> ['a', 'b', 'c']; a[] -> ['a', ''] (пустые скобки - элемент списка).
+        head, _, rest = raw_key.partition('[')
+        parts = [head] + ([p for p in rest.rstrip(']').split('][')] if rest else [])
 
         node = result
         for i, part in enumerate(parts):
