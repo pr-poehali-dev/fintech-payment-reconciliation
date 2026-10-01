@@ -1,6 +1,6 @@
 import hashlib
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, Optional, Tuple
 
 from fiscal_merge import merge_after_tbank
@@ -67,7 +67,11 @@ def _parse_datetime(value: Any) -> Optional[str]:
         return None
     text = str(value).strip()
     try:
-        return datetime.fromisoformat(text.replace('Z', '+00:00')).replace(tzinfo=None).isoformat()
+        parsed = datetime.fromisoformat(text.replace('Z', '+00:00'))
+        # В БД время хранится в UTC без смещения - "+03:00" сначала переводим в UTC.
+        if parsed.tzinfo is not None:
+            parsed = parsed.astimezone(timezone.utc)
+        return parsed.replace(tzinfo=None).isoformat()
     except ValueError:
         pass
     try:
