@@ -56,7 +56,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 r.slug, r.name, r.color,
                 s.status, s.trial_ends_at, s.current_period_end,
                 t.name, t.max_users, c.timezone, r.modules,
-                t.modules, t.max_integrations, t.max_automations, c.is_platform_admin
+                t.modules, t.max_integrations, t.max_automations, c.is_platform_admin, cu.platform_admin
             FROM company_users cu
             JOIN companies c ON c.id = cu.company_id
             JOIN roles r ON r.id = cu.role_id
@@ -87,8 +87,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 'tariff_modules': row[14],
                 'max_integrations': row[15],
                 'max_automations': row[16],
-                # Админка платформы - только владельцу компании-администратора платформы.
-                'platform_admin': bool(row[17]) and row[4] == 'owner'
+                # Админка платформы - владельцу компании-администратора платформы и отмеченным им сотрудникам.
+                'platform_admin': bool(row[17]) and (row[4] == 'owner' or bool(row[18]))
             })
 
         # Режим фоновых задач платформы: при включённом cron кабинет их сам не запускает.

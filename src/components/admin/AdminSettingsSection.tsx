@@ -8,6 +8,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { formatDateTime } from '@/lib/formatDate';
 import functionUrls from '../../../backend/func2url.json';
+import PlatformAdminsCard from './PlatformAdminsCard';
 
 const api = (functionUrls as Record<string, string>)['platform-settings'];
 
@@ -211,6 +212,8 @@ const AdminSettingsSection = () => {
       <Button onClick={save} disabled={!hasChanges || isSaving}>
         {isSaving ? 'Сохранение...' : 'Сохранить'}
       </Button>
+
+      <PlatformAdminsCard />
     </div>
   );
 };

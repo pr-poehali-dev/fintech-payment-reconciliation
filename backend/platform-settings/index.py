@@ -42,7 +42,7 @@ def is_admin(cur, user_id) -> bool:
         SELECT 1 FROM {SCHEMA}.company_users cu
         JOIN {SCHEMA}.companies c ON c.id = cu.company_id
         WHERE cu.user_id = %s AND cu.status = 'active' AND c.is_platform_admin = true
-          AND cu.role_id IN (SELECT id FROM {SCHEMA}.roles WHERE slug = 'owner')
+          AND (cu.platform_admin OR cu.role_id IN (SELECT id FROM {SCHEMA}.roles WHERE slug = 'owner'))
     ''', (user_id,))
     return cur.fetchone() is not None
 
@@ -144,12 +144,40 @@ def check_cron(settings: Dict[str, Any]) -> List[str]:
     return problems
 
 
+def is_platform_owner(cur, user_id) -> bool:
+    cur.execute(f'''
+        SELECT 1 FROM {SCHEMA}.company_users cu
+        JOIN {SCHEMA}.companies c ON c.id = cu.company_id
+        WHERE cu.user_id = %s AND cu.status = 'active' AND c.is_platform_admin = true
+          AND cu.role_id IN (SELECT id FROM {SCHEMA}.roles WHERE slug = 'owner')
+    ''', (user_id,))
+    return cur.fetchone() is not None
+
+
+def platform_members(cur) -> List[Dict[str, Any]]:
+    '''Сотрудники компании платформы и их доступ к админке (владелец - всегда).'''
+    cur.execute(f'''
+        SELECT u.id, u.full_name, u.phone, u.email, r.slug, r.name, cu.platform_admin
+        FROM {SCHEMA}.company_users cu
+        JOIN {SCHEMA}.companies c ON c.id = cu.company_id AND c.is_platform_admin = true
+        JOIN {SCHEMA}.app_users u ON u.id = cu.user_id
+        JOIN {SCHEMA}.roles r ON r.id = cu.role_id
+        WHERE cu.status = 'active'
+        ORDER BY (r.slug = 'owner') DESC, u.full_name NULLS LAST, u.id
+    ''')
+    return [{'user_id': r[0], 'full_name': r[1], 'phone': r[2], 'email': r[3], 'role_slug': r[4],
+             'role_name': r[5], 'is_owner': r[4] == 'owner', 'admin': r[4] == 'owner' or bool(r[6])}
+            for r in cur.fetchall()]
+
+
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     '''
     Настройки платформы (только для администраторов платформы) и точка запуска
     фоновых задач по расписанию.
     GET ?requester_user_id= - настройки + список компаний для выбора управляющей
     POST {action: "save", requester_user_id, managing_company_id, cron_enabled}
+    GET ?requester_user_id=&section=admins - сотрудники компании платформы и доступ к админке
+    POST {action: "set_admin", requester_user_id, user_id, enabled} - дать/забрать доступ (только владелец)
     POST {action: "tick"} + заголовок X-Cron-Token - шаг планировщика по всем компаниям
          (работает, только если включён режим cron)
     '''
@@ -177,6 +205,27 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         requester = body.get('requester_user_id') or params.get('requester_user_id')
         if not requester or not is_admin(cur, requester):
             return respond(403, {'error': 'Доступно только администраторам платформы'})
+
+        if method == 'GET' and params.get('section') == 'admins':
+            return respond(200, {'success': True, 'members': platform_members(cur),
+                                 'can_manage': is_platform_owner(cur, requester)})
+
+        if method == 'POST' and body.get('action') == 'set_admin':
+            if not is_platform_owner(cur, requester):
+                return respond(403, {'error': 'Назначать администраторов может только владелец компании платформы'})
+            cur.execute(f'''
+                UPDATE {SCHEMA}.company_users cu SET platform_admin = %s, updated_at = NOW()
+                FROM {SCHEMA}.companies c
+                WHERE cu.company_id = c.id AND c.is_platform_admin = true
+                  AND cu.user_id = %s AND cu.status = 'active'
+                  AND cu.role_id NOT IN (SELECT id FROM {SCHEMA}.roles WHERE slug = 'owner')
+                RETURNING cu.id
+            ''', (bool(body.get('enabled')), body.get('user_id')))
+            if not cur.fetchone():
+                conn.rollback()
+                return respond(404, {'error': 'Сотрудник не найден в компании платформы'})
+            conn.commit()
+            return respond(200, {'success': True, 'members': platform_members(cur), 'can_manage': True})
 
         if method == 'POST':
             if body.get('action') != 'save':

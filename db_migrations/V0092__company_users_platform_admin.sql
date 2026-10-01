@@ -1,0 +1,1 @@
+ALTER TABLE t_p83864310_fintech_payment_reco.company_users ADD COLUMN platform_admin boolean NOT NULL DEFAULT false;
