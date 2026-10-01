@@ -70,6 +70,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
           max_companies, max_users, max_integrations, max_automations, period_days, yearly_discount_percent}
           - пустой лимит = без ограничения; period_days - срок действия (пробный - дни триала)
     POST {action: "set_company_tariff", requester_user_id, company_id, tariff_id} - сменить тариф компании
+    POST {action: "extend_subscription", requester_user_id, company_id, period: tariff|year} - продлить подписку
     '''
     method = event.get('httpMethod', 'GET')
     if method == 'OPTIONS':
@@ -104,6 +105,39 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 ''', (company_id, tariff_id, status))
             conn.commit()
             return respond(200, {'success': True, 'tariff_name': tariff[1], 'subscription_status': status})
+
+        if method == 'POST' and body.get('action') == 'extend_subscription':
+            # Продление: от даты окончания (или от сегодня, если уже просрочена) на срок тарифа
+            # или на год. Пробный продлевает пробный период, платный - оплаченный период.
+            company_id, period = body.get('company_id'), body.get('period') or 'tariff'
+            if period not in ('tariff', 'year'):
+                return respond(400, {'error': 'Срок продления: тариф или год'})
+            cur.execute(f'''
+                SELECT s.id, t.slug, t.period_days FROM {SCHEMA}.subscriptions s
+                JOIN {SCHEMA}.tariffs t ON t.id = s.tariff_id
+                WHERE s.company_id = %s
+            ''', (company_id,))
+            row = cur.fetchone()
+            if not row:
+                return respond(400, {'error': 'У компании нет подписки - сначала выберите тариф'})
+            sub_id, slug, period_days = row
+            days = 365 if period == 'year' else int(period_days or 30)
+            is_trial = slug == 'trial'
+            cur.execute(f'''
+                UPDATE {SCHEMA}.subscriptions SET
+                    current_period_start = CASE WHEN COALESCE(current_period_end, NOW()) < NOW() THEN NOW() ELSE current_period_start END,
+                    current_period_end = GREATEST(COALESCE(current_period_end, NOW()), NOW()) + make_interval(days => %s),
+                    trial_ends_at = CASE WHEN %s THEN GREATEST(COALESCE(trial_ends_at, NOW()), NOW()) + make_interval(days => %s)
+                                         ELSE trial_ends_at END,
+                    status = %s, updated_at = NOW()
+                WHERE id = %s
+                RETURNING current_period_end, trial_ends_at, status
+            ''', (days, is_trial, days, 'trial' if is_trial else 'active', sub_id))
+            end, trial_end, status = cur.fetchone()
+            conn.commit()
+            return respond(200, {'success': True, 'days': days, 'subscription_status': status,
+                                 'current_period_end': end.isoformat(),
+                                 'trial_ends_at': trial_end.isoformat() if trial_end else None})
 
         if method == 'POST':
             if body.get('action') != 'save' or not body.get('id'):

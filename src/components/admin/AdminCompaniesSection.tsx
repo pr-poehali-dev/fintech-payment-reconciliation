@@ -5,6 +5,8 @@ import Icon from '@/components/ui/icon';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Button } from '@/components/ui/button';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import functionUrls from '../../../backend/func2url.json';
 import { daysLeft, formatShortDate } from '@/lib/subscription';
 
@@ -58,7 +60,7 @@ const AdminCompaniesSection = () => {
   const [companies, setCompanies] = useState<AdminCompany[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [tariffs, setTariffs] = useState<{ id: number; name: string }[]>([]);
+  const [tariffs, setTariffs] = useState<{ id: number; name: string; slug: string; period_days: number }[]>([]);
   const [changingId, setChangingId] = useState<number | null>(null);
   const [filter, setFilter] = useState<Filter>('all');
   const { toast } = useToast();
@@ -101,6 +103,31 @@ const AdminCompaniesSection = () => {
       } else {
         toast({ title: 'Ошибка', description: data.error, variant: 'destructive' });
       }
+    } finally {
+      setChangingId(null);
+    }
+  };
+
+  const extend = async (company: AdminCompany, period: 'tariff' | 'year') => {
+    setChangingId(company.id);
+    try {
+      const res = await fetch(tariffsApi, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'extend_subscription', requester_user_id: user?.user_id, company_id: company.id, period })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setCompanies((prev) => prev.map((c) => (c.id === company.id
+          ? { ...c, subscription_status: data.subscription_status, current_period_end: data.current_period_end, trial_ends_at: data.trial_ends_at }
+          : c)));
+        const end = data.subscription_status === 'trial' ? data.trial_ends_at : data.current_period_end;
+        toast({ title: `«${company.name}» продлена на ${data.days} дн.`, description: `До ${formatShortDate(end)}` });
+      } else {
+        toast({ title: 'Не удалось продлить', description: data.error, variant: 'destructive' });
+      }
+    } catch {
+      toast({ title: 'Ошибка подключения', variant: 'destructive' });
     } finally {
       setChangingId(null);
     }
@@ -209,14 +236,40 @@ const AdminCompaniesSection = () => {
                         {(() => {
                           const end = endDate(company);
                           const left = daysLeft(end);
-                          if (!end) return <span className="text-muted-foreground">—</span>;
+                          const tariff = tariffs.find((t) => t.id === company.tariff_id);
                           return (
-                            <>
-                              <p className="text-foreground">{formatShortDate(end)}</p>
-                              <p className={`text-xs ${left! < 0 ? 'text-destructive' : left! <= 3 ? 'text-warning' : 'text-muted-foreground'}`}>
-                                {left! < 0 ? `просрочена ${-left!} дн.` : left === 0 ? 'сегодня' : `осталось ${left} дн.`}
-                              </p>
-                            </>
+                            <div className="flex items-center gap-2">
+                              <div className="min-w-[96px]">
+                                {end ? (
+                                  <>
+                                    <p className="text-foreground">{formatShortDate(end)}</p>
+                                    <p className={`text-xs ${left! < 0 ? 'text-destructive' : left! <= 3 ? 'text-warning' : 'text-muted-foreground'}`}>
+                                      {left! < 0 ? `просрочена ${-left!} дн.` : left === 0 ? 'сегодня' : `осталось ${left} дн.`}
+                                    </p>
+                                  </>
+                                ) : (
+                                  <span className="text-muted-foreground">—</span>
+                                )}
+                              </div>
+                              {company.tariff_id && (
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button size="sm" variant="outline" className="h-8 gap-1" disabled={changingId === company.id}>
+                                      <Icon name={changingId === company.id ? 'Loader2' : 'CalendarPlus'} size={14} className={changingId === company.id ? 'animate-spin' : ''} />
+                                      Продлить
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end">
+                                    <DropdownMenuItem onClick={() => extend(company, 'tariff')}>
+                                      На срок тарифа{tariff ? ` (${tariff.period_days} дн.)` : ''}
+                                    </DropdownMenuItem>
+                                    {tariff?.slug !== 'trial' && (
+                                      <DropdownMenuItem onClick={() => extend(company, 'year')}>На год (365 дн.)</DropdownMenuItem>
+                                    )}
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              )}
+                            </div>
                           );
                         })()}
                       </td>
