@@ -25,7 +25,7 @@ const EventsPage = () => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const hasLoadedOnce = useRef(false);
   const { toast } = useToast();
-  const { currentCompany } = useAuth();
+  const { currentCompany, cronEnabled } = useAuth();
   const companyId = currentCompany?.id;
 
   const fetchEvents = async () => {
@@ -68,7 +68,7 @@ const EventsPage = () => {
   useEffect(() => {
     if (!companyId) return;
 
-    resyncGateway(companyId).then((changed) => {
+    resyncGateway(companyId, cronEnabled).then((changed) => {
       if (changed) {
         fetchEvents();
       }

@@ -7,9 +7,10 @@ const INTERVAL_MS = 2 * 60_000;
 // обработчик автоматизации - он запустит задания, у которых подошло время
 // повтора, и подхватит зависшие «в работе». Повторы есть и без этого
 // (по любому новому уведомлению от банка/кассы), здесь - страховка.
-export const useAutomationHeartbeat = (companyId?: number) => {
+// При включённом режиме cron всё это делает планировщик сервера - кабинет молчит.
+export const useAutomationHeartbeat = (companyId?: number, cronEnabled = false) => {
   useEffect(() => {
-    if (!companyId) return;
+    if (!companyId || cronEnabled) return;
     const tick = () => {
       if (document.visibilityState !== 'visible') return;
       // Один вызов: очередь автоматизации + (если нужно) дубли уведомлений и
@@ -23,7 +24,7 @@ export const useAutomationHeartbeat = (companyId?: number) => {
     tick();
     const id = window.setInterval(tick, INTERVAL_MS);
     return () => window.clearInterval(id);
-  }, [companyId]);
+  }, [companyId, cronEnabled]);
 };
 
 export default useAutomationHeartbeat;

@@ -67,7 +67,7 @@ const ReconciliationPage = ({ onOpenTransactions }: ReconciliationPageProps) => 
   const [statusSummary, setStatusSummary] = useState<StatusSummary | null>(null);
   const [isStatusLoading, setIsStatusLoading] = useState(true);
   const { toast } = useToast();
-  const { currentCompany } = useAuth();
+  const { currentCompany, cronEnabled } = useAuth();
   const companyId = currentCompany?.id;
 
   const fetchStats = useCallback(async () => {
@@ -105,7 +105,7 @@ const ReconciliationPage = ({ onOpenTransactions }: ReconciliationPageProps) => 
   useEffect(() => {
     if (!companyId) return;
 
-    resyncGateway(companyId).then((changed) => {
+    resyncGateway(companyId, cronEnabled).then((changed) => {
       if (changed) {
         fetchStats();
         fetchStatus();

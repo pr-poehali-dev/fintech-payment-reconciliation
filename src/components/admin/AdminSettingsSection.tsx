@@ -1,0 +1,218 @@
+import { useCallback, useEffect, useState } from 'react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import Icon from '@/components/ui/icon';
+import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
+import { formatDateTime } from '@/lib/formatDate';
+import functionUrls from '../../../backend/func2url.json';
+
+const api = (functionUrls as Record<string, string>)['platform-settings'];
+
+interface PlatformSettings {
+  managing_company_id: number | null;
+  cron_enabled: boolean;
+  cron_token: string;
+  cron_last_tick_at: string | null;
+  cron_last_result: { companies: number; failed: number } | null;
+}
+
+interface CompanyOption {
+  id: number;
+  name: string;
+  inn: string | null;
+}
+
+const AdminSettingsSection = () => {
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const [settings, setSettings] = useState<PlatformSettings | null>(null);
+  const [companies, setCompanies] = useState<CompanyOption[]>([]);
+  const [problems, setProblems] = useState<string[]>([]);
+  const [interval, setIntervalMin] = useState(1);
+  const [managingId, setManagingId] = useState<string>('');
+  const [cronEnabled, setCronEnabled] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const apply = (data: { settings: PlatformSettings; companies: CompanyOption[]; cron_problems: string[]; cron_interval_min: number }) => {
+    setSettings(data.settings);
+    setCompanies(data.companies || []);
+    setProblems(data.cron_problems || []);
+    setIntervalMin(data.cron_interval_min || 1);
+    setManagingId(data.settings.managing_company_id ? String(data.settings.managing_company_id) : '');
+    setCronEnabled(data.settings.cron_enabled);
+  };
+
+  const load = useCallback(async () => {
+    if (!user) return;
+    const res = await fetch(`${api}?requester_user_id=${user.user_id}`);
+    const data = await res.json();
+    if (res.ok) apply(data);
+    else setError(data.error || 'Не удалось загрузить настройки');
+  }, [user]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const save = async () => {
+    if (!user) return;
+    setIsSaving(true);
+    try {
+      const res = await fetch(api, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'save',
+          requester_user_id: user.user_id,
+          managing_company_id: managingId ? Number(managingId) : null,
+          cron_enabled: cronEnabled
+        })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        apply(data);
+        toast({
+          title: 'Настройки сохранены',
+          description: 'Кабинеты клиентов применят режим запуска после обновления страницы'
+        });
+      } else {
+        toast({ title: 'Ошибка', description: data.error, variant: 'destructive' });
+      }
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const copy = (text: string) => {
+    navigator.clipboard.writeText(text).then(() => toast({ title: 'Скопировано' }));
+  };
+
+  if (error) {
+    return <div className="text-destructive">{error}</div>;
+  }
+  if (!settings) {
+    return (
+      <div className="flex h-64 items-center justify-center">
+        <Icon name="Loader2" size={28} className="animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  const hasChanges = (managingId || '') !== (settings.managing_company_id ? String(settings.managing_company_id) : '')
+    || cronEnabled !== settings.cron_enabled;
+  const tickCommand = `curl -s -X POST ${api} -H 'Content-Type: application/json' -H 'X-Cron-Token: ${settings.cron_token}' -d '{"action":"tick"}'`;
+
+  return (
+    <div className="space-y-6 animate-fade-in">
+      <div>
+        <h2 className="text-3xl font-display font-bold text-foreground mb-2">Настройки</h2>
+        <p className="text-muted-foreground">Параметры всей платформы</p>
+      </div>
+
+      <Card className="border-border bg-card">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Icon name="Landmark" size={20} />
+            Управляющая компания
+          </CardTitle>
+          <CardDescription>
+            От её имени принимаются оплаты подписок клиентов и выставляются документы
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="max-w-md">
+            <Select value={managingId} onValueChange={setManagingId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Выберите компанию" />
+              </SelectTrigger>
+              <SelectContent>
+                {companies.map((c) => (
+                  <SelectItem key={c.id} value={String(c.id)}>
+                    {c.name}{c.inn ? ` · ИНН ${c.inn}` : ''}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="border-border bg-card">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Icon name="Timer" size={20} />
+            Фоновые задачи
+          </CardTitle>
+          <CardDescription>
+            Очередь автоматизации, повторы сценариев, рассылка уведомлений, проверка «платежи без чека», дозагрузка чеков кассы
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <label className="flex items-start gap-3">
+            <Checkbox checked={cronEnabled} onCheckedChange={(v) => setCronEnabled(Boolean(v))} className="mt-0.5" />
+            <span>
+              <span className="text-sm font-medium">Активировать работу по cron</span>
+              <span className="block text-xs text-muted-foreground">
+                Для всех клиентов: задачи запускает планировщик сервера по расписанию. Выключено — запуск при входе в кабинет,
+                открытии страниц и ручных действиях, как сейчас.
+              </span>
+            </span>
+          </label>
+
+          {settings.cron_enabled ? (
+            <div className="space-y-3 rounded-lg border border-border p-4">
+              <div className="text-sm font-medium">Задание для планировщика (раз в {interval} мин)</div>
+              <div className="flex items-start gap-2">
+                <code className="flex-1 break-all rounded bg-muted p-2 text-xs">{tickCommand}</code>
+                <Button size="icon" variant="ghost" onClick={() => copy(tickCommand)} title="Скопировать">
+                  <Icon name="Copy" size={16} />
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Для crontab: <code className="rounded bg-muted px-1">* * * * * {'<команда выше>'}</code>
+              </p>
+              <div className="text-sm">
+                Последний запуск:{' '}
+                {settings.cron_last_tick_at ? (
+                  <>
+                    {formatDateTime(settings.cron_last_tick_at, undefined, true)}
+                    {settings.cron_last_result && (
+                      <span className="text-muted-foreground">
+                        {' '}· компаний: {settings.cron_last_result.companies}
+                        {settings.cron_last_result.failed > 0 && `, с ошибками: ${settings.cron_last_result.failed}`}
+                      </span>
+                    )}
+                  </>
+                ) : (
+                  <span className="text-muted-foreground">ещё не было</span>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-start gap-2 rounded-lg bg-muted/50 p-3 text-xs text-muted-foreground">
+              <Icon name="Info" size={14} className="mt-0.5 shrink-0" />
+              <span>Сейчас задачи запускаются из открытых кабинетов клиентов. Если кабинет никто не открывает, задачи ждут ближайшего входа.</span>
+            </div>
+          )}
+
+          {problems.map((p) => (
+            <div key={p} className="flex items-start gap-2 rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm text-foreground">
+              <Icon name="AlertTriangle" size={16} className="mt-0.5 shrink-0 text-warning" />
+              <span>{p}</span>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+
+      <Button onClick={save} disabled={!hasChanges || isSaving}>
+        {isSaving ? 'Сохранение...' : 'Сохранить'}
+      </Button>
+    </div>
+  );
+};
+
+export default AdminSettingsSection;

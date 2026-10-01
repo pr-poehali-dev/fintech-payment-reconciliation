@@ -19,7 +19,7 @@ import { DateFilter } from '@/components/filters/DateRangeFilter';
 import { TYPE_FILTERS, TypeFilter, TypeFilterKey } from '@/lib/transactionTypeFilter';
 
 const Index = () => {
-  const { currentCompany, user } = useAuth();
+  const { currentCompany, user, cronEnabled } = useAuth();
   const [activeModule, setActiveModule] = useState('reconciliation');
   const [showNotifications, setShowNotifications] = useState(false);
   const [subscriptionOpen, setSubscriptionOpen] = useState(false);
@@ -73,7 +73,7 @@ const Index = () => {
   };
 
   const companyId = currentCompany?.id;
-  useAutomationHeartbeat(companyId);
+  useAutomationHeartbeat(companyId, cronEnabled);
   const notifications = useNotifications(companyId, user?.user_id);
 
 

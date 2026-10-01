@@ -32,6 +32,7 @@ interface AuthContextValue {
   currentCompany: Company | null;
   isLoading: boolean;
   isPlatformAdmin: boolean;
+  cronEnabled: boolean;
   setCurrentCompanyId: (id: number) => void;
   loginWithPhone: (phone: string, fullName?: string) => Promise<AuthUser>;
   refreshCompanies: () => Promise<void>;
@@ -46,6 +47,7 @@ const STORAGE_COMPANY_KEY = 'ek_current_company_id';
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<AuthUser | null>(null);
+  const [cronEnabled, setCronEnabled] = useState(false);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [currentCompanyId, setCurrentCompanyIdState] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -71,6 +73,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const data = await res.json();
       if (res.ok && data.success) {
         setCompanies(data.companies || []);
+        setCronEnabled(Boolean(data.cron_enabled));
 
         const storedCompanyId = localStorage.getItem(STORAGE_COMPANY_KEY);
         const storedIdNum = storedCompanyId ? Number(storedCompanyId) : null;
@@ -165,6 +168,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         currentCompany,
         isLoading,
         isPlatformAdmin,
+        cronEnabled,
         setCurrentCompanyId,
         loginWithPhone,
         refreshCompanies,

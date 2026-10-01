@@ -1,0 +1,209 @@
+import json
+import os
+import socket
+import urllib.error
+import urllib.request
+from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timedelta
+from typing import Any, Dict, List, Optional
+
+import psycopg2
+
+SCHEMA = 't_p83864310_fintech_payment_reco'
+
+CORS_HEADERS = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, X-Cron-Token',
+    'Access-Control-Max-Age': '86400'
+}
+
+# Фоновые задачи по каждой компании - то, что сейчас запускается входом в
+# кабинет и открытием страниц. При включённом cron их вызывает планировщик.
+JOBS_URL = 'https://functions.poehali.dev/22902813-812b-495a-9ea0-8497b880c461'
+RESYNC_URL = 'https://functions.poehali.dev/0b50cd7c-94bc-4be9-824a-0bb119c6adef'
+TICK_BATCH = 15
+
+# Интервал (мин) для внешнего планировщика - показывается в админке.
+CRON_INTERVAL_MIN = 1
+
+
+def respond(status: int, payload: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        'statusCode': status,
+        'headers': {**CORS_HEADERS, 'Content-Type': 'application/json'},
+        'body': json.dumps(payload, ensure_ascii=False, default=str),
+        'isBase64Encoded': False
+    }
+
+
+def is_admin(cur, user_id) -> bool:
+    cur.execute(f'''
+        SELECT 1 FROM {SCHEMA}.company_users cu
+        JOIN {SCHEMA}.companies c ON c.id = cu.company_id
+        WHERE cu.user_id = %s AND cu.status = 'active' AND c.is_platform_admin = true
+    ''', (user_id,))
+    return cur.fetchone() is not None
+
+
+def load_settings(cur) -> Dict[str, Any]:
+    cur.execute(f'''
+        SELECT s.managing_company_id, c.name, c.inn, s.cron_enabled, s.cron_token,
+               s.cron_last_tick_at, s.cron_last_result, s.updated_at
+        FROM {SCHEMA}.platform_settings s
+        LEFT JOIN {SCHEMA}.companies c ON c.id = s.managing_company_id
+        WHERE s.id = 1
+    ''')
+    r = cur.fetchone()
+    return {
+        'managing_company_id': r[0], 'managing_company_name': r[1], 'managing_company_inn': r[2],
+        'cron_enabled': r[3], 'cron_token': r[4], 'cron_last_tick_at': r[5],
+        'cron_last_result': r[6], 'updated_at': r[7]
+    }
+
+
+def call(url: str, body: Dict[str, Any], timeout: float) -> Optional[str]:
+    '''
+    Запускает задачу функции, не дожидаясь её конца: тайм-аут ожидания ответа -
+    это «задача запущена и работает», а не ошибка. Ошибка - только отказ сразу
+    (функция недоступна, ответ с ошибкой).
+    '''
+    try:
+        req = urllib.request.Request(url, data=json.dumps(body).encode('utf-8'),
+                                     headers={'Content-Type': 'application/json'}, method='POST')
+        urllib.request.urlopen(req, timeout=timeout).close()
+        return None
+    except (socket.timeout, TimeoutError):
+        return None
+    except urllib.error.URLError as e:
+        if isinstance(e.reason, (socket.timeout, TimeoutError)):
+            return None
+        return str(e)[:200]
+    except Exception as e:
+        return str(e)[:200]
+
+
+def tick(cur, conn, settings: Dict[str, Any]) -> Dict[str, Any]:
+    '''
+    Один шаг планировщика: по каждой компании с активными интеграциями -
+    очередь автоматизации (+ дубли уведомлений и проверка «платежи без чека за
+    вчера») и дозагрузка непробитых чеков Екомкассы. Все вызовы параллельно,
+    не дожидаясь их окончания. Компаний больше TICK_BATCH - берём по кругу,
+    следующая порция - на следующем шаге.
+    '''
+    cur.execute(f'''
+        SELECT c.id FROM {SCHEMA}.companies c
+        WHERE c.status = 'active'
+          AND EXISTS (SELECT 1 FROM {SCHEMA}.user_integrations ui
+                      WHERE ui.company_id = c.id AND ui.status = 'active')
+        ORDER BY c.id
+    ''')
+    all_ids = [r[0] for r in cur.fetchall()]
+    offset = int((settings.get('cron_last_result') or {}).get('next_offset') or 0)
+    if offset >= len(all_ids):
+        offset = 0
+    company_ids = all_ids[offset:offset + TICK_BATCH]
+    next_offset = offset + TICK_BATCH if offset + TICK_BATCH < len(all_ids) else 0
+
+    tasks = []
+    for company_id in company_ids:
+        tasks.append((company_id, JOBS_URL, {'action': 'run', 'company_id': company_id, 'heartbeat': True}))
+        tasks.append((company_id, RESYNC_URL, {'company_id': company_id}))
+    errors: Dict[int, List[str]] = {}
+    if tasks:
+        with ThreadPoolExecutor(max_workers=len(tasks)) as pool:
+            for (company_id, _, _), err in zip(tasks, pool.map(lambda t: call(t[1], t[2], 2.5), tasks)):
+                if err:
+                    errors.setdefault(company_id, []).append(err)
+    summary = {'companies': len(company_ids), 'total_companies': len(all_ids), 'failed': len(errors),
+               'errors': [{'company_id': k, 'errors': v} for k, v in list(errors.items())[:5]],
+               'next_offset': next_offset}
+    cur.execute(f'''
+        UPDATE {SCHEMA}.platform_settings SET cron_last_tick_at = NOW(), cron_last_result = %s WHERE id = 1
+    ''', (json.dumps(summary, ensure_ascii=False),))
+    conn.commit()
+    return summary
+
+
+def check_cron(settings: Dict[str, Any]) -> List[str]:
+    '''Почему автоматический режим может не работать - для сообщения в админке.'''
+    problems = []
+    if not settings['cron_enabled']:
+        return problems
+    last = settings['cron_last_tick_at']
+    fallback = ' Пока это так, задачи запускаются по-старому - из кабинетов клиентов.'
+    if not last:
+        problems.append('Планировщик ещё ни разу не вызывал запуск: задание на сервере не настроено. '
+                        f'Добавьте его (раз в {CRON_INTERVAL_MIN} мин) по команде ниже.' + fallback)
+    elif last < datetime.utcnow() - timedelta(minutes=5):
+        problems.append(f'Планировщик не запускался с {last:%d.%m.%Y %H:%M} UTC - проверьте задание на сервере.' + fallback)
+    result = settings.get('cron_last_result') or {}
+    if result.get('failed'):
+        problems.append(f"При последнем запуске были ошибки у компаний: {result['failed']} из {result.get('companies')}.")
+    return problems
+
+
+def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
+    '''
+    Настройки платформы (только для администраторов платформы) и точка запуска
+    фоновых задач по расписанию.
+    GET ?requester_user_id= - настройки + список компаний для выбора управляющей
+    POST {action: "save", requester_user_id, managing_company_id, cron_enabled}
+    POST {action: "tick"} + заголовок X-Cron-Token - шаг планировщика по всем компаниям
+         (работает, только если включён режим cron)
+    '''
+    method = event.get('httpMethod', 'GET')
+    if method == 'OPTIONS':
+        return {'statusCode': 200, 'headers': CORS_HEADERS, 'body': '', 'isBase64Encoded': False}
+
+    params = event.get('queryStringParameters') or {}
+    body = json.loads(event.get('body') or '{}') if method == 'POST' else {}
+    headers = {k.lower(): v for k, v in (event.get('headers') or {}).items()}
+
+    conn = psycopg2.connect(os.environ['DATABASE_URL'])
+    cur = conn.cursor()
+    try:
+        settings = load_settings(cur)
+
+        if method == 'POST' and body.get('action') == 'tick':
+            token = headers.get('x-cron-token') or body.get('token')
+            if not token or token != settings['cron_token']:
+                return respond(403, {'error': 'Неверный ключ планировщика'})
+            if not settings['cron_enabled']:
+                return respond(409, {'error': 'Автоматический режим (cron) выключен в настройках платформы'})
+            return respond(200, {'success': True, **tick(cur, conn, settings)})
+
+        requester = body.get('requester_user_id') or params.get('requester_user_id')
+        if not requester or not is_admin(cur, requester):
+            return respond(403, {'error': 'Доступно только администраторам платформы'})
+
+        if method == 'POST':
+            if body.get('action') != 'save':
+                return respond(400, {'error': 'Unknown action'})
+            company_id = body.get('managing_company_id')
+            if company_id:
+                cur.execute(f'SELECT 1 FROM {SCHEMA}.companies WHERE id = %s', (company_id,))
+                if not cur.fetchone():
+                    return respond(400, {'error': 'Компания не найдена'})
+            cur.execute(f'''
+                UPDATE {SCHEMA}.platform_settings
+                SET managing_company_id = %s, cron_enabled = %s, updated_by = %s, updated_at = NOW()
+                WHERE id = 1
+            ''', (company_id or None, bool(body.get('cron_enabled')), requester))
+            conn.commit()
+            settings = load_settings(cur)
+
+        cur.execute(f'''
+            SELECT id, name, inn FROM {SCHEMA}.companies WHERE status = 'active' ORDER BY name
+        ''')
+        companies = [{'id': r[0], 'name': r[1], 'inn': r[2]} for r in cur.fetchall()]
+        return respond(200, {
+            'success': True,
+            'settings': settings,
+            'companies': companies,
+            'cron_interval_min': CRON_INTERVAL_MIN,
+            'cron_problems': check_cron(settings)
+        })
+    finally:
+        cur.close()
+        conn.close()

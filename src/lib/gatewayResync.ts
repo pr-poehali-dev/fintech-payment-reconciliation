@@ -7,7 +7,9 @@ const lastRun = new Map<number, number>();
 // момент вебхука. Раньше запускалась при каждом открытии «Сверки», «Событий» и
 // «Транзакций» - теперь не чаще раза в 2 минуты на компанию.
 // Returns: true, если что-то довязалось и данные стоит перезагрузить.
-export const resyncGateway = async (companyId: number): Promise<boolean> => {
+// При включённом режиме cron дозагрузку запускает планировщик сервера - кабинет её не вызывает.
+export const resyncGateway = async (companyId: number, cronEnabled = false): Promise<boolean> => {
+  if (cronEnabled) return false;
   const now = Date.now();
   if (now - (lastRun.get(companyId) ?? 0) < THROTTLE_MS) return false;
   lastRun.set(companyId, now);

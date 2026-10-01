@@ -48,7 +48,7 @@ const TransactionsPage = ({ initialDateFilter = null, initialTypeFilter = null, 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [detachingKey, setDetachingKey] = useState<string | null>(null);
   const { toast } = useToast();
-  const { currentCompany } = useAuth();
+  const { currentCompany, cronEnabled } = useAuth();
   const companyId = currentCompany?.id;
   const { openDialog, completedTick, phase: backfillPhase } = useBackfill();
 
@@ -116,7 +116,7 @@ const TransactionsPage = ({ initialDateFilter = null, initialTypeFilter = null, 
   useEffect(() => {
     if (!companyId) return;
 
-    resyncGateway(companyId).then((changed) => {
+    resyncGateway(companyId, cronEnabled).then((changed) => {
       if (changed) {
         fetchTransactions();
       }

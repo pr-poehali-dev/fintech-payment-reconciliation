@@ -84,12 +84,23 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 'role_modules': row[13] or []
             })
 
+        # Режим фоновых задач платформы: при включённом cron кабинет их сам не запускает.
+        # Страховка: если планировщик не запускался последние 5 минут (не настроен или
+        # упал), кабинеты продолжают запускать задачи сами - работа клиентов не встаёт.
+        cur.execute('''
+            SELECT cron_enabled AND cron_last_tick_at > NOW() - INTERVAL '5 minutes'
+            FROM t_p83864310_fintech_payment_reco.platform_settings WHERE id = 1
+        ''')
+        row = cur.fetchone()
+        cron_enabled = bool(row and row[0])
+
         return {
             'statusCode': 200,
             'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
             'body': json.dumps({
                 'success': True,
-                'companies': companies
+                'companies': companies,
+                'cron_enabled': cron_enabled
             }),
             'isBase64Encoded': False
         }
