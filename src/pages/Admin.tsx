@@ -20,9 +20,6 @@ const Admin = () => {
         {activeSection === 'action_templates' && <AdminActionTemplatesSection />}
         {activeSection === 'settings' && <AdminSettingsSection />}
         {activeSection === 'tariffs' && <AdminTariffsSection />}
-        {activeSection === 'subscriptions' && (
-          <AdminPlaceholder icon="CreditCard" title="Подписки" description="Статус подписок компаний" />
-        )}
         {activeSection === 'integrations' && (
           <AdminPlaceholder icon="Plug" title="Интеграции CRM" description="Каталог провайдеров, доступных всем компаниям" />
         )}

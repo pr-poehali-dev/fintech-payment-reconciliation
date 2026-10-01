@@ -6,6 +6,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import functionUrls from '../../../backend/func2url.json';
+import { daysLeft, formatShortDate } from '@/lib/subscription';
 
 interface AdminCompany {
   id: number;
@@ -25,10 +26,31 @@ interface AdminCompany {
 }
 
 const STATUS_CONFIG: Record<string, { label: string; className: string }> = {
+  past_due: { label: 'Ожидает оплаты', className: 'bg-warning/10 text-warning border-warning/20' },
+  expired: { label: 'Истекла', className: 'bg-destructive/10 text-destructive border-destructive/20' },
   active: { label: 'Активна', className: 'bg-success/10 text-success border-success/20' },
   blocked: { label: 'Заблокирована', className: 'bg-destructive/10 text-destructive border-destructive/20' },
   trial: { label: 'Триал', className: 'bg-info/10 text-info border-info/20' },
   cancelled: { label: 'Отменена', className: 'bg-muted text-muted-foreground border-border' }
+};
+
+type Filter = 'all' | 'trial' | 'active' | 'unpaid';
+
+const endDate = (c: AdminCompany) => (c.subscription_status === 'trial' ? c.trial_ends_at : c.current_period_end);
+
+// Не оплачена: касса ждёт оплату / истекла / отменена, либо срок подписки уже прошёл.
+const isUnpaid = (c: AdminCompany) => {
+  if (c.is_platform_admin) return false;
+  if (['past_due', 'expired', 'canceled', 'cancelled'].includes(c.subscription_status || '')) return true;
+  const left = daysLeft(endDate(c));
+  return left !== null && left < 0;
+};
+
+const FILTERS: Record<Filter, (c: AdminCompany) => boolean> = {
+  all: () => true,
+  trial: (c) => c.subscription_status === 'trial' && !isUnpaid(c),
+  active: (c) => c.subscription_status === 'active' && !isUnpaid(c),
+  unpaid: isUnpaid
 };
 
 const AdminCompaniesSection = () => {
@@ -38,6 +60,7 @@ const AdminCompaniesSection = () => {
   const [error, setError] = useState<string | null>(null);
   const [tariffs, setTariffs] = useState<{ id: number; name: string }[]>([]);
   const [changingId, setChangingId] = useState<number | null>(null);
+  const [filter, setFilter] = useState<Filter>('all');
   const { toast } = useToast();
   const tariffsApi = (functionUrls as Record<string, string>)['admin-tariffs'];
 
@@ -94,8 +117,8 @@ const AdminCompaniesSection = () => {
   return (
     <div className="animate-fade-in">
       <div className="mb-8">
-        <h2 className="text-3xl font-display font-bold text-foreground mb-2">Компании</h2>
-        <p className="text-muted-foreground">Все компании, зарегистрированные на платформе</p>
+        <h2 className="text-3xl font-display font-bold text-foreground mb-2">Подписки</h2>
+        <p className="text-muted-foreground">Компании платформы, их тарифы и сроки подписки</p>
       </div>
 
       {error && (
@@ -105,29 +128,25 @@ const AdminCompaniesSection = () => {
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        <Card className="border-border bg-card">
-          <CardContent className="p-4">
-            <p className="text-xs text-muted-foreground mb-1">Всего компаний</p>
-            <p className="text-2xl font-display font-bold text-foreground">{companies.length}</p>
-          </CardContent>
-        </Card>
-        <Card className="border-border bg-card">
-          <CardContent className="p-4">
-            <p className="text-xs text-muted-foreground mb-1">На триале</p>
-            <p className="text-2xl font-display font-bold text-info">
-              {companies.filter(c => c.subscription_status === 'trial').length}
-            </p>
-          </CardContent>
-        </Card>
-        <Card className="border-border bg-card">
-          <CardContent className="p-4">
-            <p className="text-xs text-muted-foreground mb-1">С оплаченной подпиской</p>
-            <p className="text-2xl font-display font-bold text-success">
-              {companies.filter(c => c.subscription_status === 'active').length}
-            </p>
-          </CardContent>
-        </Card>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+        {([
+          { key: 'all', label: 'Всего компаний', color: 'text-foreground' },
+          { key: 'trial', label: 'На триале', color: 'text-info' },
+          { key: 'active', label: 'С оплаченной подпиской', color: 'text-success' },
+          { key: 'unpaid', label: 'Не оплачена подписка', color: 'text-destructive' }
+        ] as { key: Filter; label: string; color: string }[]).map((t) => (
+          <button
+            key={t.key}
+            type="button"
+            onClick={() => setFilter(filter === t.key ? 'all' : t.key)}
+            className={`rounded-lg border-2 bg-card p-4 text-left transition-all ${
+              filter === t.key ? 'border-primary' : 'border-border hover:border-primary/50'
+            }`}
+          >
+            <p className="text-xs text-muted-foreground mb-1">{t.label}</p>
+            <p className={`text-2xl font-display font-bold ${t.color}`}>{companies.filter(FILTERS[t.key]).length}</p>
+          </button>
+        ))}
       </div>
 
       <Card className="border-border bg-card">
@@ -140,12 +159,13 @@ const AdminCompaniesSection = () => {
                   <th className="p-4 font-medium">Владелец</th>
                   <th className="p-4 font-medium">Тариф</th>
                   <th className="p-4 font-medium">Статус</th>
+                  <th className="p-4 font-medium">Окончание</th>
                   <th className="p-4 font-medium">Пользователей</th>
                   <th className="p-4 font-medium">Регистрация</th>
                 </tr>
               </thead>
               <tbody>
-                {companies.map((company) => {
+                {companies.filter(FILTERS[filter]).map((company) => {
                   const statusInfo = STATUS_CONFIG[company.subscription_status || ''] || STATUS_CONFIG.cancelled;
                   return (
                     <tr key={company.id} className="border-b border-border last:border-0 hover:bg-muted/30 transition-colors">
@@ -185,6 +205,21 @@ const AdminCompaniesSection = () => {
                           {statusInfo.label}
                         </Badge>
                       </td>
+                      <td className="p-4">
+                        {(() => {
+                          const end = endDate(company);
+                          const left = daysLeft(end);
+                          if (!end) return <span className="text-muted-foreground">—</span>;
+                          return (
+                            <>
+                              <p className="text-foreground">{formatShortDate(end)}</p>
+                              <p className={`text-xs ${left! < 0 ? 'text-destructive' : left! <= 3 ? 'text-warning' : 'text-muted-foreground'}`}>
+                                {left! < 0 ? `просрочена ${-left!} дн.` : left === 0 ? 'сегодня' : `осталось ${left} дн.`}
+                              </p>
+                            </>
+                          );
+                        })()}
+                      </td>
                       <td className="p-4 text-foreground">{company.users_count}</td>
                       <td className="p-4 text-muted-foreground">
                         {company.created_at ? new Date(company.created_at).toLocaleDateString('ru-RU') : '—'}
@@ -196,9 +231,9 @@ const AdminCompaniesSection = () => {
             </table>
           </div>
 
-          {companies.length === 0 && !error && (
+          {companies.filter(FILTERS[filter]).length === 0 && !error && (
             <div className="p-12 text-center text-muted-foreground">
-              Компаний пока нет
+              {companies.length === 0 ? 'Компаний пока нет' : 'Нет компаний в этой группе'}
             </div>
           )}
         </CardContent>
