@@ -12,6 +12,7 @@ import TransactionsPage from './TransactionsPage';
 import ReconciliationPage from './ReconciliationPage';
 import SettingsPlaceholder from './SettingsPlaceholder';
 import { useAuth } from '@/contexts/AuthContext';
+import { useAutomationHeartbeat } from '@/hooks/useAutomationHeartbeat';
 import SubscriptionDialog from '@/components/profile/SubscriptionDialog';
 import { DateFilter } from '@/components/filters/DateRangeFilter';
 import { TYPE_FILTERS, TypeFilter, TypeFilterKey } from '@/lib/transactionTypeFilter';
@@ -42,6 +43,7 @@ const Index = () => {
 
   const companyId = currentCompany?.id;
   const { stats, reload: reloadDashboardStats } = useDashboardStats(companyId);
+  useAutomationHeartbeat(companyId);
 
   useEffect(() => {
     setMounted(true);

@@ -75,6 +75,18 @@ def _post(company_id: int):
         pass
 
 
+def has_due_jobs(cur, company_id: int) -> bool:
+    '''Есть задания, чьё время повтора наступило, или зависшие «в работе».'''
+    cur.execute(f'''
+        SELECT 1 FROM {SCHEMA}.automation_jobs
+        WHERE company_id = %s AND (
+            status IN ('new', 'error') AND next_attempt_at <= NOW()
+            OR status = 'processing' AND locked_until < NOW()
+        ) LIMIT 1
+    ''', (company_id,))
+    return cur.fetchone() is not None
+
+
 def signal_processor(company_id: int):
     '''
     Сигнал обработчику без ожидания результата: ответ платёжной системе не

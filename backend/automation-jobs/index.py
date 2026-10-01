@@ -28,29 +28,35 @@ def respond(status: int, payload: Dict[str, Any]) -> Dict[str, Any]:
 
 def claim_jobs(cur, company_id=None, job_id=None) -> List[Dict[str, Any]]:
     '''Занимает задания на 2 минуты (SKIP LOCKED) - параллельный запуск их не возьмёт.'''
-    where = ["j.status IN ('new', 'error')", 'j.next_attempt_at <= NOW()',
+    # Задание, зависшее «в работе» (сбой посреди обработки, касса не ответила),
+    # после истечения блокировки (2 мин) снова берётся в работу как обычный повтор.
+    # Дубля в кассе не будет: заказ уходит с тем же external_id.
+    where = ["(j.status IN ('new', 'error') AND j.next_attempt_at <= NOW() "
+             "OR j.status = 'processing' AND j.locked_until < NOW())",
              '(j.locked_until IS NULL OR j.locked_until < NOW())']
     args: list = []
     if company_id:
         where.append('j.company_id = %s')
         args.append(company_id)
     if job_id:
-        where = ['j.id = %s', "j.status IN ('new', 'error', 'failed')",
+        where = ['j.id = %s', "j.status IN ('new', 'error', 'failed', 'processing')",
                  '(j.locked_until IS NULL OR j.locked_until < NOW())']
         args = [job_id]
     cur.execute(f'''
-        UPDATE {SCHEMA}.automation_jobs SET status = 'processing', locked_until = NOW() + INTERVAL '2 minutes',
-               attempts = attempts + 1, updated_at = NOW()
-        WHERE id IN (
-            SELECT j.id FROM {SCHEMA}.automation_jobs j
+        UPDATE {SCHEMA}.automation_jobs u SET status = 'processing', locked_until = NOW() + INTERVAL '2 minutes',
+               attempts = u.attempts + 1, updated_at = NOW()
+        FROM (
+            SELECT j.id, j.status AS prev_status FROM {SCHEMA}.automation_jobs j
             WHERE {' AND '.join(where)}
             ORDER BY j.next_attempt_at LIMIT {BATCH}
             FOR UPDATE SKIP LOCKED
-        )
-        RETURNING id, scenario_id, source_type, source_id, attempts, company_id, step, prepared_data
+        ) c
+        WHERE u.id = c.id
+        RETURNING u.id, u.scenario_id, u.source_type, u.source_id, u.attempts, u.company_id, u.step, u.prepared_data,
+                  c.prev_status
     ''', args)
     return [{'id': r[0], 'scenario_id': r[1], 'source_type': r[2], 'source_id': r[3], 'attempts': r[4],
-             'company_id': r[5], 'step': r[6], 'prepared_data': r[7]}
+             'company_id': r[5], 'step': r[6], 'prepared_data': r[7], 'was_stuck': r[8] == 'processing'}
             for r in cur.fetchall()]
 
 
@@ -158,9 +164,26 @@ def run_action(cur, job: Dict[str, Any], scenario: Dict[str, Any], data: Dict[st
 
 def run(cur, conn, company_id=None, job_id=None) -> Dict[str, int]:
     jobs = claim_jobs(cur, company_id, job_id)
-    conn.commit()
     result: Dict[str, int] = {}
+    active = []
     for job in jobs:
+        if not job.get('was_stuck'):
+            active.append(job)
+            continue
+        message = 'Обработка прервалась (сбой или касса не ответила)'
+        if retry_delay(job['attempts'] - 1) is None and not job_id:
+            # Зависало на каждой попытке - лимит исчерпан, дальше только вручную.
+            cur.execute(f'''
+                UPDATE {SCHEMA}.automation_jobs SET status = 'failed', last_error = %s, locked_until = NULL, updated_at = NOW()
+                WHERE id = %s
+            ''', (message, job['id']))
+            log(cur, job['id'], 'error', f'{message}. Попытки исчерпаны ({job["attempts"] - 1})')
+            result['failed'] = result.get('failed', 0) + 1
+            continue
+        log(cur, job['id'], 'error', f'{message} - задание взято в работу повторно')
+        active.append(job)
+    conn.commit()
+    for job in active:
         status = process_job(cur, job)
         conn.commit()
         result[status] = result.get(status, 0) + 1
@@ -246,7 +269,13 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             'status': r[5], 'step': r[6], 'attempts': r[7], 'last_error': r[8],
             'next_attempt_at': r[9], 'created_at': r[10], 'updated_at': r[11]
         } for r in cur.fetchall()]
-        return respond(200, {'success': True, 'jobs': jobs})
+        cur.execute(f'''
+            SELECT COUNT(*) FILTER (WHERE status = 'failed'), COUNT(*) FILTER (WHERE status = 'error')
+            FROM {SCHEMA}.automation_jobs WHERE company_id = %s
+        ''', (company_id,))
+        failed_count, retry_count = cur.fetchone()
+        return respond(200, {'success': True, 'jobs': jobs,
+                             'counts': {'failed': failed_count, 'retry': retry_count}})
     finally:
         cur.close()
         conn.close()

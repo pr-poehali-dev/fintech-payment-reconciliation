@@ -6,7 +6,8 @@ from ecomkassa_client import company_cash_register, get_receipt_atol
 SCHEMA = 't_p83864310_fintech_payment_reco'
 
 # Задержка следующей попытки (минуты) по номеру попытки; после последней - статус failed.
-RETRY_DELAYS = [1, 5, 15, 60]
+# Пауза перед повтором (мин): 1, 5, 15 - после 4-й неудачной попытки задание уходит в «Не удалось».
+RETRY_DELAYS = [1, 5, 15]
 
 
 def _payment(cur, payment_id: str) -> Optional[Dict[str, Any]]:

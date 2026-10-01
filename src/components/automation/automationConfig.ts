@@ -77,7 +77,7 @@ export const MAPPING_FIELDS: { key: string; label: string; placeholder: string; 
 
 export const JOB_STATUS: Record<JobStatus, { label: string; className: string }> = {
   new: { label: 'В очереди', className: 'bg-muted text-muted-foreground border-border' },
-  processing: { label: 'Собирается', className: 'bg-info/15 text-info border-info/30' },
+  processing: { label: 'В работе', className: 'bg-info/15 text-info border-info/30' },
   ready: { label: 'Данные собраны', className: 'bg-info/15 text-info border-info/30' },
   done: { label: 'Выполнено', className: 'bg-success/15 text-success border-success/30' },
   skipped: { label: 'Пропущен', className: 'bg-muted text-muted-foreground border-border' },

@@ -188,9 +188,18 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             WHERE id = %s
         ''', (integration_id,))
 
+        # Любое уведомление компании заодно дожимает задания, у которых подошло
+        # время повтора, - не дожидаясь открытия раздела «Автоматизация».
+        due_jobs = False
+        if not jobs_created:
+            try:
+                due_jobs = automation.has_due_jobs(cur, company_id)
+            except Exception as e:
+                print(f'automation due check failed: {e}')
+
         conn.commit()
 
-        if jobs_created:
+        if jobs_created or due_jobs:
             automation.signal_processor(company_id)
 
         if forward_url and webhook_payment_id:

@@ -43,6 +43,7 @@ const AutomationPage = () => {
   const [toDelete, setToDelete] = useState<Scenario | null>(null);
   const [togglingId, setTogglingId] = useState<number | null>(null);
   const [journalOpen, setJournalOpen] = useState(false);
+  const [failedJobs, setFailedJobs] = useState(0);
 
   const api = functionUrls['automation-scenarios'];
 
@@ -65,6 +66,17 @@ const AutomationPage = () => {
     );
     setIsLoading(false);
   }, [api, companyId]);
+
+  const loadFailedCount = useCallback(async () => {
+    if (!companyId) return;
+    const res = await fetch(`${functionUrls['automation-jobs']}?company_id=${companyId}&status=failed&limit=1`);
+    const data = await res.json().catch(() => ({}));
+    setFailedJobs(data.counts?.failed || 0);
+  }, [companyId]);
+
+  useEffect(() => {
+    if (!journalOpen) loadFailedCount();
+  }, [journalOpen, loadFailedCount]);
 
   useEffect(() => {
     load();
@@ -145,6 +157,11 @@ const AutomationPage = () => {
           <Button variant="outline" className="gap-2" onClick={() => setJournalOpen(true)}>
             <Icon name="ScrollText" size={16} />
             Журнал
+            {failedJobs > 0 && (
+              <span className="rounded-full bg-destructive px-1.5 text-xs font-semibold text-destructive-foreground" title="Заданий, которые не удалось выполнить">
+                {failedJobs}
+              </span>
+            )}
           </Button>
           <Button className="gap-2" onClick={openCreate}>
             <Icon name="Plus" size={16} />

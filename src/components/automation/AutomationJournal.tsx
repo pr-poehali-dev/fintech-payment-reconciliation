@@ -132,8 +132,12 @@ const AutomationJournal = ({ open, onOpenChange }: AutomationJournalProps) => {
                     <div className="mt-1 text-xs text-muted-foreground">
                       {job.source_type === 'payment' ? 'Платёж' : job.source_type} #{job.source_id} · {formatDateTime(job.created_at, timezone)}
                       {job.attempts > 1 && ` · попыток: ${job.attempts}`}
+                      {job.status === 'error' && job.next_attempt_at && ` · следующая попытка ${formatDateTime(job.next_attempt_at, timezone, true)}`}
                     </div>
                     {job.last_error && <div className="mt-1 text-xs text-destructive">{job.last_error}</div>}
+                    {job.status === 'failed' && (
+                      <div className="mt-1 text-xs text-muted-foreground">Автоповторы закончились - проверьте причину и нажмите «Повторить сейчас»</div>
+                    )}
                   </div>
                   <Icon name={expanded === job.id ? 'ChevronUp' : 'ChevronDown'} size={16} className="mt-1 text-muted-foreground" />
                 </button>
