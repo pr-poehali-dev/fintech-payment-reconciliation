@@ -1,7 +1,8 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import Icon from '@/components/ui/icon';
 import {
-  LineChart,
+  ComposedChart,
+  Bar,
   Line,
   XAxis,
   YAxis,
@@ -31,21 +32,15 @@ const chartTooltipStyle = {
   borderRadius: '8px'
 };
 
-const SERIES = [
-  { key: 'payments', name: 'Платежи', color: 'hsl(var(--primary))' },
-  { key: 'receipts', name: 'Чеки касса', color: 'hsl(var(--info))' },
-  { key: 'receipts_ofd', name: 'Чеки ОФД', color: '#a78bfa' },
-  { key: 'bank', name: 'Деньги', color: 'hsl(var(--success))' },
-  { key: 'commission', name: 'Комиссия', color: 'hsl(var(--warning))' }
-];
-
 const formatDay = (value: string) => {
   const d = new Date(value);
   return d.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' });
 };
 
 const ReconciliationChart = ({ daily, onDayClick }: ReconciliationChartProps) => {
-  const chartData = daily.map((d) => ({ ...d, dayLabel: formatDay(d.date) }));
+  // Выручка дня - сумма пробитых чеков кассы (нетто, с учётом возвратов): по 54-ФЗ
+  // именно чек фиксирует продажу.
+  const chartData = daily.map((d) => ({ ...d, revenue: d.receipts, dayLabel: formatDay(d.date) }));
 
   return (
     <Card className="lg:col-span-2 border-border bg-card">
@@ -55,13 +50,13 @@ const ReconciliationChart = ({ daily, onDayClick }: ReconciliationChartProps) =>
           Динамика по дням
         </CardTitle>
         <CardDescription>
-          Платежи, чеки кассы и ОФД, поступления на счёт и комиссия банка за выбранный период
+          Платежи, чеки кассы и ОФД, поступления на счёт и комиссия банка; линия — выручка по чекам кассы
           {onDayClick && ' · нажмите на день, чтобы открыть его транзакции'}
         </CardDescription>
       </CardHeader>
       <CardContent>
         <ResponsiveContainer width="100%" height={300}>
-          <LineChart
+          <ComposedChart
             data={chartData}
             className={onDayClick ? 'cursor-pointer' : undefined}
             onClick={(state) => {
@@ -73,21 +68,23 @@ const ReconciliationChart = ({ daily, onDayClick }: ReconciliationChartProps) =>
             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
             <XAxis dataKey="dayLabel" stroke="hsl(var(--muted-foreground))" />
             <YAxis stroke="hsl(var(--muted-foreground))" />
-            <Tooltip contentStyle={chartTooltipStyle} />
+            <Tooltip contentStyle={chartTooltipStyle} cursor={{ fill: 'hsl(var(--muted))', opacity: 0.4 }} />
             <Legend />
-            {SERIES.map((s) => (
-              <Line
-                key={s.key}
-                type="monotone"
-                dataKey={s.key}
-                name={s.name}
-                stroke={s.color}
-                strokeWidth={s.key === 'payments' ? 3 : 2}
-                dot={{ fill: s.color, r: s.key === 'payments' ? 5 : 3 }}
-                activeDot={{ r: 6 }}
-              />
-            ))}
-          </LineChart>
+            <Bar dataKey="payments" name="Платежи" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+            <Bar dataKey="receipts" name="Чеки касса" fill="hsl(var(--info))" radius={[4, 4, 0, 0]} />
+            <Bar dataKey="receipts_ofd" name="Чеки ОФД" fill="#a78bfa" radius={[4, 4, 0, 0]} />
+            <Bar dataKey="bank" name="Деньги" fill="hsl(var(--success))" radius={[4, 4, 0, 0]} />
+            <Bar dataKey="commission" name="Комиссия" fill="hsl(var(--warning))" radius={[4, 4, 0, 0]} />
+            <Line
+              type="monotone"
+              dataKey="revenue"
+              name="Выручка"
+              stroke="hsl(var(--foreground))"
+              strokeWidth={3}
+              dot={{ fill: 'hsl(var(--foreground))', r: 4 }}
+              activeDot={{ r: 6 }}
+            />
+          </ComposedChart>
         </ResponsiveContainer>
       </CardContent>
     </Card>
