@@ -37,7 +37,7 @@ def to_json_value(val):
 
 
 def wants(type_filter, t):
-    '''type=receipt - алиас "любой чек/заказ" (используется дашбордом), остальные значения - точное совпадение.'''
+    '''type=receipt - алиас "любой чек/заказ", остальные значения - точное совпадение.'''
     if not type_filter:
         return True
     if type_filter == t:
