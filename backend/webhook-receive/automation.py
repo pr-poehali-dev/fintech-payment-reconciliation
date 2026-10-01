@@ -38,6 +38,41 @@ def enqueue_payment_jobs(cur, company_id: int, integration_id: int, webhook_paym
     return len(ids)
 
 
+def enqueue_crm_jobs(cur, company_id: int, integration_id: int, entity: Optional[str], item_id: Optional[str],
+                     event_id: Optional[int]) -> int:
+    '''
+    Хук CRM (Битрикс24): задание на каждый запущенный сценарий «Заказ в CRM» этой интеграции
+    с тем же объектом (сделка/лид). Одна сделка - одно задание на сценарий: повторные хуки
+    дубля не создают. Если сделка ещё не дошла до стадии запуска, задание пропускается
+    и оживает при следующем хуке. Стадию проверяет обработчик по свежим данным из CRM.
+    '''
+    if entity not in ('deal', 'lead') or not item_id:
+        return 0
+    source_type = f'crm_{entity}'
+    cur.execute(f'''
+        INSERT INTO {SCHEMA}.automation_jobs (company_id, scenario_id, source_type, source_id, event_id, payload)
+        SELECT s.company_id, s.id, %s, %s, %s, %s
+        FROM {SCHEMA}.automation_scenarios s
+        WHERE s.company_id = %s AND s.source_integration_id = %s AND s.trigger_type = 'crm_order'
+          AND s.status = 'active' AND s.removed_at IS NULL
+          AND COALESCE(s.field_mapping->>'entity', 'deal') = %s
+        ON CONFLICT (scenario_id, source_type, source_id) DO UPDATE SET
+            status = 'new', step = 'prepare', attempts = 0, prepared_data = NULL, last_error = NULL,
+            event_id = EXCLUDED.event_id, next_attempt_at = NOW(), updated_at = NOW()
+        WHERE {SCHEMA}.automation_jobs.status = 'skipped' AND {SCHEMA}.automation_jobs.step = 'prepare'
+        RETURNING id, (xmax = 0)
+    ''', (source_type, str(item_id), event_id, json.dumps({'entity': entity, 'id': str(item_id)}),
+          company_id, integration_id, entity))
+    rows = cur.fetchall()
+    noun = 'сделке' if entity == 'deal' else 'лиду'
+    for job_id, created in rows:
+        cur.execute(
+            f'INSERT INTO {SCHEMA}.automation_job_log (job_id, level, message) VALUES (%s, %s, %s)',
+            (job_id, 'info', f'Задание {"создано" if created else "перезапущено"} по хуку Битрикс24 по {noun} #{item_id}')
+        )
+    return len(rows)
+
+
 def wake_payment_jobs(cur, integration_id: int, provider_payment_id: Any) -> int:
     '''
     Пришла корзина - задания по этому платежу, которые её ждут, обрабатываются

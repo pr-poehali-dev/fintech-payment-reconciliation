@@ -82,8 +82,20 @@ def validate(cur, company_id: int, body: Dict[str, Any]) -> Optional[str]:
         target = cur.fetchone()
         if not target or target[0] != template[2]:
             return 'Шаблон рассчитан на другую кассу'
-    if not isinstance(body.get('field_mapping') or {}, dict):
+    mapping = body.get('field_mapping') or {}
+    if not isinstance(mapping, dict):
         return 'Некорректная настройка сопоставления полей'
+    if trigger == 'crm_order':
+        if mapping.get('entity', 'deal') not in ('deal', 'lead'):
+            return 'Выберите объект CRM: сделки или лиды'
+        if not mapping.get('order_id'):
+            return 'Укажите поле с номером заказа'
+        if mapping.get('items_mode', 'products') not in ('products', 'fixed', 'single'):
+            return 'Неизвестный способ формирования состава чека'
+        if mapping.get('items_mode') == 'fixed' and not mapping.get('fixed_items'):
+            return 'Добавьте позиции фиксированного состава чека'
+        if mapping.get('items_mode') == 'single' and not mapping.get('amount'):
+            return 'Для чека одной позицией укажите поле с суммой'
     return None
 
 

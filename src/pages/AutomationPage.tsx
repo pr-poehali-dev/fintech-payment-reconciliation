@@ -25,6 +25,7 @@ interface IntegrationRow {
   id: number;
   integration_name: string;
   provider_name: string;
+  provider_slug: string;
   category_slug: string;
   status: string;
 }
@@ -62,7 +63,7 @@ const AutomationPage = () => {
     setIntegrations(
       ((iData.user_integrations || []) as IntegrationRow[])
         .filter((i) => i.status === 'active')
-        .map((i) => ({ id: i.id, name: i.integration_name, providerName: i.provider_name, category: i.category_slug }))
+        .map((i) => ({ id: i.id, name: i.integration_name, providerName: i.provider_name, providerSlug: i.provider_slug, category: i.category_slug }))
     );
     setIsLoading(false);
   }, [api, companyId]);

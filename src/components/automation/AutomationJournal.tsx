@@ -20,6 +20,8 @@ interface AutomationJournalProps {
   onOpenChange: (open: boolean) => void;
 }
 
+const SOURCE_LABELS: Record<string, string> = { payment: 'Платёж', crm_deal: 'Сделка Битрикс24', crm_lead: 'Лид Битрикс24' };
+
 const FILTERS: { value: string; label: string }[] = [
   { value: '', label: 'Все' },
   { value: 'error', label: 'Повтор' },
@@ -130,7 +132,7 @@ const AutomationJournal = ({ open, onOpenChange }: AutomationJournalProps) => {
                       <Badge variant="outline" className={`shrink-0 ${st.className}`}>{st.label}</Badge>
                     </div>
                     <div className="mt-1 text-xs text-muted-foreground">
-                      {job.source_type === 'payment' ? 'Платёж' : job.source_type} #{job.source_id} · {formatDateTime(job.created_at, timezone)}
+                      {SOURCE_LABELS[job.source_type] || job.source_type} #{job.source_id} · {formatDateTime(job.created_at, timezone)}
                       {job.attempts > 1 && ` · попыток: ${job.attempts}`}
                       {job.status === 'error' && job.next_attempt_at && ` · следующая попытка ${formatDateTime(job.next_attempt_at, timezone, true)}`}
                     </div>

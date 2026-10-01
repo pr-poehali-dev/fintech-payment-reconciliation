@@ -15,24 +15,38 @@ STAGE_MAP = {
 }
 
 
-def _extract_deal_id(webhook_data: Dict[str, Any]) -> Optional[str]:
+def extract_entity(webhook_data: Dict[str, Any]) -> Tuple[Optional[str], Optional[str]]:
     '''
-    Битрикс24 присылает ID сделки в разных форматах в зависимости от типа события:
-    - обычный вебхук по сделке: data[FIELDS][ID]=123
-    - робот/бизнес-процесс CRM: document_id[2]=DEAL_123 (и document_id[0]=crm)
+    Объект и ID из вебхука Битрикс24:
+    - исходящий вебхук: event=ONCRMDEALUPDATE / ONCRMLEADADD..., data[FIELDS][ID]=123
+    - робот/бизнес-процесс: document_id[2]=DEAL_123 или LEAD_123
+    - ссылка робота «Исходящий вебхук» с параметрами: ?deal_id=123 / ?lead_id=123
+    Returns: ('deal' | 'lead', id)
     '''
+    event = str(webhook_data.get('event') or '').upper()
     fields = webhook_data.get('data', {}).get('FIELDS', {}) if isinstance(webhook_data.get('data'), dict) else {}
-    deal_id = fields.get('ID') if isinstance(fields, dict) else None
-    if deal_id:
-        return str(deal_id)
+    item_id = fields.get('ID') if isinstance(fields, dict) else None
+    if item_id:
+        return ('lead' if 'LEAD' in event else 'deal'), str(item_id)
 
     document_id = webhook_data.get('document_id')
     if isinstance(document_id, dict):
         raw_ref = document_id.get('2') or document_id.get(2)
-        if isinstance(raw_ref, str) and raw_ref.upper().startswith('DEAL_'):
-            return raw_ref.split('_', 1)[1]
+        if isinstance(raw_ref, str) and '_' in raw_ref:
+            kind, _, ref_id = raw_ref.partition('_')
+            if kind.upper() in ('DEAL', 'LEAD') and ref_id.isdigit():
+                return kind.lower(), ref_id
 
-    return None
+    for key, entity in (('deal_id', 'deal'), ('lead_id', 'lead')):
+        value = str(webhook_data.get(key) or '').strip()
+        if value.isdigit():
+            return entity, value
+    return None, None
+
+
+def _extract_deal_id(webhook_data: Dict[str, Any]) -> Optional[str]:
+    entity, item_id = extract_entity(webhook_data)
+    return item_id if entity == 'deal' else None
 
 
 def fetch_deal_details(webhook_url: str, deal_id: str) -> Optional[Dict[str, Any]]:
@@ -62,7 +76,11 @@ def process(cur, integration_id: int, company_id: int, config: Dict[str, Any],
     if not webhook_url:
         return False, None, 'webhook_url not configured'
 
-    deal_id = _extract_deal_id(webhook_data)
+    entity, item_id = extract_entity(webhook_data)
+    if entity == 'lead':
+        # Лиды в ленту сделок не пишем - их данные соберёт сценарий автоматизации.
+        return True, None, None
+    deal_id = item_id if entity == 'deal' else None
 
     if not deal_id:
         return False, None, 'Deal ID not found in webhook payload'

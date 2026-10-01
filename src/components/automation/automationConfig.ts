@@ -40,6 +40,7 @@ export interface IntegrationOption {
   id: number;
   name: string;
   providerName: string;
+  providerSlug?: string;
   category: string;
 }
 
@@ -65,15 +66,79 @@ export interface ActionTemplateOption {
 
 export const TARGET_CATEGORIES = ['cash_registers'];
 
-// Поля будущего чека, которые нужно сопоставить с полями CRM.
-export const MAPPING_FIELDS: { key: string; label: string; placeholder: string; required?: boolean }[] = [
-  { key: 'order_id', label: 'Номер заказа', placeholder: 'ID', required: true },
-  { key: 'amount', label: 'Сумма', placeholder: 'OPPORTUNITY', required: true },
-  { key: 'items', label: 'Товары', placeholder: 'PRODUCT_ROWS', required: true },
-  { key: 'customer_email', label: 'Email покупателя', placeholder: 'CONTACT_EMAIL' },
-  { key: 'customer_phone', label: 'Телефон покупателя', placeholder: 'CONTACT_PHONE' },
-  { key: 'stage', label: 'Стадия для запуска', placeholder: 'C1:WON' }
+// Сопоставление полей CRM для сценария «Заказ в CRM» (хранится в field_mapping сценария).
+// Ссылка на поле - «объект.КОД»: deal.OPPORTUNITY, contact.EMAIL, company.UF_CRM_123.
+export type CrmEntity = 'deal' | 'lead';
+export type ItemsMode = 'products' | 'fixed' | 'single';
+
+export interface FixedItem {
+  name: string;
+  price: string;
+  quantity: string;
+}
+
+export const MAPPING_FIELDS: { key: string; label: string; required?: boolean; hint?: string }[] = [
+  { key: 'order_id', label: 'Номер заказа', required: true },
+  { key: 'amount', label: 'Сумма', hint: 'Для сверки с суммой товаров' },
+  { key: 'customer_email', label: 'Email покупателя' },
+  { key: 'customer_phone', label: 'Телефон покупателя' },
+  { key: 'customer_name', label: 'Покупатель (имя / название)' },
+  { key: 'customer_inn', label: 'ИНН покупателя' }
 ];
+
+export const DEFAULT_CRM_MAPPING: Record<string, unknown> = {
+  entity: 'deal',
+  stage: '',
+  order_id: 'deal.ID',
+  amount: 'deal.OPPORTUNITY',
+  customer_email: 'contact.EMAIL',
+  customer_phone: 'contact.PHONE',
+  customer_name: '',
+  customer_inn: '',
+  items_mode: 'products',
+  fixed_items: [],
+  single_item_name: 'Оплата по сделке №{ID}',
+  vat: 'auto'
+};
+
+export const ENTITY_LABELS: Record<string, string> = { deal: 'Сделка', lead: 'Лид', contact: 'Контакт', company: 'Компания' };
+
+export const ITEMS_MODES: { value: ItemsMode; label: string; description: string }[] = [
+  { value: 'products', label: 'Товары из CRM', description: 'Берём товарные строки сделки как есть' },
+  { value: 'fixed', label: 'Фиксированный', description: 'Всегда один и тот же состав чека' },
+  { value: 'single', label: 'Одной позицией', description: 'Одна строка на сумму из поля «Сумма»' }
+];
+
+export const VAT_OPTIONS = [
+  { value: 'auto', label: 'Как в CRM' },
+  { value: 'none', label: 'Без НДС' },
+  { value: 'vat0', label: 'НДС 0%' },
+  { value: 'vat5', label: 'НДС 5%' },
+  { value: 'vat7', label: 'НДС 7%' },
+  { value: 'vat10', label: 'НДС 10%' },
+  { value: 'vat20', label: 'НДС 20%' },
+  { value: 'vat22', label: 'НДС 22%' }
+];
+
+export interface CrmField {
+  ref: string;
+  code: string;
+  title: string;
+  type: string;
+  multiple: boolean;
+  custom: boolean;
+}
+
+export interface CrmStage {
+  value: string;
+  label: string;
+  group?: string;
+}
+
+export interface CrmMeta {
+  fields: Record<string, CrmField[]>;
+  stages: Record<CrmEntity, CrmStage[]>;
+}
 
 export const JOB_STATUS: Record<JobStatus, { label: string; className: string }> = {
   new: { label: 'В очереди', className: 'bg-muted text-muted-foreground border-border' },

@@ -2,6 +2,7 @@ import json
 from typing import Any, Dict, Optional, Tuple
 
 from ecomkassa_client import company_cash_register, get_receipt_atol
+import bitrix_crm
 
 SCHEMA = 't_p83864310_fintech_payment_reco'
 
@@ -52,6 +53,8 @@ def prepare(cur, job: Dict[str, Any], scenario: Dict[str, Any]) -> Tuple[str, Di
     ready - всё собрано; skipped - действие не нужно; error - повторить позже.
     Корзина берётся у того же провайдера, откуда пришёл платёж.
     '''
+    if job['source_type'] in ('crm_deal', 'crm_lead'):
+        return prepare_crm(cur, job, scenario)
     if job['source_type'] != 'payment':
         return 'error', {}, f"Источник «{job['source_type']}» пока не поддерживается"
 
@@ -138,6 +141,44 @@ def prepare(cur, job: Dict[str, Any], scenario: Dict[str, Any]) -> Tuple[str, Di
         )
 
     return 'ready', data, f"Собраны данные платежа #{payment['payment_id']} на {payment['amount']:.2f} ₽"
+
+
+def _crm_webhook_url(cur, scenario_id: int) -> str:
+    cur.execute(f'''
+        SELECT ui.config FROM {SCHEMA}.automation_scenarios s
+        JOIN {SCHEMA}.user_integrations ui ON ui.id = s.source_integration_id
+        WHERE s.id = %s
+    ''', (scenario_id,))
+    row = cur.fetchone()
+    config = row[0] if row else {}
+    config = json.loads(config) if isinstance(config, str) else (config or {})
+    return config.get('webhook_url', '')
+
+
+def prepare_crm(cur, job: Dict[str, Any], scenario: Dict[str, Any]) -> Tuple[str, Dict[str, Any], str]:
+    '''
+    Сделка/лид Битрикс24: свежие данные из CRM (сделка + контакт + компания + товары),
+    проверка стадии запуска, сбор позиций и покупателя по сопоставлению полей сценария.
+    '''
+    entity = 'lead' if job['source_type'] == 'crm_lead' else 'deal'
+    noun = 'Сделка' if entity == 'deal' else 'Лид'
+    mapping = {**bitrix_crm.DEFAULT_MAPPING, **(scenario.get('field_mapping') or {})}
+    record, err = bitrix_crm.load_record(_crm_webhook_url(cur, scenario['id']), entity, job['source_id'])
+    if err:
+        return 'error', {}, err
+    main = record[entity]
+    if not bitrix_crm.stage_matches(mapping, entity, main):
+        return 'skipped', {'crm': {'entity': entity, 'id': job['source_id']}}, (
+            f"{noun} #{job['source_id']} на стадии {main.get(bitrix_crm.STAGE_FIELD[entity])} - "
+            f"ждём стадию {mapping.get('stage')}, задание оживёт при следующем хуке"
+        )
+    data, err, note = bitrix_crm.build_data(record, entity, mapping)
+    if err:
+        return 'error', {}, err
+    total = sum(i['sum'] for i in data['items'])
+    return 'ready', data, (
+        f"{noun} #{job['source_id']} «{main.get('TITLE') or ''}»: {len(data['items'])} поз. на {total:.2f} ₽{note}"
+    )
 
 
 def retry_delay(attempts: int) -> Optional[int]:

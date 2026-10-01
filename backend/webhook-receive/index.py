@@ -88,6 +88,12 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             'isBase64Encoded': False
         }
 
+    # Робот Битрикс24 «Исходящий вебхук» передаёт номер прямо в ссылке: ?token=...&deal_id={{ID}}
+    if isinstance(webhook_data, dict):
+        for key in ('deal_id', 'lead_id'):
+            if params.get(key) and not webhook_data.get(key):
+                webhook_data[key] = params[key]
+
     dsn = os.environ['DATABASE_URL']
     conn = psycopg2.connect(dsn)
     cur = conn.cursor()
@@ -169,6 +175,15 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         conn.commit()
         jobs_created = 0
         has_cart = provider_slug == 'tbank' and isinstance(webhook_data.get('Receipt'), dict)
+        if provider_slug == 'bitrix24' and not handler_error:
+            try:
+                crm_entity, crm_id = bitrix24_handler.extract_entity(webhook_data)
+                jobs_created = automation.enqueue_crm_jobs(cur, company_id, integration_id, crm_entity, crm_id, event_id)
+                conn.commit()
+            except Exception as e:
+                conn.rollback()
+                jobs_created = 0
+                print(f'automation crm enqueue failed: {e}')
         if (webhook_payment_id or has_cart) and not handler_error:
             try:
                 jobs_created = automation.enqueue_payment_jobs(cur, company_id, integration_id, webhook_payment_id, event_id)

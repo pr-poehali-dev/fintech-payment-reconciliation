@@ -5,11 +5,14 @@ import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import Icon from '@/components/ui/icon';
+import { useAuth } from '@/contexts/AuthContext';
+import CrmMappingBlock from './CrmMappingBlock';
 import {
   ACTIONS,
   ActionTemplate,
   ActionTemplateOption,
   ActionType,
+  DEFAULT_CRM_MAPPING,
   IntegrationOption,
   MAPPING_FIELDS,
   Scenario,
@@ -25,7 +28,7 @@ export interface ScenarioForm {
   action_type: ActionType;
   action_template: ActionTemplate;
   target_integration_id: number | null;
-  field_mapping: Record<string, string>;
+  field_mapping: Record<string, unknown>;
 }
 
 interface ScenarioDialogProps {
@@ -60,6 +63,7 @@ const Step = ({ n, title, children }: { n: number; title: string; children: Reac
 
 const ScenarioDialog = ({ open, onOpenChange, scenario, integrations, templates: allTemplates, isSaving, onSave }: ScenarioDialogProps) => {
   const [form, setForm] = useState<ScenarioForm>(emptyForm);
+  const { currentCompany } = useAuth();
 
   useEffect(() => {
     if (!open) return;
@@ -95,15 +99,23 @@ const ScenarioDialog = ({ open, onOpenChange, scenario, integrations, templates:
   const currentTemplate = templates.find((t) => t.code === form.action_template);
   let step = 1;
 
+  const sourceIntegration = integrations.find((i) => i.id === form.source_integration_id);
+  const isBitrix = sourceIntegration?.providerSlug === 'bitrix24';
   const missingMapping = trigger.needsMapping
-    ? MAPPING_FIELDS.filter((f) => f.required && !form.field_mapping[f.key]?.trim())
+    ? MAPPING_FIELDS.filter((f) => f.required && !String(form.field_mapping[f.key] || '').trim())
     : [];
+  const fixedItems = (form.field_mapping.fixed_items as { name: string; price: string }[] | undefined) || [];
+  const itemsInvalid =
+    trigger.needsMapping &&
+    form.field_mapping.items_mode === 'fixed' &&
+    !fixedItems.some((i) => i.name?.trim() && Number(String(i.price).replace(',', '.')) > 0);
   const canSave =
     !!form.name.trim() &&
     (!trigger.sourceCategories || !!form.source_integration_id) &&
     !!form.target_integration_id &&
     !!currentTemplate &&
     missingMapping.length === 0 &&
+    !itemsInvalid &&
     !isSaving;
 
   const setTrigger = (value: TriggerType) => setForm({ ...form, trigger_type: value, source_integration_id: null });
@@ -151,7 +163,15 @@ const ScenarioDialog = ({ open, onOpenChange, scenario, integrations, templates:
             <Step n={step++} title="Интеграция-источник">
               <Select
                 value={form.source_integration_id ? String(form.source_integration_id) : ''}
-                onValueChange={(v) => setForm({ ...form, source_integration_id: Number(v) })}
+                onValueChange={(v) => {
+                  const picked = integrations.find((i) => i.id === Number(v));
+                  const crmDefaults = trigger.needsMapping && picked?.providerSlug === 'bitrix24' && !form.field_mapping.items_mode;
+                  setForm({
+                    ...form,
+                    source_integration_id: Number(v),
+                    field_mapping: crmDefaults ? { ...DEFAULT_CRM_MAPPING } : form.field_mapping
+                  });
+                }}
               >
                 <SelectTrigger>
                   <SelectValue placeholder={sourceOptions.length ? 'Выберите интеграцию' : 'Нет подходящих интеграций'} />
@@ -221,25 +241,21 @@ const ScenarioDialog = ({ open, onOpenChange, scenario, integrations, templates:
 
           {trigger.needsMapping && (
             <Step n={step++} title="Сопоставление полей">
-              <p className="text-xs text-muted-foreground">Укажите, в каком поле CRM лежат данные для чека</p>
-              <div className="space-y-2 rounded-lg border border-border p-3">
-                {MAPPING_FIELDS.map((f) => (
-                  <div key={f.key} className="grid grid-cols-[1fr_1.2fr] items-center gap-3">
-                    <span className="text-sm">
-                      {f.label}
-                      {f.required && <span className="text-destructive"> *</span>}
-                    </span>
-                    <Input
-                      className="h-9"
-                      placeholder={f.placeholder}
-                      value={form.field_mapping[f.key] || ''}
-                      onChange={(e) =>
-                        setForm({ ...form, field_mapping: { ...form.field_mapping, [f.key]: e.target.value } })
-                      }
-                    />
-                  </div>
-                ))}
-              </div>
+              {!form.source_integration_id ? (
+                <p className="text-xs text-muted-foreground">Выберите интеграцию-источник — подгрузим её поля</p>
+              ) : isBitrix && currentCompany ? (
+                <>
+                  <p className="text-xs text-muted-foreground">Поля загружены из вашего Битрикс24, включая пользовательские</p>
+                  <CrmMappingBlock
+                    companyId={currentCompany.id}
+                    integrationId={form.source_integration_id}
+                    mapping={form.field_mapping}
+                    onChange={(m) => setForm({ ...form, field_mapping: m })}
+                  />
+                </>
+              ) : (
+                <p className="text-xs text-muted-foreground">Загрузка полей пока доступна только для Битрикс24</p>
+              )}
             </Step>
           )}
         </div>

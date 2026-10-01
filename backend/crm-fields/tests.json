@@ -1,0 +1,6 @@
+{
+  "tests": [
+    {"name": "Missing params", "method": "GET", "path": "/", "expectedStatus": 400, "expectedBody": {"error": "string"}, "bodyMatcher": "partial"},
+    {"name": "Unknown integration", "method": "GET", "path": "/?company_id=1&integration_id=999999", "expectedStatus": 404, "expectedBody": {"error": "string"}, "bodyMatcher": "partial"}
+  ]
+}
