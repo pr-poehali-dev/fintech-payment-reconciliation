@@ -1,5 +1,6 @@
 import { Button } from '@/components/ui/button';
 import Icon from '@/components/ui/icon';
+import { pluralDays } from '@/lib/trialDays';
 
 const HERO_STATS = [
   { value: '54-ФЗ', label: 'Полное соответствие закону' },
@@ -7,7 +8,7 @@ const HERO_STATS = [
   { value: '24/7', label: 'Контроль касс онлайн' }
 ];
 
-const HeroSection = ({ onCtaClick }: { onCtaClick: () => void }) => {
+const HeroSection = ({ onCtaClick, trialDays }: { onCtaClick: () => void; trialDays: number }) => {
   return (
     <section className="relative overflow-hidden pt-16 pb-24 sm:pt-24 sm:pb-32">
       <div className="absolute inset-0 -z-10">
@@ -36,7 +37,7 @@ const HeroSection = ({ onCtaClick }: { onCtaClick: () => void }) => {
             <div className="flex flex-col sm:flex-row gap-4 mb-8">
               <Button size="lg" onClick={onCtaClick} className="text-base h-14 px-8 gap-2">
                 <Icon name="Rocket" size={18} />
-                Попробовать 7 дней бесплатно
+                Попробовать {pluralDays(trialDays)} бесплатно
               </Button>
               <Button size="lg" variant="outline" className="text-base h-14 px-8 gap-2" asChild>
                 <a href="#how-it-works">

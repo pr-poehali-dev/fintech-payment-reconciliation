@@ -1,10 +1,9 @@
-import { useEffect, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import Icon from '@/components/ui/icon';
-import functionUrls from '../../../backend/func2url.json';
+import { pluralDays } from '@/lib/trialDays';
 
-interface Tariff {
+export interface Tariff {
   slug: string;
   name: string;
   description: string;
@@ -14,6 +13,7 @@ interface Tariff {
   max_users: number;
   max_integrations: number;
   features: string[];
+  period_days?: number;
 }
 
 const FALLBACK_TARIFFS: Tariff[] = [
@@ -52,19 +52,9 @@ const FALLBACK_TARIFFS: Tariff[] = [
   }
 ];
 
-const PricingSection = ({ onCtaClick }: { onCtaClick: () => void }) => {
-  const [tariffs, setTariffs] = useState<Tariff[]>(FALLBACK_TARIFFS);
-
-  useEffect(() => {
-    fetch(functionUrls['tariffs-list'])
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.success && data.tariffs?.length) {
-          setTariffs(data.tariffs);
-        }
-      })
-      .catch(() => {});
-  }, []);
+const PricingSection = ({ onCtaClick, trialDays, tariffs: loaded }: { onCtaClick: () => void; trialDays: number; tariffs: Tariff[] | null }) => {
+  const tariffs = loaded ?? FALLBACK_TARIFFS;
+  const trialLabel = pluralDays(trialDays);
 
   return (
     <section id="pricing" className="py-20 sm:py-28 bg-card/30">
@@ -94,7 +84,9 @@ const PricingSection = ({ onCtaClick }: { onCtaClick: () => void }) => {
                 )}
                 <CardHeader>
                   <CardTitle className="text-xl font-display">{tariff.name}</CardTitle>
-                  <CardDescription>{tariff.description}</CardDescription>
+                  <CardDescription>
+                    {tariff.slug === 'trial' ? `${trialLabel} бесплатно, все функции доступны` : tariff.description}
+                  </CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div className="mb-6">
@@ -132,7 +124,7 @@ const PricingSection = ({ onCtaClick }: { onCtaClick: () => void }) => {
                     variant={isPopular ? 'default' : 'outline'}
                     onClick={onCtaClick}
                   >
-                    Попробовать 7 дней бесплатно
+                    Попробовать {trialLabel} бесплатно
                   </Button>
                 </CardContent>
               </Card>

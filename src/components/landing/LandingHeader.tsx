@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import Icon from '@/components/ui/icon';
+import { pluralDays } from '@/lib/trialDays';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -10,7 +11,7 @@ const NAV_LINKS = [
   { href: '#pricing', label: 'Тарифы' }
 ];
 
-const LandingHeader = ({ onCtaClick }: { onCtaClick: () => void }) => {
+const LandingHeader = ({ onCtaClick, trialDays }: { onCtaClick: () => void; trialDays: number }) => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -48,7 +49,7 @@ const LandingHeader = ({ onCtaClick }: { onCtaClick: () => void }) => {
                 Войти
               </Button>
               <Button onClick={onCtaClick} className="gap-2">
-                Попробовать 7 дней бесплатно
+                Попробовать {pluralDays(trialDays)} бесплатно
               </Button>
             </>
           )}
@@ -87,7 +88,7 @@ const LandingHeader = ({ onCtaClick }: { onCtaClick: () => void }) => {
                   Войти
                 </Button>
                 <Button onClick={onCtaClick}>
-                  Попробовать 7 дней бесплатно
+                  Попробовать {pluralDays(trialDays)} бесплатно
                 </Button>
               </>
             )}
