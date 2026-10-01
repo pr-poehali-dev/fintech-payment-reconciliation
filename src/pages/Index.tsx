@@ -3,7 +3,6 @@ import NotificationCenter from '@/components/NotificationCenter';
 import AppHeader from '@/components/layout/AppHeader';
 import AppSidebar from '@/components/layout/AppSidebar';
 import DashboardOverview from './dashboard/DashboardOverview';
-import { useDashboardStats } from './dashboard/useDashboardStats';
 import AccessManagement from './AccessManagement';
 import IntegrationsPage from './IntegrationsPage';
 import AutomationPage from './AutomationPage';
@@ -65,7 +64,6 @@ const Index = () => {
   };
 
   const companyId = currentCompany?.id;
-  const { stats, reload: reloadDashboardStats } = useDashboardStats(companyId);
   useAutomationHeartbeat(companyId);
   const notifications = useNotifications(companyId, user?.user_id);
 
@@ -73,16 +71,6 @@ const Index = () => {
     setMounted(true);
   }, []);
 
-  // Хук грузит статистику один раз при монтировании - без этого при переходе
-  // на вкладку "Дашборд" из другого раздела (например, после переноса
-  // интеграции в другую компанию) показывались бы данные, загруженные ещё
-  // при открытии приложения.
-  useEffect(() => {
-    if (activeModule === 'dashboard') {
-      reloadDashboardStats();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeModule]);
 
 
   return (
@@ -114,7 +102,7 @@ const Index = () => {
       <AppSidebar activeModule={activeModule} onModuleChange={handleModuleChange} />
 
       <main className="ml-64 mt-16 p-8">
-        {activeModule === 'dashboard' && <DashboardOverview stats={stats} mounted={mounted} />}
+        {activeModule === 'dashboard' && <DashboardOverview mounted={mounted} />}
         {activeModule === 'reconciliation' && <ReconciliationPage onOpenTransactions={openTransactionsForPeriod} />}
         {activeModule === 'events' && <EventsPage />}
         {activeModule === 'transactions' && <TransactionsPage key={transactionsNavKey} initialDateFilter={transactionsDateFilter} initialTypeFilter={transactionsTypeFilter} initialUnmatchedOnly={transactionsUnmatchedOnly} />}

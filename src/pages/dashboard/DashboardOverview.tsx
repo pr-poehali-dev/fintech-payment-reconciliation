@@ -16,15 +16,6 @@ import {
 } from 'recharts';
 import { revenueData, reconciliationData, paymentsData, recentTransactions } from './mockData';
 
-interface DashboardStats {
-  totalPayments: number;
-  successfulPayments: number;
-  paymentsRevenue: number;
-  totalReceipts: number;
-  receiptsSum: number;
-  activeIntegrations: number;
-}
-
 const chartTooltipStyle = {
   backgroundColor: 'hsl(var(--card))',
   border: '1px solid hsl(var(--border))',
@@ -38,81 +29,15 @@ const TX_STATUS_CONFIG = {
 } as const;
 
 interface DashboardOverviewProps {
-  stats: DashboardStats;
   mounted: boolean;
 }
 
-const DashboardOverview = ({ stats, mounted }: DashboardOverviewProps) => {
+const DashboardOverview = ({ mounted }: DashboardOverviewProps) => {
   return (
     <div className="animate-fade-in">
       <div className="mb-8">
         <h2 className="text-3xl font-display font-bold text-foreground mb-2">Дашборд</h2>
         <p className="text-muted-foreground">Общая статистика и аналитика платежей</p>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        <Card className="animate-scale-in border-border bg-card hover:shadow-xl transition-shadow duration-300">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-              <Icon name="TrendingUp" size={16} />
-              Выручка из платежей
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-display font-bold text-foreground">
-              {stats.paymentsRevenue.toLocaleString('ru-RU', { style: 'currency', currency: 'RUB', minimumFractionDigits: 0 })}
-            </div>
-            <p className="text-xs text-success mt-1 flex items-center gap-1">
-              <Icon name="CheckCircle" size={14} />
-              {stats.successfulPayments} успешных
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card className="animate-scale-in border-border bg-card hover:shadow-xl transition-shadow duration-300" style={{ animationDelay: '0.1s' }}>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-              <Icon name="CreditCard" size={16} />
-              Всего платежей
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-display font-bold text-foreground">{stats.totalPayments}</div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Включая отмененные
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card className="animate-scale-in border-border bg-card hover:shadow-xl transition-shadow duration-300" style={{ animationDelay: '0.2s' }}>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-              <Icon name="Receipt" size={16} />
-              Чеков
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-display font-bold text-foreground">{stats.totalReceipts}</div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Всего чеков
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card className="animate-scale-in border-border bg-card hover:shadow-xl transition-shadow duration-300" style={{ animationDelay: '0.3s' }}>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-              <Icon name="Plug" size={16} />
-              Интеграции
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-display font-bold text-primary">{stats.activeIntegrations}</div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Активных
-            </p>
-          </CardContent>
-        </Card>
       </div>
 
       {mounted && (
@@ -225,7 +150,7 @@ const DashboardOverview = ({ stats, mounted }: DashboardOverviewProps) => {
                   <div key={tx.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors">
                     <div className="flex items-center gap-3">
                       <div className={`w-10 h-10 rounded-full flex items-center justify-center ${config.bg}`}>
-                        <Icon name={config.icon as any} size={20} className={config.text} />
+                        <Icon name={config.icon} size={20} className={config.text} />
                       </div>
                       <div>
                         <p className="text-sm font-medium text-foreground">{tx.description}</p>
