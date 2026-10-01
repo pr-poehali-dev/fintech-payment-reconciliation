@@ -4,6 +4,7 @@
     {"name": "List scenarios", "method": "GET", "path": "/?company_id=1", "expectedStatus": 200, "expectedBody": {"success": true}, "bodyMatcher": "partial"},
     {"name": "Create without name", "method": "POST", "body": {"company_id": 1, "trigger_type": "new_payment"}, "expectedStatus": 400, "expectedBody": {"error": "string"}, "bodyMatcher": "partial"},
     {"name": "Bad template", "method": "POST", "body": {"company_id": 1, "name": "X", "trigger_type": "discrepancy", "action_type": "create_receipt", "action_template": "nope"}, "expectedStatus": 400, "expectedBody": {"error": "string"}, "bodyMatcher": "partial"},
+    {"name": "Copy without target", "method": "POST", "body": {"company_id": 1, "action": "copy", "id": 1}, "expectedStatus": 400, "expectedBody": {"error": "string"}, "bodyMatcher": "partial"},
     {"name": "Delete missing", "method": "DELETE", "body": {"company_id": 1, "id": 999999}, "expectedStatus": 404, "expectedBody": {"error": "string"}, "bodyMatcher": "partial"}
   ]
 }

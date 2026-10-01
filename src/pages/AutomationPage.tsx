@@ -14,10 +14,12 @@ import {
   AlertDialogTitle
 } from '@/components/ui/alert-dialog';
 import Icon from '@/components/ui/icon';
+import { ToastAction } from '@/components/ui/toast';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import ScenarioDialog, { ScenarioForm } from '@/components/automation/ScenarioDialog';
 import AutomationJournal from '@/components/automation/AutomationJournal';
+import CopyScenarioDialog from '@/components/automation/CopyScenarioDialog';
 import { ACTIONS, ActionTemplateOption, IntegrationOption, Scenario, TRIGGERS } from '@/components/automation/automationConfig';
 import functionUrls from '../../backend/func2url.json';
 
@@ -31,7 +33,7 @@ interface IntegrationRow {
 }
 
 const AutomationPage = () => {
-  const { currentCompany } = useAuth();
+  const { currentCompany, companies, user, setCurrentCompanyId } = useAuth();
   const { toast } = useToast();
   const companyId = currentCompany?.id;
   const [scenarios, setScenarios] = useState<Scenario[]>([]);
@@ -43,7 +45,8 @@ const AutomationPage = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [toDelete, setToDelete] = useState<Scenario | null>(null);
   const [togglingId, setTogglingId] = useState<number | null>(null);
-  const [copyingId, setCopyingId] = useState<number | null>(null);
+  const [toCopy, setToCopy] = useState<Scenario | null>(null);
+  const [isCopying, setIsCopying] = useState(false);
   const [journalOpen, setJournalOpen] = useState(false);
   const [failedJobs, setFailedJobs] = useState(0);
 
@@ -130,28 +133,46 @@ const AutomationPage = () => {
     }
   };
 
-  // Копия сценария - со всеми настройками, остановленная, сразу открывается на редактирование.
-  const handleCopy = async (s: Scenario) => {
-    setCopyingId(s.id);
+  // Копия сценария: в эту компанию - сразу открываем на редактирование; в другую - сервер
+  // подбирает там такую же кассу и источник, предлагаем перейти в ту компанию.
+  const handleCopy = async (targetCompanyId: number, name: string) => {
+    if (!toCopy) return;
+    const s = toCopy;
+    setIsCopying(true);
     try {
-      const name = `${s.name} (копия)`.slice(0, 200);
-      const data = await call('POST', {
-        name,
-        trigger_type: s.trigger_type,
-        source_integration_id: s.source_integration_id,
-        action_type: s.action_type,
-        action_template: s.action_template,
-        target_integration_id: s.target_integration_id,
-        field_mapping: s.field_mapping || {}
+      if (targetCompanyId === companyId) {
+        const data = await call('POST', {
+          name,
+          trigger_type: s.trigger_type,
+          source_integration_id: s.source_integration_id,
+          action_type: s.action_type,
+          action_template: s.action_template,
+          target_integration_id: s.target_integration_id,
+          field_mapping: s.field_mapping || {}
+        });
+        toast({ title: 'Сценарий скопирован', description: 'Копия остановлена — проверьте настройки и запустите' });
+        setToCopy(null);
+        await load();
+        setEditing({ ...s, id: data.id, name, status: 'stopped', jobs_total: 0, jobs_errors: 0 });
+        setDialogOpen(true);
+        return;
+      }
+      const data = await call('POST', { action: 'copy', id: s.id, target_company_id: targetCompanyId, user_id: user?.user_id, name });
+      const targetName = companies.find((c) => c.id === targetCompanyId)?.name || 'выбранную компанию';
+      setToCopy(null);
+      toast({
+        title: `Скопировано в «${targetName}»`,
+        description: data.copied_source
+          ? `Вместе с интеграцией «${data.copied_source}» — у неё свой адрес хука, добавьте его в CRM. Сценарий остановлен.`
+          : 'Сценарий остановлен — проверьте настройки и запустите',
+        action: (
+          <ToastAction altText="Перейти в компанию" onClick={() => setCurrentCompanyId(targetCompanyId)}>Перейти</ToastAction>
+        )
       });
-      toast({ title: 'Сценарий скопирован', description: 'Копия остановлена — проверьте настройки и запустите' });
-      await load();
-      setEditing({ ...s, id: data.id, name, status: 'stopped', jobs_total: 0, jobs_errors: 0 });
-      setDialogOpen(true);
     } catch (e) {
       toast({ title: 'Не удалось скопировать', description: (e as Error).message, variant: 'destructive' });
     } finally {
-      setCopyingId(null);
+      setIsCopying(false);
     }
   };
 
@@ -258,8 +279,8 @@ const AutomationPage = () => {
                     </div>
                   </div>
                   <div className="flex items-center gap-1">
-                    <Button size="icon" variant="ghost" title="Копировать" disabled={copyingId === s.id} onClick={() => handleCopy(s)}>
-                      <Icon name={copyingId === s.id ? 'Loader2' : 'Copy'} size={16} className={copyingId === s.id ? 'animate-spin' : ''} />
+                    <Button size="icon" variant="ghost" title="Копировать" onClick={() => setToCopy(s)}>
+                      <Icon name="Copy" size={16} />
                     </Button>
                     <Button size="icon" variant="ghost" title="Изменить" onClick={() => { setEditing(s); setDialogOpen(true); }}>
                       <Icon name="Pencil" size={16} />
@@ -286,6 +307,15 @@ const AutomationPage = () => {
       />
 
       <AutomationJournal open={journalOpen} onOpenChange={setJournalOpen} />
+
+      <CopyScenarioDialog
+        scenario={toCopy}
+        companies={companies}
+        currentCompanyId={companyId ?? null}
+        isCopying={isCopying}
+        onOpenChange={(o) => !o && setToCopy(null)}
+        onCopy={handleCopy}
+      />
 
       <AlertDialog open={!!toDelete} onOpenChange={(o) => !o && setToDelete(null)}>
         <AlertDialogContent>

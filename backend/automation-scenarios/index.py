@@ -1,5 +1,6 @@
 import json
 import os
+import secrets
 import psycopg2
 from typing import Dict, Any, Optional
 
@@ -99,6 +100,120 @@ def validate(cur, company_id: int, body: Dict[str, Any]) -> Optional[str]:
     return None
 
 
+def _integration(cur, integration_id: Optional[int]) -> Optional[Dict[str, Any]]:
+    if not integration_id:
+        return None
+    cur.execute(f'''
+        SELECT id, provider_id, integration_name, config, status FROM {SCHEMA}.user_integrations WHERE id = %s
+    ''', (integration_id,))
+    r = cur.fetchone()
+    if not r:
+        return None
+    config = json.loads(r[3]) if isinstance(r[3], str) else (r[3] or {})
+    return {'id': r[0], 'provider_id': r[1], 'name': r[2], 'config': config, 'status': r[4]}
+
+
+def _match_integration(cur, company_id: int, src: Dict[str, Any]) -> Optional[int]:
+    '''
+    Такая же интеграция в другой компании: тот же провайдер, приоритет - тот же
+    адрес вебхука CRM, затем то же название, затем любая активная этого провайдера.
+    '''
+    cur.execute(f'''
+        SELECT id, integration_name, config FROM {SCHEMA}.user_integrations
+        WHERE company_id = %s AND provider_id = %s AND status = 'active' ORDER BY id
+    ''', (company_id, src['provider_id']))
+    rows = cur.fetchall()
+    url = src['config'].get('webhook_url')
+    for r in rows:
+        config = json.loads(r[2]) if isinstance(r[2], str) else (r[2] or {})
+        if url and config.get('webhook_url') == url:
+            return r[0]
+    for r in rows:
+        if r[1] == src['name']:
+            return r[0]
+    return rows[0][0] if rows and not url else None
+
+
+def copy_to_company(cur, conn, company_id: int, body: Dict[str, Any]) -> Dict[str, Any]:
+    '''
+    Копия сценария в другую компанию пользователя. Источник ищется в целевой компании
+    (тот же провайдер/вебхук/название), если его нет - копируется со своим адресом хука.
+    Касса - только существующая касса того же провайдера в целевой компании.
+    Returns: (статус, ответ).
+    '''
+    target_id = int(body.get('target_company_id') or 0)
+    user_id = body.get('user_id')
+    if not target_id or not user_id:
+        return {'status': 400, 'body': {'error': 'Укажите компанию и пользователя'}}
+    cur.execute(f'''
+        SELECT COUNT(DISTINCT company_id) FROM {SCHEMA}.company_users
+        WHERE user_id = %s AND status = 'active' AND company_id IN (%s, %s)
+    ''', (user_id, company_id, target_id))
+    if cur.fetchone()[0] < (1 if int(company_id) == target_id else 2):
+        return {'status': 403, 'body': {'error': 'Нет доступа к одной из компаний'}}
+    cur.execute(f'''
+        SELECT name, trigger_type, source_integration_id, action_type, action_template,
+               target_integration_id, field_mapping
+        FROM {SCHEMA}.automation_scenarios WHERE id = %s AND company_id = %s AND removed_at IS NULL
+    ''', (body.get('id'), company_id))
+    r = cur.fetchone()
+    if not r:
+        return {'status': 404, 'body': {'error': 'Сценарий не найден'}}
+    name, trigger, src_id, action, template, kassa_id, mapping = r
+    mapping = json.loads(mapping) if isinstance(mapping, str) else (mapping or {})
+
+    kassa = _integration(cur, kassa_id)
+    new_kassa = _match_integration(cur, target_id, kassa) if kassa else None
+    if not new_kassa:
+        return {'status': 400, 'body': {'error': f"В выбранной компании нет кассы «{kassa['name'] if kassa else '-'}» того же типа - подключите её и повторите"}}
+
+    new_src, copied_source = None, None
+    src = _integration(cur, src_id)
+    if src:
+        new_src = _match_integration(cur, target_id, src)
+        if not new_src:
+            cur.execute(f'''
+                INSERT INTO {SCHEMA}.user_integrations
+                    (legacy_owner_id_unused, provider_id, integration_name, webhook_token, config, status,
+                     webhook_settings, forward_url, company_id, sync_interval_hours)
+                SELECT legacy_owner_id_unused, provider_id, integration_name, %s, config, 'active',
+                       webhook_settings, forward_url, %s, sync_interval_hours
+                FROM {SCHEMA}.user_integrations WHERE id = %s
+                RETURNING id
+            ''', (secrets.token_urlsafe(32), target_id, src['id']))
+            new_src = cur.fetchone()[0]
+            copied_source = src['name']
+
+    payload = {'name': body.get('name') or name, 'trigger_type': trigger, 'source_integration_id': new_src,
+               'action_type': action, 'action_template': template, 'target_integration_id': new_kassa,
+               'field_mapping': mapping, 'id': 'copy'}
+    error = validate(cur, target_id, payload)
+    if error:
+        conn.rollback()
+        return {'status': 400, 'body': {'error': error}}
+    cur.execute(f'''
+        SELECT t.max_automations,
+               (SELECT COUNT(*) FROM {SCHEMA}.automation_scenarios a WHERE a.company_id = %s AND a.removed_at IS NULL)
+        FROM {SCHEMA}.subscriptions s JOIN {SCHEMA}.tariffs t ON t.id = s.tariff_id
+        WHERE s.company_id = %s
+    ''', (target_id, target_id))
+    limit_row = cur.fetchone()
+    if limit_row and limit_row[0] is not None and limit_row[1] >= limit_row[0]:
+        conn.rollback()
+        return {'status': 403, 'body': {'error': f'В выбранной компании исчерпан лимит автоматизаций по тарифу ({limit_row[0]})'}}
+    cur.execute(f'''
+        INSERT INTO {SCHEMA}.automation_scenarios
+            (company_id, name, trigger_type, source_integration_id, action_type,
+             action_template, target_integration_id, field_mapping, status)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'stopped')
+        RETURNING id
+    ''', (target_id, payload['name'][:200], trigger, new_src, action, template, new_kassa, json.dumps(mapping)))
+    new_id = cur.fetchone()[0]
+    conn.commit()
+    return {'status': 200, 'body': {'success': True, 'id': new_id, 'company_id': target_id,
+                                    'copied_source': copied_source}}
+
+
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     '''
     Сценарии автоматизации компании: источник (новый платёж, заказ в CRM,
@@ -108,6 +223,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     POST {company_id, name, trigger_type, source_integration_id, action_type,
           action_template, target_integration_id, field_mapping} - создать (остановлен)
     PUT {id, company_id, ...те же поля} - изменить; {id, company_id, status} - запустить/остановить
+    POST {action: copy, company_id, id, target_company_id, user_id, name?} - копия в другую компанию
     DELETE {id, company_id} - удалить
     '''
     method = event.get('httpMethod', 'GET')
@@ -150,6 +266,10 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 'action_template_name': r[16]
             } for r in cur.fetchall()]
             return respond(200, {'success': True, 'scenarios': scenarios})
+
+        if method == 'POST' and body.get('action') == 'copy':
+            result = copy_to_company(cur, conn, int(company_id), body)
+            return respond(result['status'], result['body'])
 
         if method == 'POST':
             error = validate(cur, company_id, body)
