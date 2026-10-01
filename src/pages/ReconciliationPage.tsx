@@ -6,6 +6,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import ReconciliationPeriodPicker from '@/components/reconciliation/ReconciliationPeriodPicker';
 import ReconciliationTiles from '@/components/reconciliation/ReconciliationTiles';
 import ReconciliationChart from '@/components/reconciliation/ReconciliationChart';
+import ReconciliationStatus, { StatusSummary } from '@/components/reconciliation/ReconciliationStatus';
 import ReconciliationByProvider from '@/components/reconciliation/ReconciliationByProvider';
 import { TypeFilterKey } from '@/lib/transactionTypeFilter';
 import functionUrls from '../../backend/func2url.json';
@@ -54,7 +55,7 @@ const getDefaultFrom = () => {
 };
 
 interface ReconciliationPageProps {
-  onOpenTransactions?: (from: Date, to: Date, typeKey?: TypeFilterKey) => void;
+  onOpenTransactions?: (from: Date, to: Date, typeKey?: TypeFilterKey, unmatchedOnly?: boolean) => void;
 }
 
 const ReconciliationPage = ({ onOpenTransactions }: ReconciliationPageProps) => {
@@ -62,6 +63,8 @@ const ReconciliationPage = ({ onOpenTransactions }: ReconciliationPageProps) => 
   const [dateTo, setDateTo] = useState<Date>(getYesterday());
   const [data, setData] = useState<ReconciliationResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [statusSummary, setStatusSummary] = useState<StatusSummary | null>(null);
+  const [isStatusLoading, setIsStatusLoading] = useState(true);
   const { toast } = useToast();
   const { currentCompany } = useAuth();
   const companyId = currentCompany?.id;
@@ -112,15 +115,40 @@ const ReconciliationPage = ({ onOpenTransactions }: ReconciliationPageProps) => 
     })
       .then((res) => res.json())
       .then((data) => {
-        if (data.resolved > 0) fetchStats();
+        if (data.resolved > 0) {
+          fetchStats();
+          fetchStatus();
+        }
       })
       .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [companyId]);
 
+  const fetchStatus = useCallback(async () => {
+    if (!companyId) return;
+    setIsStatusLoading(true);
+    try {
+      const params = new URLSearchParams({
+        company_id: String(companyId),
+        paged: '1',
+        status_summary: '1',
+        date_from: toDateParam(dateFrom),
+        date_to: toDateParam(dateTo)
+      });
+      const response = await fetch(`${functionUrls['transactions-list']}?${params.toString()}`);
+      const result = await response.json();
+      setStatusSummary(response.ok && result.summary ? result.summary : null);
+    } catch {
+      setStatusSummary(null);
+    } finally {
+      setIsStatusLoading(false);
+    }
+  }, [companyId, dateFrom, dateTo]);
+
   useEffect(() => {
     fetchStats();
-  }, [fetchStats]);
+    fetchStatus();
+  }, [fetchStats, fetchStatus]);
 
   const handlePeriodChange = (from: Date, to: Date) => {
     setDateFrom(from);
@@ -136,7 +164,7 @@ const ReconciliationPage = ({ onOpenTransactions }: ReconciliationPageProps) => 
             Автоматическая сверка платежей, чеков и поступлений на расчётный счёт
           </p>
         </div>
-        <Button onClick={fetchStats} variant="outline" disabled={isLoading}>
+        <Button onClick={() => { fetchStats(); fetchStatus(); }} variant="outline" disabled={isLoading}>
           <Icon name="RefreshCw" size={16} className={`mr-2 ${isLoading ? 'animate-spin' : ''}`} />
           Обновить
         </Button>
@@ -157,18 +185,25 @@ const ReconciliationPage = ({ onOpenTransactions }: ReconciliationPageProps) => 
             totals={data.totals}
             onTileClick={onOpenTransactions ? (typeKey) => onOpenTransactions(dateFrom, dateTo, typeKey) : undefined}
           />
-          <ReconciliationChart
-            daily={data.daily}
-            onDayClick={
-              onOpenTransactions
-                ? (day) => {
-                    const [y, m, d] = day.split('-').map(Number);
-                    const date = new Date(y, m - 1, d);
-                    onOpenTransactions(date, date);
-                  }
-                : undefined
-            }
-          />
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+            <ReconciliationChart
+              daily={data.daily}
+              onDayClick={
+                onOpenTransactions
+                  ? (day) => {
+                      const [y, m, d] = day.split('-').map(Number);
+                      const date = new Date(y, m - 1, d);
+                      onOpenTransactions(date, date);
+                    }
+                  : undefined
+              }
+            />
+            <ReconciliationStatus
+              summary={statusSummary}
+              isLoading={isStatusLoading}
+              onOpenUnmatched={onOpenTransactions ? () => onOpenTransactions(dateFrom, dateTo, undefined, true) : undefined}
+            />
+          </div>
           {data.details.payments_by_provider && (
             <ReconciliationByProvider paymentsByProvider={data.details.payments_by_provider} />
           )}

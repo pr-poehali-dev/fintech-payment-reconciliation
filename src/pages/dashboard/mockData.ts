@@ -1,18 +1,3 @@
-export const revenueData = [
-  { month: 'Янв', amount: 4200 },
-  { month: 'Фев', amount: 5100 },
-  { month: 'Мар', amount: 4800 },
-  { month: 'Апр', amount: 6200 },
-  { month: 'Май', amount: 7500 },
-  { month: 'Июн', amount: 8200 }
-];
-
-export const reconciliationData = [
-  { name: 'Сверено', value: 85, color: 'hsl(var(--primary))' },
-  { name: 'Расхождения', value: 12, color: 'hsl(var(--accent))' },
-  { name: 'Ожидают', value: 3, color: 'hsl(var(--muted))' }
-];
-
 export const paymentsData = [
   { day: 'Пн', count: 45 },
   { day: 'Вт', count: 52 },

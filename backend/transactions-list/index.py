@@ -689,6 +689,38 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
         all_groups = group_transactions(final_rows)
 
+        if params.get('status_summary') == '1':
+            # Статус сверки за период (по часовому поясу компании) - считаем сделки:
+            # оплаченный платёж + чек в группе = сверено; платёж без чека, но с
+            # заказом в кассе = ожидает чек; платёж без чека и заказа = без чека;
+            # чек кассы без платежа в группе = чек без платежа.
+            def in_period(t):
+                day = local_date(t.get('occurred_at'), company_tz)
+                return bool(day) and (not date_from or day >= date_from) and (not date_to or day <= date_to)
+
+            summary = {k: {'count': 0, 'amount': 0.0} for k in ('reconciled', 'waiting', 'no_receipt', 'no_payment')}
+            for g in all_groups:
+                has_receipt = any(t['type'] in ('receipt_kassa', 'receipt_ofd') for t in g)
+                has_order = any(t['type'] == 'receipt_order' for t in g)
+                paid = [t for t in g if t['type'] == 'payment' and t.get('status') in ('CONFIRMED', 'AUTHORIZED')]
+                if paid:
+                    bucket = 'reconciled' if has_receipt else ('waiting' if has_order else 'no_receipt')
+                    for t in paid:
+                        if in_period(t):
+                            summary[bucket]['count'] += 1
+                            summary[bucket]['amount'] += float(t.get('amount') or 0)
+                    continue
+                if any(t['type'] == 'payment' for t in g):
+                    continue
+                for t in g:
+                    if t['type'] == 'receipt_kassa' and t.get('status') == 'done' and in_period(t) \
+                            and float(t.get('signed_amount') or 0) > 0 and t.get('match_method') != 'order_receipt':
+                        summary['no_payment']['count'] += 1
+                        summary['no_payment']['amount'] += float(t.get('amount') or 0)
+            for v in summary.values():
+                v['amount'] = round(v['amount'], 2)
+            return json_ok({'success': True, 'summary': summary})
+
         if params.get('missing_receipts') == '1':
             # Проверка для уведомлений: оплаченные платежи за день (по часовому поясу
             # компании), в группе которых нет ни одного чека - ни кассы, ни ОФД.

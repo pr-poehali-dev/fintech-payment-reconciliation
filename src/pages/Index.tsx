@@ -25,21 +25,21 @@ const Index = () => {
   const [subscriptionOpen, setSubscriptionOpen] = useState(false);
   const [transactionsDateFilter, setTransactionsDateFilter] = useState<DateFilter | null>(null);
   const [transactionsTypeFilter, setTransactionsTypeFilter] = useState<TypeFilter | null>(null);
-
-  // Переход из «Сверки» (плитки, столбцы графика) в «Транзакции» сразу с
-  // фильтром на нужный период.
-  const openTransactionsForPeriod = (from: Date, to: Date, typeKey?: TypeFilterKey) => {
-    setTransactionsDateFilter({ from, to });
-    setTransactionsTypeFilter(typeKey ? TYPE_FILTERS[typeKey] : null);
-    setTransactionsUnmatchedOnly(false);
-    setTransactionsNavKey((k) => k + 1);
-    setActiveModule('transactions');
-  };
-
   const [transactionsUnmatchedOnly, setTransactionsUnmatchedOnly] = useState(false);
   // Меняется при каждом переходе с фильтрами - «Транзакции» пересоздаются и
   // применяют их, даже если раздел уже открыт.
   const [transactionsNavKey, setTransactionsNavKey] = useState(0);
+
+  // Переход из «Сверки» (плитки, столбцы графика) в «Транзакции» сразу с
+  // фильтром на нужный период.
+  const openTransactionsForPeriod = (from: Date, to: Date, typeKey?: TypeFilterKey, unmatchedOnly = false) => {
+    setTransactionsDateFilter({ from, to });
+    setTransactionsTypeFilter(typeKey ? TYPE_FILTERS[typeKey] : null);
+    setTransactionsUnmatchedOnly(unmatchedOnly);
+    setTransactionsNavKey((k) => k + 1);
+    setActiveModule('transactions');
+  };
+
 
   const openFromNotification = (n: AppNotification) => {
     const day = typeof n.payload?.date === 'string' ? n.payload.date : null;
