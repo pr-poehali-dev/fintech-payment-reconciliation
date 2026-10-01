@@ -21,17 +21,17 @@ const CrmFieldPicker = ({ value, onChange, fields, entities, placeholder = 'Не
   const label = value ? `${ENTITY_LABELS[entity] || entity}: ${current?.title || code}` : placeholder;
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={setOpen} modal>
       <PopoverTrigger asChild>
         <Button variant="outline" className="h-9 w-full justify-between px-3 font-normal">
           <span className={`truncate ${value ? '' : 'text-muted-foreground'}`}>{label}</span>
           <Icon name="ChevronsUpDown" size={14} className="shrink-0 text-muted-foreground" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[320px] p-0" align="end">
+      <PopoverContent className="w-[var(--radix-popover-trigger-width)] min-w-[420px] p-0" align="end">
         <Command>
           <CommandInput placeholder="Поиск поля..." />
-          <CommandList className="max-h-72">
+          <CommandList className="max-h-80 overflow-y-auto overscroll-contain" onWheel={(e) => e.stopPropagation()} onTouchMove={(e) => e.stopPropagation()}>
             <CommandEmpty>Поле не найдено</CommandEmpty>
             {value && (
               <CommandGroup>
@@ -50,8 +50,8 @@ const CrmFieldPicker = ({ value, onChange, fields, entities, placeholder = 'Не
                     onSelect={() => { onChange(f.ref); setOpen(false); }}
                   >
                     <Icon name="Check" size={14} className={`mr-2 ${f.ref === value ? 'opacity-100' : 'opacity-0'}`} />
-                    <span className="flex-1 truncate">{f.title}</span>
-                    <span className="ml-2 font-mono text-[10px] text-muted-foreground">{f.code}</span>
+                    <span className="min-w-0 flex-1 truncate" title={f.title}>{f.title}</span>
+                    <span className="ml-2 max-w-[45%] shrink-0 truncate font-mono text-[10px] text-muted-foreground" title={f.code}>{f.code}</span>
                   </CommandItem>
                 ))}
               </CommandGroup>
