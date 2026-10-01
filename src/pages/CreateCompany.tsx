@@ -135,7 +135,19 @@ const CreateCompany = () => {
           </p>
         </div>
 
-        <Card className="shadow-2xl border-0 animate-scale-in">
+        <Card className="relative shadow-2xl border-0 animate-scale-in">
+          {hasCompanies && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => navigate('/app')}
+              className="absolute right-3 top-3 h-8 w-8 text-muted-foreground hover:text-foreground"
+              aria-label="Закрыть"
+              title="Закрыть и вернуться к компаниям"
+            >
+              <Icon name="X" size={18} />
+            </Button>
+          )}
           <CardHeader className="text-center pb-4">
             <CardTitle className="text-2xl font-display">Создание компании</CardTitle>
             <CardDescription className="text-base">
