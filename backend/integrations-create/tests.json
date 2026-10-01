@@ -1,20 +1,16 @@
 {
   "tests": [
     {
-      "name": "Create Tbank integration",
+      "name": "Unknown provider",
       "method": "POST",
       "body": {
         "company_id": 1,
-        "provider_slug": "tbank",
-        "integration_name": "Терминал №1",
-        "config": {
-          "terminal_id": "1234567890",
-          "terminal_password": "test_password"
-        }
+        "provider_slug": "no_such_provider",
+        "integration_name": "X"
       },
-      "expectedStatus": 200,
+      "expectedStatus": 404,
       "expectedBody": {
-        "success": true
+        "error": "string"
       },
       "bodyMatcher": "partial"
     },
@@ -23,6 +19,20 @@
       "method": "POST",
       "body": {
         "provider_slug": "tbank"
+      },
+      "expectedStatus": 400,
+      "expectedBody": {
+        "error": "string"
+      },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Copy without target",
+      "method": "POST",
+      "body": {
+        "action": "copy",
+        "company_id": 1,
+        "integration_id": 1
       },
       "expectedStatus": 400,
       "expectedBody": {

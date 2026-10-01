@@ -5,7 +5,6 @@ import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import Icon from '@/components/ui/icon';
-import { Scenario } from './automationConfig';
 
 interface CompanyOption {
   id: number;
@@ -13,7 +12,9 @@ interface CompanyOption {
 }
 
 interface CopyScenarioDialogProps {
-  scenario: Scenario | null;
+  scenario: { name: string } | null;
+  title?: string;
+  hint?: string;
   companies: CompanyOption[];
   currentCompanyId: number | null;
   isCopying: boolean;
@@ -22,7 +23,7 @@ interface CopyScenarioDialogProps {
 }
 
 // Копирование сценария: в эту же компанию или в другую компанию пользователя.
-const CopyScenarioDialog = ({ scenario, companies, currentCompanyId, isCopying, onOpenChange, onCopy }: CopyScenarioDialogProps) => {
+const CopyScenarioDialog = ({ scenario, title = 'Копировать сценарий', hint, companies, currentCompanyId, isCopying, onOpenChange, onCopy }: CopyScenarioDialogProps) => {
   const [target, setTarget] = useState('');
   const [name, setName] = useState('');
 
@@ -39,8 +40,8 @@ const CopyScenarioDialog = ({ scenario, companies, currentCompanyId, isCopying, 
     <Dialog open={!!scenario} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Копировать сценарий</DialogTitle>
-          <DialogDescription>Копия создаётся остановленной — проверьте настройки и запустите</DialogDescription>
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription>{title === 'Копировать сценарий' ? 'Копия создаётся остановленной — проверьте настройки и запустите' : 'Копия получит те же настройки и ключи'}</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
@@ -66,8 +67,12 @@ const CopyScenarioDialog = ({ scenario, companies, currentCompanyId, isCopying, 
           </div>
           {other && (
             <div className="space-y-1 rounded-md bg-muted/50 p-3 text-xs text-muted-foreground">
-              <p>Касса — ищем такую же кассу в выбранной компании. Если её нет, подключите кассу и повторите.</p>
-              <p>Источник — берём такую же интеграцию из выбранной компании, а если её нет, копируем вместе со сценарием. У копии будет свой адрес для хука.</p>
+              {hint ? <p>{hint}</p> : (
+                <>
+                  <p>Касса — ищем такую же кассу в выбранной компании. Если её нет, подключите кассу и повторите.</p>
+                  <p>Источник — берём такую же интеграцию из выбранной компании, а если её нет, копируем вместе со сценарием. У копии будет свой адрес для хука.</p>
+                </>
+              )}
             </div>
           )}
         </div>

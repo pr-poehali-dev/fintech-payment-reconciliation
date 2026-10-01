@@ -11,6 +11,7 @@ interface IntegrationCardProps {
   onToggleExpand: (id: number) => void;
   onEdit: (integration: UserIntegration) => void;
   onDeleteClick: (integration: UserIntegration) => void;
+  onCopy: (integration: UserIntegration) => void;
   onCopyWebhookUrl: (token: string) => void;
   formatDate: (dateStr: string | null) => string;
   loadingStatement: number | null;
@@ -23,6 +24,7 @@ const IntegrationCard = ({
   onToggleExpand,
   onEdit,
   onDeleteClick,
+  onCopy,
   onCopyWebhookUrl,
   formatDate,
   loadingStatement,
@@ -71,6 +73,10 @@ const IntegrationCard = ({
       {isExpanded && (
       <CardContent className="space-y-3 pt-0 animate-fade-in">
         <div className="flex justify-end gap-2 -mt-1 mb-1">
+          <Button variant="ghost" size="sm" title="Копировать" onClick={() => onCopy(integration)}>
+            <Icon name="Copy" size={16} className="mr-1" />
+            Копировать
+          </Button>
           <Button
             variant="ghost"
             size="sm"
