@@ -10,6 +10,7 @@ export interface AppNotification {
   link_module: string | null;
   entity_type: string | null;
   entity_id: string | null;
+  payload: Record<string, unknown> | null;
   created_at: string;
   read: boolean;
 }

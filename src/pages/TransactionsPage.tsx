@@ -28,13 +28,14 @@ interface IntegrationRow {
 interface TransactionsPageProps {
   initialDateFilter?: DateFilter | null;
   initialTypeFilter?: TypeFilter | null;
+  initialUnmatchedOnly?: boolean;
 }
 
-const TransactionsPage = ({ initialDateFilter = null, initialTypeFilter = null }: TransactionsPageProps) => {
+const TransactionsPage = ({ initialDateFilter = null, initialTypeFilter = null, initialUnmatchedOnly = false }: TransactionsPageProps) => {
   const [selectedTx, setSelectedTx] = useState<Transaction | null>(null);
   const [showDetails, setShowDetails] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [showUnmatchedOnly, setShowUnmatchedOnly] = useState(false);
+  const [showUnmatchedOnly, setShowUnmatchedOnly] = useState(initialUnmatchedOnly);
   const [dateFilter, setDateFilter] = useState<DateFilter | null>(initialDateFilter);
   const [typeFilter, setTypeFilter] = useState<TransactionType[]>(initialTypeFilter?.types ?? []);
   const [ecomkassaIntegrations, setEcomkassaIntegrations] = useState<{ id: number; name: string }[]>([]);

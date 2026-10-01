@@ -13,7 +13,7 @@ import ReconciliationPage from './ReconciliationPage';
 import SettingsPlaceholder from './SettingsPlaceholder';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAutomationHeartbeat } from '@/hooks/useAutomationHeartbeat';
-import { useNotifications } from '@/hooks/useNotifications';
+import { useNotifications, AppNotification } from '@/hooks/useNotifications';
 import SubscriptionDialog from '@/components/profile/SubscriptionDialog';
 import { DateFilter } from '@/components/filters/DateRangeFilter';
 import { TYPE_FILTERS, TypeFilter, TypeFilterKey } from '@/lib/transactionTypeFilter';
@@ -32,10 +32,33 @@ const Index = () => {
   const openTransactionsForPeriod = (from: Date, to: Date, typeKey?: TypeFilterKey) => {
     setTransactionsDateFilter({ from, to });
     setTransactionsTypeFilter(typeKey ? TYPE_FILTERS[typeKey] : null);
+    setTransactionsUnmatchedOnly(false);
+    setTransactionsNavKey((k) => k + 1);
     setActiveModule('transactions');
   };
 
+  const [transactionsUnmatchedOnly, setTransactionsUnmatchedOnly] = useState(false);
+  // Меняется при каждом переходе с фильтрами - «Транзакции» пересоздаются и
+  // применяют их, даже если раздел уже открыт.
+  const [transactionsNavKey, setTransactionsNavKey] = useState(0);
+
+  const openFromNotification = (n: AppNotification) => {
+    const day = typeof n.payload?.date === 'string' ? n.payload.date : null;
+    if (n.link_module === 'transactions' && day) {
+      const [y, m, d] = day.split('-').map(Number);
+      const date = new Date(y, m - 1, d);
+      setTransactionsDateFilter({ from: date, to: date });
+      setTransactionsTypeFilter(null);
+      setTransactionsUnmatchedOnly(n.kind === 'missing_receipts');
+      setTransactionsNavKey((k) => k + 1);
+      setActiveModule('transactions');
+      return;
+    }
+    if (n.link_module) handleModuleChange(n.link_module);
+  };
+
   const handleModuleChange = (id: string) => {
+    setTransactionsUnmatchedOnly(false);
     setTransactionsDateFilter(null);
     setTransactionsTypeFilter(null);
     setActiveModule(id);
@@ -73,7 +96,7 @@ const Index = () => {
           onMarkRead={notifications.markRead}
           onHide={notifications.hide}
           onReload={notifications.reload}
-          onOpenModule={handleModuleChange}
+          onOpen={openFromNotification}
         />
       )}
 
@@ -94,7 +117,7 @@ const Index = () => {
         {activeModule === 'dashboard' && <DashboardOverview stats={stats} mounted={mounted} />}
         {activeModule === 'reconciliation' && <ReconciliationPage onOpenTransactions={openTransactionsForPeriod} />}
         {activeModule === 'events' && <EventsPage />}
-        {activeModule === 'transactions' && <TransactionsPage initialDateFilter={transactionsDateFilter} initialTypeFilter={transactionsTypeFilter} />}
+        {activeModule === 'transactions' && <TransactionsPage key={transactionsNavKey} initialDateFilter={transactionsDateFilter} initialTypeFilter={transactionsTypeFilter} initialUnmatchedOnly={transactionsUnmatchedOnly} />}
         {activeModule === 'automation' && <AutomationPage />}
         {activeModule === 'integrations' && <IntegrationsPage />}
         {activeModule === 'access' && <AccessManagement />}

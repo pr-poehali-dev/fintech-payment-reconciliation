@@ -15,7 +15,7 @@ interface NotificationCenterProps {
   onMarkRead: (ids?: number[]) => void;
   onHide: (id: number) => void;
   onReload: () => void;
-  onOpenModule: (module: string) => void;
+  onOpen: (notification: AppNotification) => void;
 }
 
 const LEVEL_STYLE: Record<string, { icon: string; color: string; bg: string }> = {
@@ -23,6 +23,11 @@ const LEVEL_STYLE: Record<string, { icon: string; color: string; bg: string }> =
   warning: { icon: 'AlertTriangle', color: 'text-warning', bg: 'bg-warning/20' },
   error: { icon: 'XCircle', color: 'text-destructive', bg: 'bg-destructive/20' },
   info: { icon: 'Info', color: 'text-info', bg: 'bg-info/20' }
+};
+
+const linkLabel = (n: AppNotification) => {
+  if (n.kind === 'missing_receipts' && n.payload?.date) return 'Показать платежи без чека';
+  return n.link_module ? MODULE_LABELS[n.link_module] : undefined;
 };
 
 const MODULE_LABELS: Record<string, string> = {
@@ -38,7 +43,7 @@ const timeAgo = (value: string) => {
 };
 
 const NotificationCenter = ({
-  items, unread, isLoading, onClose, onMarkRead, onHide, onReload, onOpenModule
+  items, unread, isLoading, onClose, onMarkRead, onHide, onReload, onOpen
 }: NotificationCenterProps) => {
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
   const visible = filter === 'unread' ? items.filter((n) => !n.read) : items;
@@ -46,7 +51,7 @@ const NotificationCenter = ({
   const open = (n: AppNotification) => {
     if (!n.read) onMarkRead([n.id]);
     if (n.link_module) {
-      onOpenModule(n.link_module);
+      onOpen(n);
       onClose();
     }
   };
@@ -145,9 +150,9 @@ const NotificationCenter = ({
                                 {timeAgo(n.created_at)}
                               </span>
                               {!n.read && <Badge variant="secondary" className="text-xs">Новое</Badge>}
-                              {n.link_module && MODULE_LABELS[n.link_module] && (
+                              {linkLabel(n) && (
                                 <span className="text-xs text-primary flex items-center gap-1">
-                                  {MODULE_LABELS[n.link_module]}
+                                  {linkLabel(n)}
                                   <Icon name="ArrowRight" size={12} />
                                 </span>
                               )}
