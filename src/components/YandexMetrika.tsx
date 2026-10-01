@@ -12,7 +12,6 @@ declare global {
 }
 
 const api = (functionUrls as Record<string, string>)['platform-settings'];
-const TAG_URL = 'https://mc.yandex.ru/metrika/tag.js';
 
 // Счётчик Яндекс Метрики из настроек платформы: подключается при загрузке сайта,
 // переходы между страницами приложения отправляются как просмотры (hit).
@@ -34,19 +33,26 @@ const YandexMetrika = () => {
           ym.l = Date.now();
           window.ym = ym;
         }
-        if (!Array.from(document.scripts).some((s) => s.src === TAG_URL)) {
+        // Как в официальном коде счётчика: tag.js?id=<номер> - сборка под настройки этого счётчика.
+        const tagUrl = `https://mc.yandex.ru/metrika/tag.js?id=${id}`;
+        if (!Array.from(document.scripts).some((s) => s.src === tagUrl)) {
           const script = document.createElement('script');
           script.async = true;
-          script.src = TAG_URL;
-          document.head.appendChild(script);
+          script.src = tagUrl;
+          const first = document.getElementsByTagName('script')[0];
+          if (first?.parentNode) first.parentNode.insertBefore(script, first);
+          else document.head.appendChild(script);
         }
         window.dataLayer = window.dataLayer || [];
         window.ym(id, 'init', {
-          clickmap: true,
-          trackLinks: true,
-          accurateTrackBounce: true,
+          ssr: true,
           webvisor: true,
-          ecommerce: 'dataLayer'
+          clickmap: true,
+          ecommerce: 'dataLayer',
+          referrer: document.referrer,
+          url: window.location.href,
+          accurateTrackBounce: true,
+          trackLinks: true
         });
       })
       .catch(() => {});
