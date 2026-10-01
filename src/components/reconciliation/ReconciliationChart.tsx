@@ -80,7 +80,7 @@ const ReconciliationChart = ({ daily, onDayClick }: ReconciliationChartProps) =>
               dataKey="revenue"
               name="Выручка"
               stroke="hsl(var(--foreground))"
-              strokeWidth={3}
+              strokeWidth={1.5}
               dot={{ fill: 'hsl(var(--foreground))', r: 4 }}
               activeDot={{ r: 6 }}
             />
