@@ -173,9 +173,7 @@ def prepare_crm(cur, job: Dict[str, Any], scenario: Dict[str, Any]) -> Tuple[str
             f"ждём {'стадию ' + mapping['stage'] if mapping.get('stage') else 'воронку ' + str(mapping.get('pipeline'))}, "
             f"задание оживёт при следующем хуке"
         )
-    cur.execute(f'SELECT inn FROM {SCHEMA}.companies WHERE id = %s', (job['company_id'],))
-    inn_row = cur.fetchone()
-    data, err, note = bitrix_crm.build_data(record, entity, mapping, inn_row[0] if inn_row else None)
+    data, err, note = bitrix_crm.build_data(record, entity, mapping)
     if err:
         return 'error', {}, err
     total = sum(i['sum'] for i in data['items'])

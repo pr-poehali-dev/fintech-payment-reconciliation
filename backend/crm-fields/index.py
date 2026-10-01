@@ -46,9 +46,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     cur = conn.cursor()
     try:
         cur.execute(f'''
-            SELECT p.slug, ui.config, c.inn FROM {SCHEMA}.user_integrations ui
+            SELECT p.slug, ui.config FROM {SCHEMA}.user_integrations ui
             JOIN {SCHEMA}.integration_providers p ON p.id = ui.provider_id
-            JOIN {SCHEMA}.companies c ON c.id = ui.company_id
             WHERE ui.id = %s AND ui.company_id = %s
         ''', (integration_id, company_id))
         row = cur.fetchone()
@@ -57,7 +56,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         conn.close()
     if not row:
         return respond(404, {'error': 'Интеграция не найдена'})
-    slug, config, seller_inn = row
+    slug, config = row
     config = json.loads(config) if isinstance(config, str) else (config or {})
     if slug != 'bitrix24':
         return respond(400, {'error': 'Загрузка полей пока доступна только для Битрикс24'})
@@ -75,12 +74,11 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         record, err = bitrix_crm.load_record(webhook_url, entity, body.get('entity_id'))
         if err:
             return respond(200, {'success': False, 'error': err})
-        refs = {k: mapping.get(k) for k in ('order_id', 'payment_ref', 'amount', 'customer_email', 'customer_phone',
+        refs = {k: mapping.get(k) for k in ('order_id', 'amount', 'customer_email', 'customer_phone',
                                               'customer_name', 'customer_inn')}
         values = {k: bitrix_crm.resolve(record, entity, ref) for k, ref in refs.items()}
         main = record[entity]
-        values['order_id'] = bitrix_crm.make_order_id(record, entity, mapping, seller_inn)
-        data, build_error, note = bitrix_crm.build_data(record, entity, mapping, seller_inn)
+        data, build_error, note = bitrix_crm.build_data(record, entity, mapping)
         return respond(200, {
             'success': True,
             'title': main.get('TITLE'),

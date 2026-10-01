@@ -78,8 +78,7 @@ export interface FixedItem {
 }
 
 export const MAPPING_FIELDS: { key: string; label: string; required?: boolean; hint?: string }[] = [
-  { key: 'order_id', label: 'Номер сделки', required: true },
-  { key: 'payment_ref', label: 'Номер платежа', hint: 'Если заполнен в сделке - станет номером заказа' },
+  { key: 'order_id', label: 'Номер заказа', required: true },
   { key: 'amount', label: 'Сумма', hint: 'Для сверки с суммой товаров' },
   { key: 'customer_email', label: 'Email покупателя' },
   { key: 'customer_phone', label: 'Телефон покупателя' },
@@ -92,8 +91,6 @@ export const DEFAULT_CRM_MAPPING: Record<string, unknown> = {
   pipeline: '',
   stage: '',
   order_id: 'deal.ID',
-  order_inn_prefix: true,
-  payment_ref: '',
   amount: 'deal.OPPORTUNITY',
   customer_email: 'contact.EMAIL',
   customer_phone: 'contact.PHONE',

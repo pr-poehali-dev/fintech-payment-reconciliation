@@ -25,8 +25,6 @@ DEFAULT_MAPPING = {
     'pipeline': '',
     'stage': '',
     'order_id': 'deal.ID',
-    'order_inn_prefix': True,
-    'payment_ref': '',
     'amount': 'deal.OPPORTUNITY',
     'customer_email': 'contact.EMAIL',
     'customer_phone': 'contact.PHONE',
@@ -261,25 +259,7 @@ def build_items(record: Dict[str, Any], entity: str, mapping: Dict[str, Any],
     return items, '' if items else f'В {noun} нет платных товаров - добавьте товары или выберите другой состав чека'
 
 
-def make_order_id(record: Dict[str, Any], entity: str, mapping: Dict[str, Any], seller_inn: Optional[str]) -> str:
-    '''
-    Номер заказа для кассы и сверки. Номера сделок у разных клиентов совпадают, поэтому:
-    1) номер платежа из CRM (поле payment_ref), если заполнен - как есть, по нему сверяем с платежом;
-    2) иначе ИНН продавца + номер сделки: 643890985437-46480 (если включено order_inn_prefix).
-    '''
-    payment = resolve(record, entity, mapping.get('payment_ref'))
-    if payment:
-        return payment
-    main = record.get(entity) or {}
-    base = resolve(record, entity, mapping.get('order_id')) or str(main.get('ID'))
-    inn = re.sub(r'\D', '', seller_inn or '')
-    if mapping.get('order_inn_prefix', True) and inn and not base.startswith(f'{inn}-'):
-        return f'{inn}-{base}'
-    return base
-
-
-def build_data(record: Dict[str, Any], entity: str, mapping: Dict[str, Any],
-               seller_inn: Optional[str] = None) -> Tuple[Optional[Dict[str, Any]], str, str]:
+def build_data(record: Dict[str, Any], entity: str, mapping: Dict[str, Any]) -> Tuple[Optional[Dict[str, Any]], str, str]:
     '''
     Данные для действия сценария из сделки/лида по сопоставлению полей.
     Returns: (data, ошибка, примечание для журнала).
@@ -311,7 +291,7 @@ def build_data(record: Dict[str, Any], entity: str, mapping: Dict[str, Any],
             digits = '7' + digits[1:]
         customer['phone'] = f'+{digits}' if digits else None
 
-    order_id = make_order_id(record, entity, mapping, seller_inn)
+    order_id = resolve(record, entity, mapping.get('order_id')) or str(main.get('ID'))
     data = {
         'items': items,
         'items_format': 'atol',

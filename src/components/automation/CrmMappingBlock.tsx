@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import Icon from '@/components/ui/icon';
 import functionUrls from '../../../backend/func2url.json';
@@ -233,20 +232,6 @@ const CrmMappingBlock = ({ companyId, integrationId, mapping, onChange }: CrmMap
             />
           </div>
         ))}
-        <div className="mt-1 space-y-2 rounded-md bg-muted/40 p-2.5">
-          <label className="flex items-center justify-between gap-3 text-sm">
-            <span>Добавлять ИНН компании к номеру сделки</span>
-            <Switch
-              checked={mapping.order_inn_prefix !== false}
-              onCheckedChange={(v) => set({ order_inn_prefix: v })}
-            />
-          </label>
-          <p className="text-xs text-muted-foreground">
-            Номер заказа в чеке: {mapping.payment_ref ? 'номер платежа из CRM, а если он пуст — ' : ''}
-            {mapping.order_inn_prefix !== false ? <span className="font-mono">ИНН-номер сделки</span> : 'номер сделки'}.
-            Номера сделок у разных компаний совпадают — с ИНН номер уникален, и чек точно найдёт свой платёж при сверке.
-          </p>
-        </div>
       </div>
 
       <div className="space-y-3 rounded-lg border border-border p-3">
@@ -333,7 +318,7 @@ const CrmMappingBlock = ({ companyId, integrationId, mapping, onChange }: CrmMap
               Стадия {test.stage} — {test.stage_matches ? 'чек будет создан' : 'не совпадает со стадией запуска'}
             </div>
             <div className="space-y-1 rounded-md bg-background/60 p-2 text-xs">
-              {[{ key: 'order_id', label: 'Номер заказа в чеке' }, ...MAPPING_FIELDS.filter((x) => x.key !== 'order_id' && x.key !== 'payment_ref')].map((f) => (
+              {MAPPING_FIELDS.map((f) => (
                 <div key={f.key} className="flex justify-between gap-3">
                   <span className="text-muted-foreground">{f.label}</span>
                   <span className={`truncate text-right ${test.values?.[f.key] ? '' : 'text-muted-foreground'}`}>{test.values?.[f.key] || '—'}</span>
