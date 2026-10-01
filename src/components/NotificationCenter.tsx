@@ -165,7 +165,7 @@ const NotificationCenter = ({
           <div className="p-4 border-t border-border">
             <div className="flex items-start gap-2 rounded-lg bg-muted/50 p-3 text-xs text-muted-foreground">
               <Icon name="MessageSquare" size={16} className="mt-0.5 shrink-0" />
-              <span>Дублирование уведомлений в Telegram и на почту будет настраиваться в разделе «Настройки».</span>
+              <span>Дублировать уведомления себе в Max, WhatsApp, Telegram или на почту можно в разделе «Настройки».</span>
             </div>
           </div>
         </div>

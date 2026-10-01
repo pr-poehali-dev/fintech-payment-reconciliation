@@ -7,6 +7,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { TIMEZONE_OPTIONS, DEFAULT_TIMEZONE } from '@/lib/formatDate';
 import functionUrls from '../../backend/func2url.json';
+import NotificationPreferences from '@/components/settings/NotificationPreferences';
 
 const SettingsPlaceholder = () => {
   const { currentCompany, refreshCompanies } = useAuth();
@@ -87,6 +88,7 @@ const SettingsPlaceholder = () => {
           </Button>
         </CardContent>
       </Card>
+      <NotificationPreferences />
     </div>
   );
 };

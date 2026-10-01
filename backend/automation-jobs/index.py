@@ -1,10 +1,13 @@
 import json
 import os
+import urllib.request
 import psycopg2
 from typing import Dict, Any, List
 
 from preparer import prepare, retry_delay, log
 from actions import ACTIONS
+
+NOTIFICATIONS_URL = 'https://functions.poehali.dev/8f4541fc-6ff8-4816-a954-324e4278743d'
 
 SCHEMA = 't_p83864310_fintech_payment_reco'
 BATCH = 20
@@ -46,7 +49,20 @@ def mark_failed(cur, job: Dict[str, Any], message: str, attempts: int) -> None:
         LEFT JOIN {SCHEMA}.automation_scenarios s ON s.id = j.scenario_id
         LEFT JOIN {SCHEMA}.webhook_payments wp ON j.source_type = 'payment' AND wp.id::text = j.source_id
         WHERE j.id = %s
+        RETURNING id
     ''', (message, attempts, job['id']))
+    row = cur.fetchone()
+    if row:
+        # Дубль в мессенджер/почту - тем сотрудникам компании, кто сам подписался на этот вид.
+        cur.execute(f'''
+            INSERT INTO {SCHEMA}.notification_deliveries (notification_id, user_id, channel)
+            SELECT %s, p.user_id, p.channel
+            FROM {SCHEMA}.notification_preferences p
+            JOIN {SCHEMA}.company_users cu ON cu.company_id = p.company_id AND cu.user_id = p.user_id
+                 AND cu.status = 'active'
+            WHERE p.company_id = %s AND p.channel IS NOT NULL AND p.kinds ? 'automation_failed'
+            ON CONFLICT (notification_id, user_id) DO NOTHING
+        ''', (row[0], job['company_id']))
 
 
 def claim_jobs(cur, company_id=None, job_id=None) -> List[Dict[str, Any]]:
@@ -198,7 +214,23 @@ def run(cur, conn, company_id=None, job_id=None) -> Dict[str, int]:
         status = process_job(cur, job)
         conn.commit()
         result[status] = result.get(status, 0) + 1
+    if result.get('failed'):
+        signal_notifications(company_id)
     return result
+
+
+def signal_notifications(company_id=None):
+    '''Сигнал отправщику уведомлений: разошлёт дубли в мессенджеры/почту.'''
+    try:
+        req = urllib.request.Request(
+            NOTIFICATIONS_URL,
+            data=json.dumps({'action': 'dispatch', 'company_id': company_id}).encode('utf-8'),
+            headers={'Content-Type': 'application/json'},
+            method='POST'
+        )
+        urllib.request.urlopen(req, timeout=1.5).close()
+    except Exception:
+        pass
 
 
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:

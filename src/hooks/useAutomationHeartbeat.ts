@@ -17,6 +17,12 @@ export const useAutomationHeartbeat = (companyId?: number) => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'run', company_id: companyId })
       }).catch(() => {});
+      // Страховка: дубли уведомлений, не отправленные сразу, уходят здесь.
+      fetch((functionUrls as Record<string, string>)['notifications'], {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'dispatch', company_id: companyId })
+      }).catch(() => {});
     };
     const id = window.setInterval(tick, INTERVAL_MS);
     return () => window.clearInterval(id);
