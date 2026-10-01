@@ -6,7 +6,6 @@ export interface AppModule {
 }
 
 export const APP_MODULES: AppModule[] = [
-  { id: 'dashboard', name: 'Дашборд', icon: 'LayoutDashboard' },
   { id: 'reconciliation', name: 'Сверка', icon: 'GitCompare' },
   { id: 'events', name: 'События', icon: 'Radio' },
   { id: 'transactions', name: 'Транзакции', icon: 'ArrowLeftRight' },

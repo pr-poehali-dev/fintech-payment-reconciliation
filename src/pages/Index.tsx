@@ -1,8 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import NotificationCenter from '@/components/NotificationCenter';
 import AppHeader from '@/components/layout/AppHeader';
 import AppSidebar from '@/components/layout/AppSidebar';
-import DashboardOverview from './dashboard/DashboardOverview';
 import AccessManagement from './AccessManagement';
 import IntegrationsPage from './IntegrationsPage';
 import AutomationPage from './AutomationPage';
@@ -19,8 +18,7 @@ import { TYPE_FILTERS, TypeFilter, TypeFilterKey } from '@/lib/transactionTypeFi
 
 const Index = () => {
   const { currentCompany, user } = useAuth();
-  const [activeModule, setActiveModule] = useState('dashboard');
-  const [mounted, setMounted] = useState(false);
+  const [activeModule, setActiveModule] = useState('reconciliation');
   const [showNotifications, setShowNotifications] = useState(false);
   const [subscriptionOpen, setSubscriptionOpen] = useState(false);
   const [transactionsDateFilter, setTransactionsDateFilter] = useState<DateFilter | null>(null);
@@ -67,10 +65,6 @@ const Index = () => {
   useAutomationHeartbeat(companyId);
   const notifications = useNotifications(companyId, user?.user_id);
 
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
 
 
   return (
@@ -102,7 +96,6 @@ const Index = () => {
       <AppSidebar activeModule={activeModule} onModuleChange={handleModuleChange} />
 
       <main className="ml-64 mt-16 p-8">
-        {activeModule === 'dashboard' && <DashboardOverview mounted={mounted} />}
         {activeModule === 'reconciliation' && <ReconciliationPage onOpenTransactions={openTransactionsForPeriod} />}
         {activeModule === 'events' && <EventsPage />}
         {activeModule === 'transactions' && <TransactionsPage key={transactionsNavKey} initialDateFilter={transactionsDateFilter} initialTypeFilter={transactionsTypeFilter} initialUnmatchedOnly={transactionsUnmatchedOnly} />}
