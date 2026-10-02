@@ -104,6 +104,7 @@ def process(cur, integration_id: int, company_id: int, config: Dict[str, Any],
             currency = EXCLUDED.currency,
             raw_data = EXCLUDED.raw_data,
             webhook_count = t_p83864310_fintech_payment_reco.crm_deals.webhook_count + 1,
+            customer_emails = NULL,
             updated_at = NOW()
     ''', (
         integration_id,

@@ -341,7 +341,9 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     CASE WHEN ekr.order_type = 'CORD' AND ad.operation LIKE 'sell_refund%%' THEN 'Закрывающий чек возврата'
                          WHEN ekr.order_type = 'CORD' THEN 'Закрывающий чек заказа'
                          WHEN ad.operation LIKE 'sell_refund%%' OR rp.id IS NOT NULL THEN 'Чек возврата'
-                         ELSE COALESCE(ekr.payment_provider, 'Касса') END AS subtitle,
+                         ELSE COALESCE(ekr.payment_provider, 'Касса') END
+                    || COALESCE(' · Сделка #' || (SELECT cd.external_deal_id FROM {SCHEMA}.crm_deals cd
+                                                  WHERE cd.linked_receipt_id = ekr.id LIMIT 1), '') AS subtitle,
                     ui.integration_name AS integration_name,
                     ekr.order_id AS reference,
                     ekr.raw_data AS raw_data,

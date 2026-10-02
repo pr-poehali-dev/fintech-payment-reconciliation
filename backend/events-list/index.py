@@ -394,7 +394,9 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         deals_where = 'WHERE company_id = %s'
         deals_params = [company_id]
         cur.execute(f'''
-            SELECT integration_id, external_deal_id, title, stage, amount, currency
+            SELECT integration_id, external_deal_id, title, stage, amount, currency,
+                   (SELECT COALESCE(r.doc_number, r.order_id) FROM t_p83864310_fintech_payment_reco.ecomkassa_receipts r
+                    WHERE r.id = crm_deals.linked_receipt_id)
             FROM t_p83864310_fintech_payment_reco.crm_deals
             {deals_where}
         ''', deals_params)
@@ -434,9 +436,11 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             deal_info = deals_info.get((group['integration_id'], external_deal_id)) if external_deal_id else None
 
             if deal_info:
-                _, _, title, stage, amount, currency = deal_info
+                _, _, title, stage, amount, currency, linked_receipt = deal_info
                 amount_str = f' · {float(amount):.2f} {currency or "₽"}' if amount is not None else ''
                 summary = f'{noun} #{external_deal_id} · {title or stage or ""}{amount_str}'.strip()
+                if linked_receipt:
+                    summary += f' · оплачено, чек #{linked_receipt}'
             elif external_deal_id:
                 summary = f'{noun} #{external_deal_id}'
             else:

@@ -5,6 +5,7 @@ from typing import Dict, Any
 
 from ecomkassa_report import fetch_report, save_receipt_from_report, RECEIPT_DONE_STATUS
 from ecomkassa_token import ensure_valid_token
+import crm_link
 from cron_report import record_cron_run
 
 CORS_HEADERS = {
@@ -94,6 +95,15 @@ def _handle(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 'isBase64Encoded': False
             }
 
+        # Сделки CRM -> чеки кассы (почта + сумма + время). Сбой связывания не мешает дозагрузке чеков.
+        deals_linked = 0
+        try:
+            deals_linked = crm_link.run(cur, token, protocol_version, company_id)
+            conn.commit()
+        except Exception as e:
+            conn.rollback()
+            print(f'crm link failed: {e}')
+
         # Платежи шлюза без довязанного чека - только успешные статусы имеют смысл
         # (CREATED ещё не оплачен, CANCELED/REJECTED чека никогда не получат).
         cur.execute('''
@@ -138,7 +148,7 @@ def _handle(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         return {
             'statusCode': 200,
             'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
-            'body': json.dumps({'success': True, 'checked': checked, 'resolved': resolved}),
+            'body': json.dumps({'success': True, 'checked': checked, 'resolved': resolved, 'deals_linked': deals_linked}),
             'isBase64Encoded': False
         }
 
