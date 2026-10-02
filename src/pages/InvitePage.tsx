@@ -21,6 +21,16 @@ interface InviteInfo {
   expires_at: string;
 }
 
+type Messenger = 'telegram' | 'whatsapp' | 'max';
+
+const MESSENGERS: Record<Messenger, { label: string; provider: string; icon: string }> = {
+  telegram: { label: 'Telegram', provider: 'ek_tg', icon: 'Send' },
+  whatsapp: { label: 'WhatsApp', provider: 'ek_wa', icon: 'MessageCircle' },
+  max: { label: 'Max', provider: 'ek_max', icon: 'Mail' },
+};
+
+const MESSENGER_ORDER: Messenger[] = ['telegram', 'whatsapp', 'max'];
+
 const InvitePage = () => {
   const { token } = useParams<{ token: string }>();
   const navigate = useNavigate();
@@ -36,6 +46,8 @@ const InvitePage = () => {
   const [code, setCode] = useState('');
   const [sentCode, setSentCode] = useState('');
   const [isSending, setIsSending] = useState(false);
+  const [messenger, setMessenger] = useState<Messenger>('telegram');
+  const [failed, setFailed] = useState<Messenger[]>([]);
   const [isAccepting, setIsAccepting] = useState(false);
 
   useEffect(() => {
@@ -105,18 +117,20 @@ const InvitePage = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, invite, isLoadingInfo]);
 
-  const handleSendCode = async () => {
+  const handleSendCode = async (via: Messenger = messenger) => {
     if (!isValidPhone(phone)) return;
+    setMessenger(via);
     setIsSending(true);
     const generatedCode = Math.floor(100000 + Math.random() * 900000).toString();
     setSentCode(generatedCode);
+    const label = MESSENGERS[via].label;
 
     try {
       const res = await fetch(functionUrls['send-message'], {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          provider: 'ek_tg',
+          provider: MESSENGERS[via].provider,
           recipient: phone.replace(/\D/g, ''),
           message: `Ваш код для подтверждения приглашения: ${generatedCode}`
         })
@@ -125,11 +139,15 @@ const InvitePage = () => {
 
       if (res.ok && data.success) {
         setStep('code');
-        toast({ title: 'Код отправлен' });
+        setCode('');
+        toast({ title: `Код отправлен в ${label}` });
       } else {
-        toast({ title: 'Ошибка отправки', description: data.error, variant: 'destructive' });
+        setFailed((f) => (f.includes(via) ? f : [...f, via]));
+        setStep('phone');
+        toast({ title: `Не удалось отправить в ${label}`, description: 'Выберите другой мессенджер', variant: 'destructive' });
       }
     } catch {
+      setFailed((f) => (f.includes(via) ? f : [...f, via]));
       toast({ title: 'Ошибка подключения', variant: 'destructive' });
     } finally {
       setIsSending(false);
@@ -249,8 +267,36 @@ const InvitePage = () => {
                   />
                 </div>
 
+                {failed.length > 0 && (
+                  <div className="flex items-start gap-2 rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+                    <Icon name="AlertTriangle" size={16} className="mt-0.5 shrink-0" />
+                    <div>
+                      Не получилось отправить код в {failed.map((m) => MESSENGERS[m].label).join(', ')}.
+                      Выберите другой мессенджер — номер тот же.
+                    </div>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-3 gap-2">
+                  {MESSENGER_ORDER.map((m) => (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => setMessenger(m)}
+                      disabled={isSending}
+                      className={`flex flex-col items-center gap-1 rounded-lg border-2 p-3 text-sm transition-colors ${
+                        messenger === m ? 'border-primary text-primary' : 'border-border text-muted-foreground hover:bg-muted/40'
+                      } ${failed.includes(m) ? 'opacity-50' : ''}`}
+                    >
+                      <Icon name={MESSENGERS[m].icon} size={22} />
+                      {MESSENGERS[m].label}
+                      {failed.includes(m) && <span className="text-[10px] text-destructive">не дошло</span>}
+                    </button>
+                  ))}
+                </div>
+
                 <Button
-                  onClick={handleSendCode}
+                  onClick={() => handleSendCode()}
                   disabled={isSending}
                   className="w-full h-12 text-base font-semibold"
                 >
@@ -259,7 +305,7 @@ const InvitePage = () => {
                       <Icon name="Loader2" size={18} className="mr-2 animate-spin" />
                       Отправка...
                     </>
-                  ) : 'Получить код в Telegram'}
+                  ) : `Получить код в ${MESSENGERS[messenger].label}`}
                 </Button>
               </>
             ) : (
@@ -289,6 +335,24 @@ const InvitePage = () => {
                     </>
                   ) : 'Подтвердить и вступить'}
                 </Button>
+
+                <div className="space-y-2 text-center text-sm text-muted-foreground">
+                  <div>Код отправлен в {MESSENGERS[messenger].label}. Не пришёл? Отправить в:</div>
+                  <div className="flex justify-center gap-2">
+                    {MESSENGER_ORDER.filter((m) => m !== messenger).map((m) => (
+                      <Button
+                        key={m}
+                        variant="outline"
+                        size="sm"
+                        disabled={isSending}
+                        onClick={() => handleSendCode(m)}
+                      >
+                        <Icon name={MESSENGERS[m].icon} size={14} className="mr-1" />
+                        {MESSENGERS[m].label}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
               </>
             )}
           </CardContent>
