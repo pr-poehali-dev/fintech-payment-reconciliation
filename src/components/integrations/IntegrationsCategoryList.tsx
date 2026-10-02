@@ -12,7 +12,6 @@ interface IntegrationsCategoryListProps {
   onToggleExpand?: (id: number) => void;
   onEdit: (integration: UserIntegration) => void;
   onDeleteClick: (integration: UserIntegration) => void;
-  onCopy: (integration: UserIntegration) => void;
   onCopyWebhookUrl: (token: string) => void;
   formatDate: (dateStr: string | null) => string;
   loadingStatement: number | null;
@@ -26,7 +25,6 @@ const IntegrationsCategoryList = ({
   getCategoryIntegrations,
   onEdit,
   onDeleteClick,
-  onCopy,
   onCopyWebhookUrl,
   formatDate,
   loadingStatement,
@@ -53,7 +51,6 @@ const IntegrationsCategoryList = ({
                     integration={integration}
                     onEdit={onEdit}
                     onDeleteClick={onDeleteClick}
-                    onCopy={onCopy}
                     onCopyWebhookUrl={onCopyWebhookUrl}
                     formatDate={formatDate}
                     loadingStatement={loadingStatement}

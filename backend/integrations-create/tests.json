@@ -25,20 +25,6 @@
         "error": "string"
       },
       "bodyMatcher": "partial"
-    },
-    {
-      "name": "Copy without target",
-      "method": "POST",
-      "body": {
-        "action": "copy",
-        "company_id": 1,
-        "integration_id": 1
-      },
-      "expectedStatus": 400,
-      "expectedBody": {
-        "error": "string"
-      },
-      "bodyMatcher": "partial"
     }
   ]
 }

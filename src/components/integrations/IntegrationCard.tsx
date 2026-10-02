@@ -8,7 +8,6 @@ interface IntegrationCardProps {
   integration: UserIntegration;
   onEdit: (integration: UserIntegration) => void;
   onDeleteClick: (integration: UserIntegration) => void;
-  onCopy: (integration: UserIntegration) => void;
   onCopyWebhookUrl: (token: string) => void;
   formatDate: (dateStr: string | null) => string;
   loadingStatement: number | null;
@@ -29,7 +28,6 @@ const IntegrationCard = ({
   integration,
   onEdit,
   onDeleteClick,
-  onCopy,
   onCopyWebhookUrl,
   formatDate,
   loadingStatement,
@@ -90,15 +88,6 @@ const IntegrationCard = ({
                 <Icon name="Link" size={16} />
               </Button>
             )}
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 text-muted-foreground hover:text-primary"
-              title="Копировать"
-              onClick={(e) => stop(e, () => onCopy(integration))}
-            >
-              <Icon name="Copy" size={16} />
-            </Button>
             <Button
               variant="ghost"
               size="icon"
