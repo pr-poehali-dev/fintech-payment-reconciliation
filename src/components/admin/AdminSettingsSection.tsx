@@ -42,6 +42,7 @@ const AdminSettingsSection = () => {
   const [metrikaId, setMetrikaId] = useState('');
   const [sources, setSources] = useState<CronSource[]>([]);
   const [sourceValues, setSourceValues] = useState<Record<string, boolean>>({});
+  const [sourceIntervals, setSourceIntervals] = useState<Record<string, string>>({});
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -56,6 +57,7 @@ const AdminSettingsSection = () => {
     const list = data.cron_sources || [];
     setSources(list);
     setSourceValues(Object.fromEntries(list.map((s) => [s.key, s.enabled])));
+    setSourceIntervals(Object.fromEntries(list.map((s) => [s.key, s.interval])));
   };
 
   const load = useCallback(async () => {
@@ -83,7 +85,8 @@ const AdminSettingsSection = () => {
           managing_company_id: managingId ? Number(managingId) : null,
           cron_enabled: cronEnabled,
           metrika_counter_id: metrikaId || null,
-          cron_sources: sourceValues
+          cron_sources: sourceValues,
+          cron_intervals: sourceIntervals
         })
       });
       const data = await res.json();
@@ -119,7 +122,7 @@ const AdminSettingsSection = () => {
   const hasChanges = (managingId || '') !== (settings.managing_company_id ? String(settings.managing_company_id) : '')
     || cronEnabled !== settings.cron_enabled
     || metrikaId !== (settings.metrika_counter_id || '')
-    || sources.some((s) => sourceValues[s.key] !== s.enabled);
+    || sources.some((s) => sourceValues[s.key] !== s.enabled || sourceIntervals[s.key] !== s.interval);
   const tickCommand = `curl -s -X POST ${api} -H 'Content-Type: application/json' -H 'X-Cron-Token: ${settings.cron_token}' -d '{"action":"tick"}'`;
 
   return (
@@ -243,7 +246,9 @@ const AdminSettingsSection = () => {
             <CronSourcesList
               sources={sources}
               values={sourceValues}
+              intervals={sourceIntervals}
               onChange={(key, enabled) => setSourceValues((prev) => ({ ...prev, [key]: enabled }))}
+              onIntervalChange={(key, value) => setSourceIntervals((prev) => ({ ...prev, [key]: value }))}
             />
           )}
 

@@ -1,4 +1,5 @@
 import { Switch } from '@/components/ui/switch';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { formatDateTime } from '@/lib/formatDate';
 
 export interface CronSourceIntegration {
@@ -20,6 +21,7 @@ export interface CronSourceRun {
 export interface CronSource {
   key: string;
   unit: string;
+  interval: string;
   last_run: CronSourceRun | null;
   name: string;
   hint: string;
@@ -27,16 +29,25 @@ export interface CronSource {
   integrations: CronSourceIntegration[];
 }
 
+const INTERVAL_OPTIONS = [
+  { value: 'cron', label: 'По крону' },
+  { value: '1h', label: 'Раз в час' },
+  { value: '12h', label: 'Раз в 12 часов' },
+  { value: '1d', label: 'Раз в день' }
+];
+
 interface Props {
   sources: CronSource[];
   values: Record<string, boolean>;
+  intervals: Record<string, string>;
   onChange: (key: string, enabled: boolean) => void;
+  onIntervalChange: (key: string, interval: string) => void;
 }
 
 const lastSync = (src: CronSource) =>
   src.integrations.map((i) => i.last_synced_at).filter(Boolean).sort().pop() || null;
 
-const CronSourcesList = ({ sources, values, onChange }: Props) => (
+const CronSourcesList = ({ sources, values, intervals, onChange, onIntervalChange }: Props) => (
   <div className="space-y-2">
     <div className="text-sm font-medium">Что загружать автоматически</div>
     <div className="divide-y divide-border rounded-lg border border-border">
@@ -63,9 +74,21 @@ const CronSourcesList = ({ sources, values, onChange }: Props) => (
                 </div>
               )}
             </div>
-            <div className="flex shrink-0 items-center gap-2">
-              <span className={`text-xs ${on ? 'text-foreground' : 'text-muted-foreground'}`}>{on ? 'Да' : 'Нет'}</span>
-              <Switch checked={on} onCheckedChange={(v) => onChange(src.key, v)} />
+            <div className="flex shrink-0 flex-col items-end gap-2">
+              <div className="flex items-center gap-2">
+                <span className={`text-xs ${on ? 'text-foreground' : 'text-muted-foreground'}`}>{on ? 'Да' : 'Нет'}</span>
+                <Switch checked={on} onCheckedChange={(v) => onChange(src.key, v)} />
+              </div>
+              <Select value={intervals[src.key] ?? src.interval} onValueChange={(v) => onIntervalChange(src.key, v)} disabled={!on}>
+                <SelectTrigger className="h-8 w-40 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {INTERVAL_OPTIONS.map((o) => (
+                    <SelectItem key={o.value} value={o.value} className="text-xs">{o.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
         );
