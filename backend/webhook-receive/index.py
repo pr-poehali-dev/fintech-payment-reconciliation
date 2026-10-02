@@ -10,6 +10,8 @@ from form_parser import parse_webhook_body
 from inbox import save_event, mark_processed
 import tbank_handler
 import bitrix24_handler
+import crm_link
+from ecomkassa_token import ensure_valid_token as ensure_kassa_token
 import amocrm_handler
 import ecomkassa_gateway_handler
 import automation
@@ -30,6 +32,29 @@ EVENT_TYPE_BY_PROVIDER = {
     'amocrm': 'lead_updated',
     'ecomkassa_gateway': 'payment_status_changed'
 }
+
+
+def link_deal_now(cur, company_id: int, integration_id: int, external_deal_id: str) -> None:
+    cur.execute('''
+        SELECT id FROM t_p83864310_fintech_payment_reco.crm_deals
+        WHERE integration_id = %s AND external_deal_id = %s AND linked_receipt_id IS NULL
+    ''', (integration_id, str(external_deal_id)))
+    row = cur.fetchone()
+    if not row:
+        return
+    cur.execute('''
+        SELECT ui.id, ui.config FROM t_p83864310_fintech_payment_reco.user_integrations ui
+        JOIN t_p83864310_fintech_payment_reco.integration_providers p ON p.id = ui.provider_id
+        WHERE ui.company_id = %s AND p.slug = 'ecomkassa' AND ui.status = 'active'
+        ORDER BY ui.id LIMIT 1
+    ''', (company_id,))
+    kassa = cur.fetchone()
+    token, protocol = None, 'v4'
+    if kassa:
+        kassa_config = kassa[1] if isinstance(kassa[1], dict) else json.loads(kassa[1] or '{}')
+        token = ensure_kassa_token(cur, kassa[0], kassa_config)
+        protocol = kassa_config.get('protocol_version', 'v4')
+    crm_link.run_for_deal(cur, token, protocol, company_id, row[0])
 
 
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
@@ -175,6 +200,15 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         conn.commit()
         jobs_created = 0
         has_cart = provider_slug == 'tbank' and isinstance(webhook_data.get('Receipt'), dict)
+        if provider_slug == 'bitrix24' and not handler_error and external_deal_id:
+            # Сразу по хуку CRM ищем чек и платёж этой сделки (почта + сумма + ±5 минут от хука),
+            # чтобы в реестре сделка встала в одну группу с ними без ожидания крона.
+            try:
+                link_deal_now(cur, company_id, integration_id, external_deal_id)
+                conn.commit()
+            except Exception as e:
+                conn.rollback()
+                print(f'crm link failed: {e}')
         if provider_slug == 'bitrix24' and not handler_error:
             try:
                 crm_entity, crm_id = bitrix24_handler.extract_entity(webhook_data)
