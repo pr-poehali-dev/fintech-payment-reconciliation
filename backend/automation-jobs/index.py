@@ -6,6 +6,7 @@ from typing import Dict, Any, List
 
 from preparer import prepare, retry_delay, log
 from actions import ACTIONS
+from cron_report import record_cron_run
 
 NOTIFICATIONS_URL = 'https://functions.poehali.dev/8f4541fc-6ff8-4816-a954-324e4278743d'
 
@@ -235,7 +236,7 @@ def signal_notifications(company_id=None, daily: bool = False):
         pass
 
 
-def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
+def _handle(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     '''
     Журнал автоматизации и обработчик подготовки данных.
     GET ?company_id=[&status=][&scenario_id=][&limit=] - журнал заданий
@@ -342,3 +343,11 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     finally:
         cur.close()
         conn.close()
+
+
+def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
+    '''Точка входа: обработка запроса + итог для админки, если вызвал планировщик.'''
+    resp = _handle(event, context)
+    if event.get('httpMethod', 'POST') == 'POST':
+        record_cron_run(event, resp, 'automation', 'processed')
+    return resp

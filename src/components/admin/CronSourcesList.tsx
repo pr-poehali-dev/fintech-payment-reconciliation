@@ -8,8 +8,19 @@ export interface CronSourceIntegration {
   last_synced_at: string | null;
 }
 
+export interface CronSourceRun {
+  loaded: number;
+  calls: number;
+  failed: number;
+  finished_at: string | null;
+  error: string | null;
+  pending?: number;
+}
+
 export interface CronSource {
   key: string;
+  unit: string;
+  last_run: CronSourceRun | null;
   name: string;
   hint: string;
   enabled: boolean;
@@ -36,6 +47,15 @@ const CronSourcesList = ({ sources, values, onChange }: Props) => (
             <div className="min-w-0 flex-1">
               <div className="text-sm font-medium">{src.name}</div>
               <div className="text-xs text-muted-foreground">{src.hint}</div>
+              {src.last_run?.finished_at && (
+                <div className={`mt-1 text-xs ${src.last_run.failed ? 'text-destructive' : 'text-foreground'}`}>
+                  {src.last_run.failed && src.last_run.failed === src.last_run.calls
+                    ? `Не загрузилось ${formatDateTime(src.last_run.finished_at, undefined, true)}: ${src.last_run.error || 'ошибка'}`
+                    : `Загрузили ${src.last_run.loaded} ${src.unit} ${formatDateTime(src.last_run.finished_at, undefined, true)}`}
+                  {src.last_run.failed > 0 && src.last_run.failed < src.last_run.calls && ` · с ошибкой: ${src.last_run.failed} из ${src.last_run.calls}`}
+                  {src.last_run.pending ? ' · банк ещё формирует выписку, заберём при следующем запуске' : ''}
+                </div>
+              )}
               {src.integrations.length > 0 && (
                 <div className="mt-1 text-xs text-muted-foreground">
                   Подключено у компаний: {new Set(src.integrations.map((i) => i.company)).size}

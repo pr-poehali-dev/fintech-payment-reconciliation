@@ -5,6 +5,7 @@ from typing import Dict, Any
 
 from ecomkassa_report import fetch_report, save_receipt_from_report, RECEIPT_DONE_STATUS
 from ecomkassa_token import ensure_valid_token
+from cron_report import record_cron_run
 
 CORS_HEADERS = {
     'Access-Control-Allow-Origin': '*',
@@ -18,7 +19,7 @@ CORS_HEADERS = {
 MAX_PAYMENTS_PER_RUN = 20
 
 
-def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
+def _handle(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     '''
     Дозагрузка чеков для платежей шлюза Екомкассы (ecomkassa_gateway), которые
     на момент вебхука ещё не были фискализированы (чек не успел пробиться).
@@ -152,3 +153,11 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     finally:
         cur.close()
         conn.close()
+
+
+def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
+    '''Точка входа: обработка запроса + итог для админки, если вызвал планировщик.'''
+    resp = _handle(event, context)
+    if event.get('httpMethod', 'POST') == 'POST':
+        record_cron_run(event, resp, 'ecomkassa_receipts', 'resolved')
+    return resp

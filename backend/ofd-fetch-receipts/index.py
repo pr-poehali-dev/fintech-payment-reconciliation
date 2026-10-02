@@ -6,6 +6,7 @@ import urllib.error
 import urllib.parse
 from typing import Dict, Any, Optional, Tuple
 from datetime import datetime, timedelta
+from cron_report import record_cron_run
 
 CORS_HEADERS = {
     'Access-Control-Allow-Origin': '*',
@@ -126,7 +127,7 @@ def parse_iso_date(value: Optional[str], fallback: datetime) -> datetime:
         return fallback
 
 
-def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
+def _handle(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     '''
     Загрузка фискальных чеков из OFD.RU.
     Два режима:
@@ -303,3 +304,11 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     finally:
         cur.close()
         conn.close()
+
+
+def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
+    '''Точка входа: обработка запроса + итог для админки, если вызвал планировщик.'''
+    resp = _handle(event, context)
+    if event.get('httpMethod', 'POST') == 'POST':
+        record_cron_run(event, resp, 'ofd', 'inserted')
+    return resp

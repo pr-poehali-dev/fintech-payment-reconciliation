@@ -14,6 +14,7 @@ from tbank_oauth import fetch_statement as fetch_tbank_statement
 from purpose_classifier import matches_keywords, get_purpose_keywords, operation_purpose_text
 from ru_trusted_ca import build_ssl_context
 from acquiring_settlement import process_acquiring_settlements
+from cron_report import record_cron_run
 
 # enter.tochka.com отдаёт TLS-сертификат, подписанный НУЦ Минцифры РФ (ГОСТ) -
 # системное доверенное хранилище Python его не знает без этого контекста.
@@ -318,7 +319,7 @@ STATEMENT_FETCHERS = {
 }
 
 
-def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
+def _handle(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     '''
     Ручная синхронизация банковской выписки по кнопке "Синхронизировать сейчас".
     Это второй слой обработки: сюда попадают только операции, назначение платежа
@@ -394,10 +395,16 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
         transactions = fetcher(cur, integration_id, company_id, config, date_from, date_to)
         if transactions is None:
+            cur.execute('SELECT config FROM t_p83864310_fintech_payment_reco.user_integrations WHERE id = %s', (integration_id,))
+            fresh = cur.fetchone()
+            fresh_cfg = (json.loads(fresh[0]) if isinstance(fresh[0], str) else fresh[0]) if fresh and fresh[0] else {}
+            waiting = bool(fresh_cfg.get('tochka_pending_statements'))
             return {
                 'statusCode': 200,
                 'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
-                'body': json.dumps({'success': False, 'error': 'Не удалось получить выписку от банка'}),
+                'body': json.dumps({'success': False, 'pending': waiting,
+                                    'error': 'Банк ещё формирует выписку - заберём при следующем запуске' if waiting
+                                    else 'Не удалось получить выписку от банка'}),
                 'isBase64Encoded': False
             }
 
@@ -465,3 +472,11 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     finally:
         cur.close()
         conn.close()
+
+
+def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
+    '''Точка входа: обработка запроса + итог для админки, если вызвал планировщик.'''
+    resp = _handle(event, context)
+    if event.get('httpMethod', 'POST') == 'POST':
+        record_cron_run(event, resp, 'bank', 'inserted')
+    return resp

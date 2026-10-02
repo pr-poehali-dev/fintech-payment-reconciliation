@@ -9,6 +9,7 @@ import psycopg2
 from ecomkassa_token import ensure_valid_token
 from ecomkassa_api import search_orders
 from fiscal_merge import merge_after_ecomkassa
+from cron_report import record_cron_run
 
 SCHEMA = 't_p83864310_fintech_payment_reco'
 ECOMKASSA_BASE_URL = 'https://app.ecomkassa.ru'
@@ -228,7 +229,7 @@ def collect_candidates(token: str, since: Optional[str], until: Optional[str],
     return candidates, len(candidates), capped, None
 
 
-def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
+def _handle(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     '''
     Дозагрузка исторических чеков/счетов/заказов Екомкассы за период вручную
     (для случаев, когда часть данных не попала через вебхук - например,
@@ -418,3 +419,11 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     finally:
         cur.close()
         conn.close()
+
+
+def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
+    '''Точка входа: обработка запроса + итог для админки, если вызвал планировщик.'''
+    resp = _handle(event, context)
+    if event.get('httpMethod', 'POST') == 'POST':
+        record_cron_run(event, resp, 'ecomkassa', 'inserted')
+    return resp

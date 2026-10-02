@@ -37,13 +37,13 @@ BANK_DEFAULT_HOURS = 1
 # Источники, которые планировщик загружает сам. Админ включает/выключает каждый
 # (platform_settings.cron_sources: {key: bool}); нет записи - включён.
 CRON_SOURCES = [
-    {'key': 'ecomkassa', 'name': 'Екомкасса: новые счета, заказы и чеки',
+    {'key': 'ecomkassa', 'unit': 'документов', 'name': 'Екомкасса: новые счета, заказы и чеки',
      'hint': 'Не нужно, когда настроены вебхуки Екомкассы по платежам'},
-    {'key': 'ecomkassa_receipts', 'name': 'Екомкасса: дозагрузка непробитых чеков',
+    {'key': 'ecomkassa_receipts', 'unit': 'чеков', 'name': 'Екомкасса: дозагрузка непробитых чеков',
      'hint': 'Довязывает чек к платежу шлюза, если касса пробила его позже'},
-    {'key': 'ofd', 'name': 'ОФД: чеки', 'hint': f'Не чаще раза в {OFD_EVERY_MIN} мин'},
-    {'key': 'bank', 'name': 'Банки: выписки', 'hint': 'По частоте из настроек интеграции, без неё - раз в час'},
-    {'key': 'automation', 'name': 'Автоматизация и уведомления',
+    {'key': 'ofd', 'unit': 'чеков', 'name': 'ОФД: чеки', 'hint': f'Не чаще раза в {OFD_EVERY_MIN} мин'},
+    {'key': 'bank', 'unit': 'операций', 'name': 'Банки: выписки', 'hint': 'По частоте из настроек интеграции, без неё - раз в час'},
+    {'key': 'automation', 'unit': 'заданий', 'name': 'Автоматизация и уведомления',
      'hint': 'Очередь сценариев, повторы, рассылка уведомлений, «платежи без чека»'},
 ]
 SOURCE_PROVIDERS = {'ecomkassa': ['ecomkassa'], 'ecomkassa_receipts': ['ecomkassa_gateway'],
@@ -68,10 +68,22 @@ def cron_sources_view(cur, settings: Dict[str, Any]) -> List[Dict[str, Any]]:
     for slug, iid, name, company, last in cur.fetchall():
         by_slug.setdefault(slug, []).append({'id': iid, 'name': name, 'company': company,
                                              'last_synced_at': last.isoformat() if last else None})
+    # Последний запуск каждого источника планировщиком - сумма по всем клиентам.
+    cur.execute(f'''
+        WITH last AS (SELECT source, MAX(tick) tick FROM {SCHEMA}.cron_source_runs GROUP BY source)
+        SELECT r.source, SUM(r.loaded), COUNT(*), COUNT(r.error) FILTER (WHERE r.error <> 'pending'), MAX(r.finished_at),
+               (ARRAY_AGG(r.error) FILTER (WHERE r.error IS NOT NULL AND r.error <> 'pending'))[1],
+               COUNT(*) FILTER (WHERE r.error = 'pending')
+        FROM {SCHEMA}.cron_source_runs r JOIN last l ON l.source = r.source AND l.tick = r.tick
+        GROUP BY r.source
+    ''')
+    runs = {r[0]: {'loaded': int(r[1] or 0), 'calls': r[2], 'failed': r[3],
+                   'finished_at': r[4].isoformat() if r[4] else None, 'error': r[5], 'pending': r[6]} for r in cur.fetchall()}
     out = []
     for src in CRON_SOURCES:
         integrations = [i for slug in SOURCE_PROVIDERS.get(src['key'], []) for i in by_slug.get(slug, [])]
-        out.append({**src, 'enabled': source_on(settings, src['key']), 'integrations': integrations})
+        out.append({**src, 'enabled': source_on(settings, src['key']), 'integrations': integrations,
+                    'last_run': runs.get(src['key'])})
     return out
 
 # Интервал (мин) для внешнего планировщика - показывается в админке.
@@ -190,6 +202,7 @@ def tick(cur, conn, settings: Dict[str, Any]) -> Dict[str, Any]:
         ''', (company_ids, BANK_DEFAULT_HOURS))
         bank_jobs = cur.fetchall()
 
+    tick_id = datetime.utcnow().strftime('%Y%m%d%H%M%S')
     tasks = []
     for company_id in company_ids:
         if company_id in ofd_ids:
@@ -205,7 +218,10 @@ def tick(cur, conn, settings: Dict[str, Any]) -> Dict[str, Any]:
         if source_on(settings, 'ecomkassa_receipts'):
             tasks.append((company_id, RESYNC_URL, {'company_id': company_id}))
     for integration_id, company_id, date_from, date_to in bank_jobs:
-        tasks.append((company_id, BANK_URL, {'integration_id': integration_id, 'date_from': date_from, 'date_to': date_to}))
+        tasks.append((company_id, BANK_URL, {'integration_id': integration_id, 'company_id': company_id,
+                                             'date_from': date_from, 'date_to': date_to}))
+    for _, _, task_body in tasks:
+        task_body['cron_tick'] = tick_id
     errors: Dict[int, List[str]] = {}
     if tasks:
         with ThreadPoolExecutor(max_workers=len(tasks)) as pool:
