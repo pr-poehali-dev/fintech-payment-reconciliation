@@ -34,7 +34,6 @@ interface Invite {
   role_color: string;
   created_at: string | null;
   expires_at: string | null;
-  token?: string | null;
 }
 
 interface Role {
@@ -287,20 +286,6 @@ const AccessManagement = () => {
     }
   };
 
-  const copyInviteLink = async (invite: Invite) => {
-    if (!invite.token) return;
-    const link = `${window.location.origin}/invite/${invite.token}`;
-    try {
-      await navigator.clipboard.writeText(link);
-      toast({
-        title: 'Ссылка скопирована',
-        description: `Отправьте её ${invite.full_name || invite.phone} любым удобным способом. Действует до ${invite.expires_at ? new Date(invite.expires_at).toLocaleDateString('ru-RU') : '—'}`
-      });
-    } catch {
-      window.prompt('Скопируйте ссылку приглашения', link);
-    }
-  };
-
   const cancelInvite = async (inviteId: number) => {
     if (!companyId) return;
     try {
@@ -467,7 +452,6 @@ const AccessManagement = () => {
               invites={invites}
               onCancel={cancelInvite}
               onResend={resendInvite}
-              onCopyLink={copyInviteLink}
               resendingId={resendingId}
             />
           </CardContent>

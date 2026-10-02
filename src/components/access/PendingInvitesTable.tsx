@@ -22,14 +22,12 @@ interface Invite {
   role_color: string;
   created_at: string | null;
   expires_at: string | null;
-  token?: string | null;
 }
 
 interface PendingInvitesTableProps {
   invites: Invite[];
   onCancel: (inviteId: number) => void;
   onResend: (invite: Invite, channel?: string) => void;
-  onCopyLink: (invite: Invite) => void;
   resendingId: number | null;
 }
 
@@ -40,7 +38,7 @@ const channelLabels: Record<string, { icon: string; label: string }> = {
   email: { icon: 'Mail', label: 'Email' },
 };
 
-const PendingInvitesTable = ({ invites, onCancel, onResend, onCopyLink, resendingId }: PendingInvitesTableProps) => {
+const PendingInvitesTable = ({ invites, onCancel, onResend, resendingId }: PendingInvitesTableProps) => {
   if (invites.length === 0) return null;
 
   return (
@@ -97,16 +95,7 @@ const PendingInvitesTable = ({ invites, onCancel, onResend, onCopyLink, resendin
                   {invite.expires_at ? new Date(invite.expires_at).toLocaleDateString('ru-RU') : '-'}
                 </span>
               </TableCell>
-              <TableCell className="text-right whitespace-nowrap">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  title="Скопировать ссылку приглашения"
-                  disabled={!invite.token}
-                  onClick={() => onCopyLink(invite)}
-                >
-                  <Icon name="Link" size={16} className="text-muted-foreground" />
-                </Button>
+              <TableCell className="text-right">
                 <Button
                   variant="ghost"
                   size="icon"
