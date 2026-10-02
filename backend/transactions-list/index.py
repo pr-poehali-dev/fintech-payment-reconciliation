@@ -467,8 +467,12 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             ''')
 
         if wants(type_filter, 'crm_deal'):
-            # Сделка CRM, связанная с чеком/счётом кассы (почта покупателя + сумма + время,
-            # см. ecomkassa-gateway-resync/crm_link.py). Несвязанные сделки в реестр не попадают.
+            # Сделка CRM - шапка группы. Связь, по приоритету:
+            # 1) заказ Екомкассы, созданный сценарием «Заказ в CRM» по этой сделке (UUID заказа
+            #    в реестре документов автоматизации) - сделка в группе сразу с момента создания
+            #    заказа, платежи и чеки по заказу подтягиваются по цепочке;
+            # 2) чек/счёт по почте покупателя + сумме + ±5 минут от хука (crm_link.py).
+            # Несвязанные сделки в реестр не попадают.
             parts.append(f'''
                 SELECT
                     'crm_deal' AS type,
@@ -477,23 +481,36 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     COALESCE((cd.raw_data->>'DATE_CREATE')::timestamptz AT TIME ZONE 'UTC', cd.created_at) AS occurred_at,
                     NULL::date AS settlement_date,
                     cd.amount AS amount,
-                    'paid' AS status,
+                    CASE WHEN ao.id IS NOT NULL AND ao.status <> 'done' THEN 'wait' ELSE 'paid' END AS status,
                     ('Сделка #' || cd.external_deal_id) AS title,
                     cd.title AS subtitle,
                     ui.integration_name AS integration_name,
                     cd.external_deal_id AS reference,
                     jsonb_build_object('deal_id', cd.external_deal_id, 'title', cd.title, 'stage', cd.stage,
-                                       'customer_emails', cd.customer_emails, 'linked_at', cd.linked_at) AS raw_data,
-                    'receipt_kassa' AS linked_type,
+                                       'customer_emails', cd.customer_emails, 'linked_at', cd.linked_at,
+                                       'order_uuid', ao.order_id) AS raw_data,
+                    CASE WHEN ao.id IS NOT NULL THEN 'receipt_order' ELSE 'receipt_kassa' END AS linked_type,
                     'ecomkassa' AS linked_source,
-                    cd.linked_receipt_id AS linked_id,
-                    'crm_email' AS match_method,
+                    COALESCE(ao.id, lr.id) AS linked_id,
+                    CASE WHEN ao.id IS NOT NULL THEN 'crm_automation' ELSE 'crm_email' END AS match_method,
                     NULL::text AS group_key,
                     NULL::text AS linked_ofd_status
                 FROM {SCHEMA}.crm_deals cd
                 JOIN {SCHEMA}.user_integrations ui ON ui.id = cd.integration_id
-                JOIN {SCHEMA}.ecomkassa_receipts lr ON lr.id = cd.linked_receipt_id AND lr.removed_at IS NULL
-                WHERE cd.company_id = %(company_id)s AND cd.linked_receipt_id IS NOT NULL
+                LEFT JOIN {SCHEMA}.ecomkassa_receipts lr ON lr.id = cd.linked_receipt_id AND lr.removed_at IS NULL
+                LEFT JOIN LATERAL (
+                    SELECT ekr.id, ekr.status, ekr.order_id
+                    FROM {SCHEMA}.automation_documents d
+                    JOIN {SCHEMA}.automation_jobs j ON j.id = d.job_id
+                    JOIN {SCHEMA}.automation_scenarios s ON s.id = j.scenario_id
+                    JOIN {SCHEMA}.ecomkassa_receipts ekr ON ekr.integration_id = d.kassa_integration_id
+                         AND ekr.order_id = d.ecom_uuid AND ekr.order_type = 'CORD' AND ekr.removed_at IS NULL
+                    WHERE d.company_id = cd.company_id AND j.source_type = 'crm_deal'
+                      AND j.source_id = cd.external_deal_id AND s.source_integration_id = cd.integration_id
+                      AND d.operation NOT LIKE 'sell_refund%%'
+                    ORDER BY d.id DESC LIMIT 1
+                ) ao ON true
+                WHERE cd.company_id = %(company_id)s AND (ao.id IS NOT NULL OR lr.id IS NOT NULL)
             ''')
 
         if wants(type_filter, 'money'):

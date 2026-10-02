@@ -19,6 +19,7 @@ const autoReasons: Record<string, Omit<LinkReason, 'kind'> & { kind: LinkReasonK
   qr_id: { kind: 'bank', label: 'Банковская операция', description: 'В назначении платежа банка найден тот же QR ID СБП, что у платежа', icon: 'Landmark' },
   external_id: { kind: 'bank', label: 'Банковская операция', description: 'В назначении платежа банка найден внешний ID платежа', icon: 'Landmark' },
   acquiring_commission: { kind: 'bank', label: 'Банковская операция', description: 'Комиссия банка, удержанная из этого зачисления', icon: 'Landmark' },
+  crm_automation: { kind: 'crm', label: 'Заказ по сделке', description: 'Заказ создан сценарием автоматизации по этой сделке CRM (связь по UUID заказа)', icon: 'Workflow' },
   crm_email: { kind: 'crm', label: 'По почте, сумме и времени', description: 'У сделки и чека совпали почта покупателя и сумма, чек пробит в период работы со сделкой', icon: 'Briefcase' },
   settlement_date: { kind: 'bank', label: 'Банковская операция', description: 'Зачисление эквайринга, сопоставленное с платежом при загрузке выписки', icon: 'Landmark' },
 };

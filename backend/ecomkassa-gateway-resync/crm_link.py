@@ -125,6 +125,13 @@ def link_deals(cur, company_id: int, deal_row_id: Optional[int] = None) -> int:
               AND COALESCE(d2.customer_emails, '') <> '' AND d2.amount > 0
               AND d2.updated_at > NOW() - make_interval(days => %s)
               AND (%s::int IS NULL OR d2.id = %s::int)
+              -- Заказ по сделке создан сценарием - связь уже есть по UUID заказа, почта не нужна.
+              AND NOT EXISTS (
+                  SELECT 1 FROM {SCHEMA}.automation_jobs j
+                  JOIN {SCHEMA}.automation_scenarios s ON s.id = j.scenario_id
+                  JOIN {SCHEMA}.automation_documents ad ON ad.job_id = j.id AND ad.ecom_uuid IS NOT NULL
+                  WHERE j.source_type = 'crm_deal' AND j.source_id = d2.external_deal_id
+                    AND s.source_integration_id = d2.integration_id)
         ) m
         WHERE d.id = m.deal_id AND m.receipt_id IS NOT NULL
         RETURNING d.id
