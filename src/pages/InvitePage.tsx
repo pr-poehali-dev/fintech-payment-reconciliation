@@ -18,6 +18,7 @@ interface InviteInfo {
   role_color: string;
   phone: string;
   full_name: string | null;
+  channel?: string | null;
   expires_at: string;
 }
 
@@ -58,6 +59,7 @@ const InvitePage = () => {
         const data = await res.json();
 
         if (res.ok && data.success) {
+          if (data.channel && data.channel in MESSENGERS) setMessenger(data.channel as Messenger);
           setInvite(data);
           setPhone(formatPhoneNumber(data.phone.length === 11 ? '+' + data.phone : data.phone));
         } else {

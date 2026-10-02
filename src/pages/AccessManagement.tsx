@@ -214,8 +214,12 @@ const AccessManagement = () => {
 
   const [resendingId, setResendingId] = useState<number | null>(null);
 
-  const resendInvite = async (invite: Invite) => {
+  const resendInvite = async (invite: Invite, channel: string = invite.channel) => {
     if (!companyId) return;
+    if (channel === 'email' && !invite.email) {
+      toast({ title: 'Нет почты', description: 'У приглашения не указан email — выберите мессенджер', variant: 'destructive' });
+      return;
+    }
     setResendingId(invite.id);
 
     try {
@@ -228,7 +232,7 @@ const AccessManagement = () => {
           full_name: invite.full_name,
           email: invite.email,
           role_slug: invite.role_slug,
-          channel: invite.channel,
+          channel,
           invited_by: user?.user_id
         })
       });
@@ -247,13 +251,13 @@ const AccessManagement = () => {
       const link = `${window.location.origin}/invite/${inviteData.token}`;
       const messageText = `Привет, ${invite.full_name || ''}! Вас пригласили в команду «${currentCompany?.name}» на портале Сверка.\n\nПерейдите по ссылке, чтобы принять приглашение: ${link}\n\nРоль: ${invite.role_name}\nСсылка действует 7 дней.`;
 
-      const recipient = invite.channel === 'email' ? invite.email || '' : invite.phone;
+      const recipient = channel === 'email' ? invite.email || '' : invite.phone;
 
       const sendRes = await fetch(functionUrls['send-message'], {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          provider: channelProviderMap[invite.channel] || 'ek_tg',
+          provider: channelProviderMap[channel] || 'ek_tg',
           recipient,
           message: messageText
         })
@@ -264,12 +268,12 @@ const AccessManagement = () => {
       if (sendRes.ok && sendData.success) {
         toast({
           title: 'Приглашение отправлено повторно',
-          description: `Новая ссылка ушла через ${channelLabelMap[invite.channel] || 'Telegram'}`
+          description: `Новая ссылка ушла через ${channelLabelMap[channel] || 'Telegram'}`
         });
       } else {
         toast({
-          title: 'Ссылка обновлена, но не доставлена',
-          description: 'Скопируйте ссылку и отправьте её вручную',
+          title: `Не удалось отправить через ${channelLabelMap[channel] || 'мессенджер'}`,
+          description: 'Выберите другой способ в списке «Отправлено через»',
           variant: 'destructive'
         });
       }

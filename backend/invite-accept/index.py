@@ -48,7 +48,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
             cur.execute('''
                 SELECT it.status, it.expires_at, it.phone, it.full_name,
-                       c.name, r.name, r.color
+                       c.name, r.name, r.color, it.channel
                 FROM invite_tokens it
                 JOIN companies c ON c.id = it.company_id
                 JOIN roles r ON r.id = it.role_id
@@ -64,7 +64,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     'isBase64Encoded': False
                 }
 
-            status, expires_at, phone, full_name, company_name, role_name, role_color = row
+            status, expires_at, phone, full_name, company_name, role_name, role_color, channel = row
 
             if status != 'pending':
                 return {
@@ -95,6 +95,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     'role_color': role_color,
                     'phone': phone,
                     'full_name': full_name,
+                    'channel': channel,
                     'expires_at': expires_at.isoformat()
                 }),
                 'isBase64Encoded': False

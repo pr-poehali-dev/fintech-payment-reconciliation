@@ -1,6 +1,7 @@
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import Icon from '@/components/ui/icon';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   Table,
   TableBody,
@@ -26,7 +27,7 @@ interface Invite {
 interface PendingInvitesTableProps {
   invites: Invite[];
   onCancel: (inviteId: number) => void;
-  onResend: (invite: Invite) => void;
+  onResend: (invite: Invite, channel?: string) => void;
   resendingId: number | null;
 }
 
@@ -53,7 +54,6 @@ const PendingInvitesTable = ({ invites, onCancel, onResend, resendingId }: Pendi
       </TableHeader>
       <TableBody>
         {invites.map((invite) => {
-          const channel = channelLabels[invite.channel] || channelLabels.telegram;
           return (
             <TableRow key={invite.id}>
               <TableCell>
@@ -66,10 +66,29 @@ const PendingInvitesTable = ({ invites, onCancel, onResend, resendingId }: Pendi
                 </Badge>
               </TableCell>
               <TableCell>
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Icon name={channel.icon as any} size={14} />
-                  {channel.label}
-                </div>
+                <Select
+                  value={channelLabels[invite.channel] ? invite.channel : 'telegram'}
+                  disabled={resendingId === invite.id}
+                  onValueChange={(value) => {
+                    if (value !== invite.channel) onResend(invite, value);
+                  }}
+                >
+                  <SelectTrigger className="h-8 w-40 text-sm" title="Сменить способ и отправить ссылку заново">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(channelLabels)
+                      .filter(([key]) => key !== 'email' || invite.email)
+                      .map(([key, c]) => (
+                        <SelectItem key={key} value={key}>
+                          <span className="flex items-center gap-2">
+                            <Icon name={c.icon} size={14} />
+                            {c.label}
+                          </span>
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
               </TableCell>
               <TableCell>
                 <span className="text-sm text-muted-foreground">
