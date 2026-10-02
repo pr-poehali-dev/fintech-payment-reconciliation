@@ -24,6 +24,9 @@ CORS_HEADERS = {
 JOBS_URL = 'https://functions.poehali.dev/22902813-812b-495a-9ea0-8497b880c461'
 RESYNC_URL = 'https://functions.poehali.dev/0b50cd7c-94bc-4be9-824a-0bb119c6adef'
 TICK_BATCH = 15
+FETCH_ORDERS_URL = 'https://functions.poehali.dev/dc01171b-cd60-4a98-b96c-5d167bc1add8'
+# Окно авто-дозагрузки Екомкассы: документы, обновлённые за последние N часов.
+ECOMKASSA_AUTO_HOURS = 24
 
 # Интервал (мин) для внешнего планировщика - показывается в админке.
 CRON_INTERVAL_MIN = 1
@@ -107,8 +110,23 @@ def tick(cur, conn, settings: Dict[str, Any]) -> Dict[str, Any]:
     company_ids = all_ids[offset:offset + TICK_BATCH]
     next_offset = offset + TICK_BATCH if offset + TICK_BATCH < len(all_ids) else 0
 
+    ecomkassa_ids = set()
+    if company_ids:
+        cur.execute(f'''
+            SELECT DISTINCT ui.company_id FROM {SCHEMA}.user_integrations ui
+            JOIN {SCHEMA}.integration_providers p ON p.id = ui.provider_id
+            WHERE p.slug = 'ecomkassa' AND ui.status = 'active' AND ui.company_id = ANY(%s)
+        ''', (company_ids,))
+        ecomkassa_ids = {r[0] for r in cur.fetchall()}
+
     tasks = []
     for company_id in company_ids:
+        if company_id in ecomkassa_ids:
+            # Новые счета/заказы/чеки Екомкассы (и платежи шлюза по ним), если живой хук не пришёл.
+            tasks.append((company_id, FETCH_ORDERS_URL, {
+                'company_id': company_id, 'auto_hours': ECOMKASSA_AUTO_HOURS,
+                'order_types': ['INVC', 'CORD', 'VCHR'], 'statuses': ['PAID', 'COMPLETED'], 'batch_size': 30
+            }))
         tasks.append((company_id, JOBS_URL, {'action': 'run', 'company_id': company_id, 'heartbeat': True}))
         tasks.append((company_id, RESYNC_URL, {'company_id': company_id}))
     errors: Dict[int, List[str]] = {}

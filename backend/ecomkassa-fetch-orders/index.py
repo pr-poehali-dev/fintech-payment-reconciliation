@@ -275,6 +275,13 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     statuses = body.get('statuses') or ['COMPLETED']
     offset = max(0, int(body.get('offset', 0)))
     batch_size = min(MAX_BATCH_SIZE, max(1, int(body.get('batch_size', DEFAULT_BATCH_SIZE))))
+    # Авто-режим планировщика: окно «последние N часов», только ещё не загруженные документы.
+    auto_hours = body.get('auto_hours')
+    only_new = bool(body.get('only_new')) or bool(auto_hours)
+    if auto_hours:
+        now = datetime.utcnow()
+        date_from = (now - timedelta(hours=min(72, max(1, int(auto_hours))))).isoformat()
+        date_to = (now + timedelta(minutes=5)).isoformat()
 
     if not company_id:
         return response(400, {'error': 'company_id required'})
@@ -328,6 +335,18 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
         if error:
             return response(200, {'success': False, 'error': error})
+
+        if only_new and candidates:
+            # Уже загруженные (чек пробит) не перезапрашиваем - иначе каждый тик
+            # планировщика заново тянул бы report() по всем документам окна.
+            ids = [str(c.get('orderId')) for c in candidates]
+            cur.execute(f'''
+                SELECT order_id FROM {SCHEMA}.ecomkassa_receipts
+                WHERE integration_id = %s AND status = 'done' AND order_id = ANY(%s)
+            ''', (integration_id, ids))
+            known = {r[0] for r in cur.fetchall()}
+            candidates = [c for c in candidates if str(c.get('orderId')) not in known]
+            matched_total = len(candidates)
 
         batch = candidates[offset:offset + batch_size]
 
