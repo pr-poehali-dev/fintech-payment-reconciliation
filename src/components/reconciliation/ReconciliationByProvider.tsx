@@ -1,6 +1,13 @@
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import Icon from '@/components/ui/icon';
 
+const plural = (n: number) => {
+  const m10 = n % 10, m100 = n % 100;
+  if (m10 === 1 && m100 !== 11) return 'платёж';
+  if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return 'платежа';
+  return 'платежей';
+};
+
 interface ProviderStats {
   amount: number;
   count: number;
@@ -26,7 +33,7 @@ const ReconciliationByProvider = ({ paymentsByProvider }: ReconciliationByProvid
           Детализация по видам оплат
         </CardTitle>
         <CardDescription>
-          Разбивка платежей шлюза Екомкассы по конкретной платёжной системе (ЮKassa, СБП и т.п.)
+          Успешные платежи по платёжным интеграциям; для шлюза Екомкассы — по видам оплат (СБП, эквайринг и т.п.)
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -36,7 +43,7 @@ const ReconciliationByProvider = ({ paymentsByProvider }: ReconciliationByProvid
               <span className="text-sm text-foreground">{provider}</span>
               <div className="text-right">
                 <div className="text-sm font-medium text-foreground">{formatMoney(stats.amount)}</div>
-                <div className="text-xs text-muted-foreground">{stats.count} платежей</div>
+                <div className="text-xs text-muted-foreground">{stats.count} {plural(stats.count)}</div>
               </div>
             </div>
           ))}

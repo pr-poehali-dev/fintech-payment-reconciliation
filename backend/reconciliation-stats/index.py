@@ -23,6 +23,37 @@ def parse_date(value: str, fallback: date) -> date:
         return fallback
 
 
+
+# Коды видов оплат шлюза Екомкассы (invoice_payload.provider) -> понятные названия,
+# как в списке видов оплат кассы, который выбирают при подключении шлюза.
+PAYMENT_KIND_LABELS = {
+    'TOCHKA_SBP': 'СБП банка «Точка»',
+    'TOCHKA_BANK': 'Эквайринг банка «Точка»',
+    'TINKOFF_BANK': 'Тинькофф Эквайринг',
+    'TINKOFF_SBP': 'Тинькофф СБП',
+    'TINKOFF_INSTALLMENT': 'Тинькофф Рассрочка',
+    'TINKOFF_CREDIT': 'Тинькофф Рассрочка',
+    'YANDEX_KASSA': 'ЮKassa',
+    'YOOKASSA': 'ЮKassa',
+    'YOO_KASSA': 'ЮKassa',
+    'DOLYAME': 'Долями',
+    'PLAIT': 'Плайт',
+}
+
+
+def payment_kind_label(provider_slug: Optional[str], payment_provider: Optional[str],
+                       integration_name: Optional[str]) -> str:
+    '''
+    Строка блока «Детализация по видам оплат»: для шлюза Екомкассы - вид оплаты
+    (СБП Точки, эквайринг и т.п.), для остальных платёжек - название интеграции.
+    '''
+    name = integration_name or 'Платёжная интеграция'
+    if provider_slug == 'ecomkassa_gateway' and payment_provider:
+        code = str(payment_provider).strip()
+        return PAYMENT_KIND_LABELS.get(code.upper(), code)
+    return name
+
+
 def classify_receipt_sign(operation_type: Optional[str]) -> int:
     '''
     Знак вклада фискального документа в выручку по его типу операции (54-ФЗ) -
@@ -158,7 +189,9 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     MAX(wp.amount) AS amount,
                     MIN(COALESCE(er.doc_datetime, wp.created_at))::date AS payment_date,
                     (array_agg(wp.status ORDER BY wp.created_at DESC))[1] AS latest_status,
-                    (array_agg(wp.payment_provider ORDER BY wp.created_at DESC))[1] AS payment_provider
+                    (array_agg(wp.payment_provider ORDER BY wp.created_at DESC))[1] AS payment_provider,
+                    MAX(ui.integration_name) AS integration_name,
+                    MAX(p.slug) AS provider_slug
                 FROM {SCHEMA}.webhook_payments wp
                 JOIN {SCHEMA}.user_integrations ui ON ui.id = wp.integration_id
                 JOIN {SCHEMA}.integration_providers p ON p.id = ui.provider_id
@@ -168,7 +201,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                   AND wp.removed_at IS NULL AND ui.status = 'active'
                 GROUP BY wp.integration_id, wp.payment_id
             )
-            SELECT payment_date, latest_status, amount, payment_provider
+            SELECT payment_date, latest_status, amount, payment_provider, integration_name, provider_slug
             FROM latest
             WHERE payment_date BETWEEN %s AND %s
         ''', (company_id, date_from, date_to))
@@ -182,7 +215,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         # только по успешным платежам, у одной кассы их может быть больше 10.
         payments_by_provider: Dict[str, Dict[str, float]] = {}
 
-        for payment_date, latest_status, amount, payment_provider in payments_rows:
+        for payment_date, latest_status, amount, payment_provider, integration_name, provider_slug in payments_rows:
             payments_by_status[latest_status] = payments_by_status.get(latest_status, 0) + 1
             # Количество - по числу документов вне зависимости от статуса
             # (возврат тоже был платежом и должен быть виден в счётчике).
@@ -198,7 +231,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             daily_payments[day_key] = daily_payments.get(day_key, 0.0) + contribution
 
             if latest_status in ('AUTHORIZED', 'CONFIRMED'):
-                provider_key = payment_provider or 'Без указания провайдера'
+                provider_key = payment_kind_label(provider_slug, payment_provider, integration_name)
                 if provider_key not in payments_by_provider:
                     payments_by_provider[provider_key] = {'amount': 0.0, 'count': 0}
                 payments_by_provider[provider_key]['amount'] += amount_f
