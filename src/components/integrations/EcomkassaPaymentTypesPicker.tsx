@@ -23,6 +23,7 @@ const EcomkassaPaymentTypesPicker = ({ companyId, config, onConfigChange }: Ecom
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
   const [cashRegisterConnected, setCashRegisterConnected] = useState(true);
+  const [reloadKey, setReloadKey] = useState(0);
 
   const selectedIds = Array.isArray(config.payment_type_ids) ? (config.payment_type_ids as string[]) : [];
 
@@ -47,7 +48,7 @@ const EcomkassaPaymentTypesPicker = ({ companyId, config, onConfigChange }: Ecom
       }
     };
     load();
-  }, [companyId]);
+  }, [companyId, reloadKey]);
 
   const toggle = (id: number) => {
     const idStr = String(id);
@@ -56,6 +57,13 @@ const EcomkassaPaymentTypesPicker = ({ companyId, config, onConfigChange }: Ecom
       : [...selectedIds, idStr];
     onConfigChange({ ...config, payment_type_ids: next });
   };
+
+  const retryButton = (
+    <Button type="button" variant="outline" size="sm" onClick={() => setReloadKey((k) => k + 1)}>
+      <Icon name="RefreshCw" size={14} className="mr-2" />
+      {error ? 'Повторить' : 'Обновить список'}
+    </Button>
+  );
 
   if (isLoading) {
     return (
@@ -82,19 +90,25 @@ const EcomkassaPaymentTypesPicker = ({ companyId, config, onConfigChange }: Ecom
     return (
       <div className="space-y-2">
         <p className="text-xs text-destructive">{error}</p>
-        <Button type="button" variant="outline" size="sm" onClick={() => setIsLoading(true)}>
-          <Icon name="RefreshCw" size={14} className="mr-2" />
-          Повторить
-        </Button>
+        {retryButton}
       </div>
     );
   }
 
   if (paymentTypes.length === 0) {
     return (
-      <p className="text-xs text-muted-foreground">
-        В личном кабинете Екомкассы не настроено ни одного вида оплаты для счетов
-      </p>
+      <div className="space-y-2">
+        <Label>Виды оплат для отслеживания</Label>
+        <div className="flex items-start gap-2 text-xs text-muted-foreground bg-muted/50 rounded-md p-3">
+          <Icon name="Info" size={14} className="mt-0.5 shrink-0" />
+          <div>
+            В кассе Екомкассы не подключено ни одного вида оплаты. Подключите нужные
+            (СБП, эквайринг, рассрочку) в личном кабинете Екомкассы и нажмите «Обновить список».
+            Пока список пуст, будут учитываться платежи по всем видам оплат.
+          </div>
+        </div>
+        {retryButton}
+      </div>
     );
   }
 
