@@ -90,7 +90,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             SELECT
                 it.id, it.phone, it.email, it.full_name, it.channel,
                 r.slug, r.name, r.color,
-                it.created_at, it.expires_at
+                it.created_at, it.expires_at, it.token
             FROM invite_tokens it
             JOIN roles r ON r.id = it.role_id
             WHERE it.company_id = %s AND it.status = 'pending' AND it.expires_at > now()
@@ -109,7 +109,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 'role_name': row[6],
                 'role_color': row[7],
                 'created_at': row[8].isoformat() if row[8] else None,
-                'expires_at': row[9].isoformat() if row[9] else None
+                'expires_at': row[9].isoformat() if row[9] else None,
+                'token': row[10]
             })
 
         return {
