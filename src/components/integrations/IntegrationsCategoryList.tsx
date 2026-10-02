@@ -8,8 +8,8 @@ interface IntegrationsCategoryListProps {
   categories: Category[];
   userIntegrations: UserIntegration[];
   getCategoryIntegrations: (categorySlug: string) => UserIntegration[];
-  expandedIds: Set<number>;
-  onToggleExpand: (id: number) => void;
+  expandedIds?: Set<number>;
+  onToggleExpand?: (id: number) => void;
   onEdit: (integration: UserIntegration) => void;
   onDeleteClick: (integration: UserIntegration) => void;
   onCopy: (integration: UserIntegration) => void;
@@ -24,8 +24,6 @@ const IntegrationsCategoryList = ({
   categories,
   userIntegrations,
   getCategoryIntegrations,
-  expandedIds,
-  onToggleExpand,
   onEdit,
   onDeleteClick,
   onCopy,
@@ -48,13 +46,11 @@ const IntegrationsCategoryList = ({
             </div>
 
             {categoryIntegrations.length > 0 ? (
-              <div className="grid gap-4 mb-6">
+              <div className="grid grid-cols-1 gap-4 mb-6 md:grid-cols-2">
                 {categoryIntegrations.map((integration) => (
                   <IntegrationCard
                     key={integration.id}
                     integration={integration}
-                    isExpanded={expandedIds.has(integration.id)}
-                    onToggleExpand={onToggleExpand}
                     onEdit={onEdit}
                     onDeleteClick={onDeleteClick}
                     onCopy={onCopy}

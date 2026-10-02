@@ -1,14 +1,11 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import Icon from '@/components/ui/icon';
-import functionUrls from '../../../backend/func2url.json';
 import { UserIntegration } from './integrationsPageTypes';
 
 interface IntegrationCardProps {
   integration: UserIntegration;
-  isExpanded: boolean;
-  onToggleExpand: (id: number) => void;
   onEdit: (integration: UserIntegration) => void;
   onDeleteClick: (integration: UserIntegration) => void;
   onCopy: (integration: UserIntegration) => void;
@@ -18,10 +15,18 @@ interface IntegrationCardProps {
   onSyncStatement: (integrationId: number) => void;
 }
 
+const Chip = ({ children, tone = 'muted' }: { children: React.ReactNode; tone?: 'muted' | 'warning' | 'primary' }) => {
+  const cls =
+    tone === 'warning'
+      ? 'bg-amber-500/15 text-amber-500'
+      : tone === 'primary'
+        ? 'bg-primary/15 text-primary'
+        : 'bg-muted';
+  return <span className={`rounded-md px-2 py-1 ${cls}`}>{children}</span>;
+};
+
 const IntegrationCard = ({
   integration,
-  isExpanded,
-  onToggleExpand,
   onEdit,
   onDeleteClick,
   onCopy,
@@ -34,187 +39,118 @@ const IntegrationCard = ({
   const isBank = integration.category_slug === 'banks';
   const isCrm = integration.category_slug === 'crm';
   const isEcomkassa = integration.provider_slug === 'ecomkassa';
+  const isActive = integration.status === 'active';
+  const usesWebhook = !isEcomkassa && !isOFD && !isBank;
+  const cfg = integration.config || {};
+  const syncing = loadingStatement === integration.id;
+
+  const stop = (e: React.MouseEvent, fn: () => void) => {
+    e.stopPropagation();
+    fn();
+  };
 
   return (
-    <Card className="overflow-hidden">
-      <button
-        type="button"
-        onClick={() => onToggleExpand(integration.id)}
-        className="w-full text-left"
-      >
-        <CardHeader className="hover:bg-muted/40 transition-colors">
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-3 min-w-0">
-              <Icon
-                name="ChevronRight"
-                size={18}
-                className={`text-muted-foreground shrink-0 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
-              />
-              <div className="min-w-0">
-                <CardTitle className="text-lg truncate">{integration.integration_name}</CardTitle>
-                <CardDescription className="truncate">{integration.provider_name}</CardDescription>
-              </div>
-            </div>
-            <div className="flex items-center gap-2 shrink-0">
-              <Badge
-                variant="outline"
-                className={
-                  integration.status === 'active'
-                    ? 'border-success/40 text-success bg-success/10'
-                    : 'border-muted-foreground/30 text-muted-foreground bg-transparent'
-                }
-              >
-                {integration.status === 'active' ? 'Подключено' : 'Неактивно'}
-              </Badge>
-            </div>
+    <Card
+      onClick={() => onEdit(integration)}
+      className={`cursor-pointer transition-colors hover:border-primary/40 ${isActive ? '' : 'opacity-60'}`}
+    >
+      <CardContent className="space-y-3 p-5">
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <div className="truncate font-semibold">{integration.integration_name}</div>
+            <div className="truncate text-xs text-muted-foreground">{integration.provider_name}</div>
           </div>
-        </CardHeader>
-      </button>
-      {isExpanded && (
-      <CardContent className="space-y-3 pt-0 animate-fade-in">
-        <div className="flex justify-end gap-2 -mt-1 mb-1">
-          <Button variant="ghost" size="sm" title="Копировать" onClick={() => onCopy(integration)}>
-            <Icon name="Copy" size={16} className="mr-1" />
-            Копировать
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => onEdit(integration)}
-          >
-            <Icon name="Settings" size={16} className="mr-1" />
-            Настроить
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => onDeleteClick(integration)}
-          >
-            <Icon name="Trash2" size={16} />
-          </Button>
-        </div>
-        {isEcomkassa ? (
-          <>
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">Магазин:</span>
-              <span className="font-medium font-mono">{integration.config?.store_id || '—'}</span>
-            </div>
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">Версия протокола:</span>
-              <span className="font-medium">{integration.config?.protocol_version || 'v4'}</span>
-            </div>
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">Последняя загрузка:</span>
-              <span className="font-medium">{formatDate(integration.last_synced_at ?? null)}</span>
-            </div>
-          </>
-        ) : isOFD ? (
-          <>
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">ИНН:</span>
-              <span className="font-medium font-mono">{integration.config?.inn || '—'}</span>
-            </div>
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">РНМ:</span>
-              <span className="font-medium font-mono">{integration.config?.kkt || '—'}</span>
-            </div>
-          </>
-        ) : isBank ? (
-          <>
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">Счёт:</span>
-              <span className="font-medium font-mono">{integration.config?.account_number || '—'}</span>
-            </div>
-            {integration.provider_slug === 'tochka_account' && !integration.config?.account_number && (
-              <div className="flex items-start gap-2 text-xs text-amber-600 bg-amber-500/10 rounded-md p-2">
-                <Icon name="AlertTriangle" size={14} className="mt-0.5 shrink-0" />
-                <div>Счёт ещё не выбран — откройте «Настроить» и выберите его из списка по токену</div>
-              </div>
-            )}
-            {integration.provider_slug === 'tochka_account' && (
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Способ авторизации:</span>
-                <span className="font-medium">
-                  {(integration.config?.auth_method || 'jwt') === 'jwt' ? 'JWT-токен' : 'OAuth 2.0'}
-                </span>
-              </div>
-            )}
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">Последняя синхронизация:</span>
-              <span className="font-medium">{formatDate(integration.last_synced_at ?? null)}</span>
-            </div>
-            {integration.sync_interval_hours && (
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Периодичность:</span>
-                <span className="font-medium">
-                  {integration.sync_interval_hours === 12 ? '2 раза в сутки' : '1 раз в сутки'}
-                </span>
-              </div>
-            )}
-            {integration.config?.purpose_keywords && String(integration.config.purpose_keywords).trim() && (
-              <div className="text-sm">
-                <span className="text-muted-foreground">Ключевые слова: </span>
-                <span className="font-medium">{integration.config.purpose_keywords}</span>
-              </div>
-            )}
-            <div className="pt-1">
+          <div className="flex shrink-0 items-center gap-1">
+            <Badge
+              variant="outline"
+              className={isActive ? 'border-success/30 bg-success/15 text-success' : 'text-muted-foreground'}
+            >
+              {isActive ? 'Подключено' : 'Неактивно'}
+            </Badge>
+            {isBank && (
               <Button
-                onClick={() => onSyncStatement(integration.id)}
-                disabled={loadingStatement === integration.id}
-                variant="outline"
-                size="sm"
-                className="w-full"
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-muted-foreground hover:text-primary"
+                title="Синхронизировать сейчас"
+                disabled={syncing}
+                onClick={(e) => stop(e, () => onSyncStatement(integration.id))}
               >
-                {loadingStatement === integration.id ? (
-                  <Icon name="Loader2" className="animate-spin mr-2" size={14} />
-                ) : (
-                  <Icon name="RefreshCw" size={14} className="mr-2" />
-                )}
-                Синхронизировать сейчас
+                <Icon name={syncing ? 'Loader2' : 'RefreshCw'} size={16} className={syncing ? 'animate-spin' : ''} />
               </Button>
-            </div>
-          </>
-        ) : (
-          <>
-            {isCrm && (
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Обновляется:</span>
-                <span className="font-medium">по вебхуку от CRM</span>
-              </div>
             )}
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">Последний вебхук:</span>
-              <span className="font-medium">{formatDate(integration.last_webhook_at)}</span>
-            </div>
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">Всего вебхуков:</span>
-              <span className="font-medium">{integration.webhook_count}</span>
-            </div>
-            <div>
-              <div className="flex items-center gap-2 mb-1">
-                <span className="text-sm text-muted-foreground">Webhook URL:</span>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => onCopyWebhookUrl(integration.webhook_token)}
-                >
-                  <Icon name="Copy" size={14} />
-                </Button>
-              </div>
-              <code className="text-xs bg-muted p-2 rounded block overflow-x-auto">
-                {`${functionUrls['webhook-receive']}?token=${integration.webhook_token}`}
-              </code>
-            </div>
-            {integration.forward_url && (
-              <div className="text-sm">
-                <span className="text-muted-foreground">Переадресация: </span>
-                <span className="font-mono text-xs">{integration.forward_url}</span>
-              </div>
+            {usesWebhook && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-muted-foreground hover:text-primary"
+                title="Скопировать Webhook URL"
+                onClick={(e) => stop(e, () => onCopyWebhookUrl(integration.webhook_token))}
+              >
+                <Icon name="Link" size={16} />
+              </Button>
             )}
-          </>
-        )}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-muted-foreground hover:text-primary"
+              title="Копировать"
+              onClick={(e) => stop(e, () => onCopy(integration))}
+            >
+              <Icon name="Copy" size={16} />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-muted-foreground hover:text-destructive"
+              title="Удалить"
+              onClick={(e) => stop(e, () => onDeleteClick(integration))}
+            >
+              <Icon name="Trash2" size={16} />
+            </Button>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap gap-2 text-xs">
+          {isEcomkassa && (
+            <>
+              <Chip>Магазин: {String(cfg.store_id || '—')}</Chip>
+              <Chip>Протокол {String(cfg.protocol_version || 'v4')}</Chip>
+              <Chip>Загрузка: {formatDate(integration.last_synced_at ?? null)}</Chip>
+            </>
+          )}
+          {isOFD && (
+            <>
+              <Chip>ИНН: {String(cfg.inn || '—')}</Chip>
+              <Chip>РНМ: {String(cfg.kkt || '—')}</Chip>
+            </>
+          )}
+          {isBank && (
+            <>
+              {integration.provider_slug === 'tochka_account' && !cfg.account_number ? (
+                <Chip tone="warning">Счёт не выбран — откройте настройки</Chip>
+              ) : (
+                <Chip>Счёт: {String(cfg.account_number || '—')}</Chip>
+              )}
+              <Chip>Синхронизация: {formatDate(integration.last_synced_at ?? null)}</Chip>
+              {integration.sync_interval_hours ? (
+                <Chip>{integration.sync_interval_hours === 12 ? '2 раза в сутки' : '1 раз в сутки'}</Chip>
+              ) : null}
+              {cfg.purpose_keywords && String(cfg.purpose_keywords).trim() ? (
+                <Chip>Ключевые слова: {String(cfg.purpose_keywords)}</Chip>
+              ) : null}
+            </>
+          )}
+          {usesWebhook && (
+            <>
+              {isCrm && <Chip>По вебхуку от CRM</Chip>}
+              <Chip>Последний вебхук: {formatDate(integration.last_webhook_at)}</Chip>
+              <Chip>Вебхуков: {integration.webhook_count}</Chip>
+              {integration.forward_url && <Chip tone="primary">Переадресация</Chip>}
+            </>
+          )}
+        </div>
       </CardContent>
-      )}
     </Card>
   );
 };
