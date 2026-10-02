@@ -70,7 +70,7 @@ const makeUnionFind = () => {
 // платёж, чек кассы, чек ОФД, деньги на счёт и т.д. Чек кассы/ОФД и
 // банковская операция сами по себе никогда не показываются как верхний
 // уровень группы - они всегда вложены (под заказом либо платежом).
-const displayOrder: Record<string, number> = { receipt_order: 0, payment: 1, receipt_kassa: 2, receipt_ofd: 3, money: 4 };
+const displayOrder: Record<string, number> = { crm_deal: -1, receipt_order: 0, payment: 1, receipt_kassa: 2, receipt_ofd: 3, money: 4 };
 
 // Порядок предпочтения при выборе "представителя" сделки для СУММЫ группы -
 // платёж остаётся самым авторитетным источником факта движения денег

@@ -14,7 +14,7 @@ CORS_HEADERS = {
     'Access-Control-Max-Age': '86400'
 }
 
-ALLOWED_TYPES = {'payment', 'receipt_ofd', 'receipt_kassa', 'receipt_order', 'money'}
+ALLOWED_TYPES = {'payment', 'receipt_ofd', 'receipt_kassa', 'receipt_order', 'money', 'crm_deal'}
 
 
 def response(status: int, body: Dict[str, Any]) -> Dict[str, Any]:

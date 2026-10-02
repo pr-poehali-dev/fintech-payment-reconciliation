@@ -26,6 +26,7 @@ const typeConfig: Record<string, { icon: string; label: string; className: strin
   receipt_order: { icon: 'Truck', label: 'Заказ', className: 'bg-orange-500/10 text-orange-400 border-orange-500/30' },
   receipt_ofd: { icon: 'FileCheck', label: 'Чек ОФД', className: 'bg-violet-500/10 text-violet-400 border-violet-500/30' },
   money: { icon: 'Landmark', label: 'Деньги', className: 'bg-success/10 text-success border-success/30' },
+  crm_deal: { icon: 'Briefcase', label: 'Сделка CRM', className: 'bg-amber-500/10 text-amber-400 border-amber-500/30' },
 };
 
 

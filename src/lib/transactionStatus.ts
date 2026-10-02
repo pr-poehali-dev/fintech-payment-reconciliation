@@ -3,6 +3,7 @@
 // технические коды платёжной системы/кассы Екомкассы.
 const STATUS_LABELS: Record<string, string> = {
   CONFIRMED: 'Оплачено',
+  paid: 'Оплачена',
   done: 'Создан',
   AUTHORIZED: 'Авторизован',
   REJECTED: 'Отклонён',
@@ -21,6 +22,7 @@ export const transactionStatusLabel = (status: string | null): string => {
 export const transactionStatusColor = (status: string | null): string => {
   switch (status) {
     case 'CONFIRMED':
+    case 'paid':
     case 'done':
     case 'in':
       return 'bg-success';

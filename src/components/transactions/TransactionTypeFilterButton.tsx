@@ -3,7 +3,7 @@ import { TransactionType } from '@/components/transactions/transactionsTypes';
 import { typeConfig } from '@/components/transactions/table/tableHelpers';
 
 const TYPE_OPTIONS: FilterOption<TransactionType>[] = (
-  ['payment', 'receipt_kassa', 'receipt_order', 'receipt_ofd', 'money'] as TransactionType[]
+  ['crm_deal', 'payment', 'receipt_kassa', 'receipt_order', 'receipt_ofd', 'money'] as TransactionType[]
 ).map((type) => ({ value: type, label: typeConfig[type].label, icon: typeConfig[type].icon }));
 
 interface TransactionTypeFilterButtonProps {

@@ -94,6 +94,10 @@ def compute_signed_amount(row: Dict[str, Any]) -> float:
     if t == 'money':
         return amount if row.get('status') == 'in' else -amount
 
+    # Сделка CRM - не движение денег, а основание: в суммы сверки не входит.
+    if t == 'crm_deal':
+        return 0.0
+
     if t == 'receipt_ofd':
         return amount * classify_receipt_sign(row.get('status'))
 
@@ -341,9 +345,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     CASE WHEN ekr.order_type = 'CORD' AND ad.operation LIKE 'sell_refund%%' THEN 'Закрывающий чек возврата'
                          WHEN ekr.order_type = 'CORD' THEN 'Закрывающий чек заказа'
                          WHEN ad.operation LIKE 'sell_refund%%' OR rp.id IS NOT NULL THEN 'Чек возврата'
-                         ELSE COALESCE(ekr.payment_provider, 'Касса') END
-                    || COALESCE(' · Сделка #' || (SELECT cd.external_deal_id FROM {SCHEMA}.crm_deals cd
-                                                  WHERE cd.linked_receipt_id = ekr.id LIMIT 1), '') AS subtitle,
+                         ELSE COALESCE(ekr.payment_provider, 'Касса') END AS subtitle,
                     ui.integration_name AS integration_name,
                     ekr.order_id AS reference,
                     ekr.raw_data AS raw_data,
@@ -462,6 +464,36 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 ) aj ON true
                 WHERE ekr.company_id = %(company_id)s AND ekr.removed_at IS NULL
                   AND ekr.order_type = 'CORD'
+            ''')
+
+        if wants(type_filter, 'crm_deal'):
+            # Сделка CRM, связанная с чеком/счётом кассы (почта покупателя + сумма + время,
+            # см. ecomkassa-gateway-resync/crm_link.py). Несвязанные сделки в реестр не попадают.
+            parts.append(f'''
+                SELECT
+                    'crm_deal' AS type,
+                    cd.provider_slug AS source,
+                    cd.id AS id,
+                    COALESCE((cd.raw_data->>'DATE_CREATE')::timestamptz AT TIME ZONE 'UTC', cd.created_at) AS occurred_at,
+                    NULL::date AS settlement_date,
+                    cd.amount AS amount,
+                    'paid' AS status,
+                    ('Сделка #' || cd.external_deal_id) AS title,
+                    cd.title AS subtitle,
+                    ui.integration_name AS integration_name,
+                    cd.external_deal_id AS reference,
+                    jsonb_build_object('deal_id', cd.external_deal_id, 'title', cd.title, 'stage', cd.stage,
+                                       'customer_emails', cd.customer_emails, 'linked_at', cd.linked_at) AS raw_data,
+                    'receipt_kassa' AS linked_type,
+                    'ecomkassa' AS linked_source,
+                    cd.linked_receipt_id AS linked_id,
+                    'crm_email' AS match_method,
+                    NULL::text AS group_key,
+                    NULL::text AS linked_ofd_status
+                FROM {SCHEMA}.crm_deals cd
+                JOIN {SCHEMA}.user_integrations ui ON ui.id = cd.integration_id
+                JOIN {SCHEMA}.ecomkassa_receipts lr ON lr.id = cd.linked_receipt_id AND lr.removed_at IS NULL
+                WHERE cd.company_id = %(company_id)s AND cd.linked_receipt_id IS NOT NULL
             ''')
 
         if wants(type_filter, 'money'):

@@ -1,6 +1,6 @@
 import { Transaction } from '@/components/transactions/transactionsTypes';
 
-export type LinkReasonKind = 'manual' | 'order' | 'fiscal' | 'bank' | 'group';
+export type LinkReasonKind = 'manual' | 'order' | 'fiscal' | 'bank' | 'group' | 'crm';
 
 export interface LinkReason {
   kind: LinkReasonKind;
@@ -19,6 +19,7 @@ const autoReasons: Record<string, Omit<LinkReason, 'kind'> & { kind: LinkReasonK
   qr_id: { kind: 'bank', label: 'Банковская операция', description: 'В назначении платежа банка найден тот же QR ID СБП, что у платежа', icon: 'Landmark' },
   external_id: { kind: 'bank', label: 'Банковская операция', description: 'В назначении платежа банка найден внешний ID платежа', icon: 'Landmark' },
   acquiring_commission: { kind: 'bank', label: 'Банковская операция', description: 'Комиссия банка, удержанная из этого зачисления', icon: 'Landmark' },
+  crm_email: { kind: 'crm', label: 'По почте, сумме и времени', description: 'У сделки и чека совпали почта покупателя и сумма, чек пробит в период работы со сделкой', icon: 'Briefcase' },
   settlement_date: { kind: 'bank', label: 'Банковская операция', description: 'Зачисление эквайринга, сопоставленное с платежом при загрузке выписки', icon: 'Landmark' },
 };
 
@@ -65,4 +66,5 @@ export const linkReasonClassName: Record<LinkReasonKind, string> = {
   fiscal: 'bg-violet-500/10 text-violet-400 border-violet-500/30',
   bank: 'bg-success/10 text-success border-success/30',
   group: 'bg-muted text-muted-foreground border-border',
+  crm: 'bg-amber-500/10 text-amber-400 border-amber-500/30',
 };
