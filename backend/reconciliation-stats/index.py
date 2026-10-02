@@ -1,4 +1,5 @@
 import json
+import re
 import os
 import psycopg2
 from typing import Dict, Any, Optional
@@ -22,6 +23,21 @@ def parse_date(value: str, fallback: date) -> date:
     except ValueError:
         return fallback
 
+
+
+def short_kind_name(description: Optional[str]) -> str:
+    '''
+    Короткое название вида оплаты для отчёта: без «Платёж через» и «счёт»,
+    кавычки - ёлочки, а если в кавычках всё название - без них.
+    «Платёж через счёт "Тинькофф Эквайринг"» -> «Тинькофф Эквайринг».
+    '''
+    text = re.sub(r'^\s*плат[её]ж\s+через\s+', '', description or '', flags=re.IGNORECASE)
+    text = re.sub(r'^сч[её]т\s+', '', text, flags=re.IGNORECASE).strip()
+    m = re.fullmatch(r'["«](.+)["»]', text)
+    if m:
+        text = m.group(1)
+    text = re.sub(r'"([^"]*)"', r'«\1»', text)
+    return (text[:1].upper() + text[1:]) if text else (description or '')
 
 
 def payment_kind_label(provider_slug: Optional[str], payment_provider: Optional[str],
@@ -195,7 +211,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             SELECT UPPER(provider_code), description FROM {SCHEMA}.ecomkassa_payment_types
             WHERE provider_code IS NOT NULL
         ''')
-        kind_names = {code: (desc or '').replace('"', '«', 1).replace('"', '»', 1) for code, desc in cur.fetchall()}
+        kind_names = {code: short_kind_name(desc) for code, desc in cur.fetchall()}
         payments_total = 0.0
         payments_count = 0
         payments_by_status: Dict[str, int] = {}
