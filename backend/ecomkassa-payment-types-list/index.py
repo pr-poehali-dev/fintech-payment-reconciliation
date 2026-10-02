@@ -115,6 +115,20 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         if not isinstance(payment_types, list):
             payment_types = []
 
+        # Справочник видов оплат общий для всех клиентов: новые виды добавляем,
+        # у известных обновляем название. Привязку к коду шлюза (provider_code) не трогаем.
+        for pt in payment_types:
+            if not isinstance(pt, dict) or pt.get('id') is None or not pt.get('description'):
+                continue
+            cur.execute('''
+                INSERT INTO t_p83864310_fintech_payment_reco.ecomkassa_payment_types (id, code, description)
+                VALUES (%s, %s, %s)
+                ON CONFLICT (id) DO UPDATE SET
+                    code = EXCLUDED.code, description = EXCLUDED.description, updated_at = NOW()
+                WHERE t_p83864310_fintech_payment_reco.ecomkassa_payment_types.description IS DISTINCT FROM EXCLUDED.description
+                   OR t_p83864310_fintech_payment_reco.ecomkassa_payment_types.code IS DISTINCT FROM EXCLUDED.code
+            ''', (int(pt['id']), pt.get('code'), str(pt['description'])))
+
         conn.commit()
 
         return {

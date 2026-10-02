@@ -24,33 +24,17 @@ def parse_date(value: str, fallback: date) -> date:
 
 
 
-# Коды видов оплат шлюза Екомкассы (invoice_payload.provider) -> понятные названия,
-# как в списке видов оплат кассы, который выбирают при подключении шлюза.
-PAYMENT_KIND_LABELS = {
-    'TOCHKA_SBP': 'СБП банка «Точка»',
-    'TOCHKA_BANK': 'Эквайринг банка «Точка»',
-    'TINKOFF_BANK': 'Тинькофф Эквайринг',
-    'TINKOFF_SBP': 'Тинькофф СБП',
-    'TINKOFF_INSTALLMENT': 'Тинькофф Рассрочка',
-    'TINKOFF_CREDIT': 'Тинькофф Рассрочка',
-    'YANDEX_KASSA': 'ЮKassa',
-    'YOOKASSA': 'ЮKassa',
-    'YOO_KASSA': 'ЮKassa',
-    'DOLYAME': 'Долями',
-    'PLAIT': 'Плайт',
-}
-
-
 def payment_kind_label(provider_slug: Optional[str], payment_provider: Optional[str],
-                       integration_name: Optional[str]) -> str:
+                       integration_name: Optional[str], kind_names: Dict[str, str]) -> str:
     '''
     Строка блока «Детализация по видам оплат»: для шлюза Екомкассы - вид оплаты
-    (СБП Точки, эквайринг и т.п.), для остальных платёжек - название интеграции.
+    из справочника кассы (ecomkassa_payment_types) по коду шлюза, для остальных
+    платёжек - название интеграции. Неизвестный код показываем как есть.
     '''
     name = integration_name or 'Платёжная интеграция'
     if provider_slug == 'ecomkassa_gateway' and payment_provider:
         code = str(payment_provider).strip()
-        return PAYMENT_KIND_LABELS.get(code.upper(), code)
+        return kind_names.get(code.upper(), code)
     return name
 
 
@@ -207,6 +191,11 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         ''', (company_id, date_from, date_to))
 
         payments_rows = cur.fetchall()
+        cur.execute(f'''
+            SELECT UPPER(provider_code), description FROM {SCHEMA}.ecomkassa_payment_types
+            WHERE provider_code IS NOT NULL
+        ''')
+        kind_names = {code: (desc or '').replace('"', '«', 1).replace('"', '»', 1) for code, desc in cur.fetchall()}
         payments_total = 0.0
         payments_count = 0
         payments_by_status: Dict[str, int] = {}
@@ -231,7 +220,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             daily_payments[day_key] = daily_payments.get(day_key, 0.0) + contribution
 
             if latest_status in ('AUTHORIZED', 'CONFIRMED'):
-                provider_key = payment_kind_label(provider_slug, payment_provider, integration_name)
+                provider_key = payment_kind_label(provider_slug, payment_provider, integration_name, kind_names)
                 if provider_key not in payments_by_provider:
                     payments_by_provider[provider_key] = {'amount': 0.0, 'count': 0}
                 payments_by_provider[provider_key]['amount'] += amount_f
