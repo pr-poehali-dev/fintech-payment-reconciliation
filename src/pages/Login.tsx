@@ -7,7 +7,6 @@ import Icon from '@/components/ui/icon';
 import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
-import functionUrls from '../../backend/func2url.json';
 import { formatPhoneNumber, isValidPhone } from '@/lib/formatters';
 
 type MessengerType = 'whatsapp' | 'telegram' | 'max' | null;
@@ -18,13 +17,12 @@ const Login = () => {
   const [selectedMessenger, setSelectedMessenger] = useState<MessengerType>(null);
   const [code, setCode] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [sentCode, setSentCode] = useState('');
   const [attempts, setAttempts] = useState(0);
   const [blockTime, setBlockTime] = useState(0);
   const { toast } = useToast();
-  const { loginWithPhone } = useAuth();
+  const { requestCode, loginWithPhone } = useAuth();
 
-  const MAX_ATTEMPTS = 3;
+  const MAX_ATTEMPTS = 5;
   const BLOCK_DURATION = 300;
 
   const messengers = [
@@ -33,113 +31,71 @@ const Login = () => {
     { id: 'max' as MessengerType, icon: 'Mail', label: 'Max', color: 'hover:bg-accent/10' }
   ];
 
-  const handleSendCode = async () => {
-    if (isValidPhone(phone) && selectedMessenger) {
-      setIsLoading(true);
-      
-      const providerMap: Record<string, string> = {
-        'whatsapp': 'ek_wa',
-        'telegram': 'ek_tg',
-        'max': 'ek_max'
-      };
-      
-      const generatedCode = Math.floor(100000 + Math.random() * 900000).toString();
-      setSentCode(generatedCode);
-      
-      try {
-        const response = await fetch(functionUrls['send-message'], {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            provider: providerMap[selectedMessenger],
-            recipient: phone.replace(/\D/g, ''),
-            message: `Ваш код для входа в Сверка: ${generatedCode}`
-          })
-        });
-        
-        const data = await response.json();
-        
-        if (response.ok && data.success) {
-          toast({
-            title: 'Код отправлен',
-            description: `Проверьте ${selectedMessenger === 'whatsapp' ? 'WhatsApp' : selectedMessenger === 'telegram' ? 'Telegram' : 'Max'}`,
-          });
-          setStep('code');
-        } else {
-          toast({
-            title: 'Ошибка отправки',
-            description: data.error || 'Не удалось отправить код',
-            variant: 'destructive'
-          });
+  const messengerLabel = (m: MessengerType) => messengers.find((x) => x.id === m)?.label || 'мессенджер';
+
+  const startBlock = () => {
+    setStep('blocked');
+    setBlockTime(BLOCK_DURATION);
+    const timer = setInterval(() => {
+      setBlockTime((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          setStep('phone');
+          setAttempts(0);
+          setCode('');
+          return 0;
         }
-      } catch (error) {
-        toast({
-          title: 'Ошибка',
-          description: 'Проблема с подключением к серверу',
-          variant: 'destructive'
-        });
-      } finally {
-        setIsLoading(false);
-      }
+        return prev - 1;
+      });
+    }, 1000);
+  };
+
+  const handleSendCode = async () => {
+    if (!isValidPhone(phone) || !selectedMessenger) return;
+    setIsLoading(true);
+    try {
+      await requestCode(phone.replace(/\D/g, ''), selectedMessenger, 'login');
+      setAttempts(0);
+      setCode('');
+      toast({ title: 'Код отправлен', description: `Проверьте ${messengerLabel(selectedMessenger)}` });
+      setStep('code');
+    } catch (error) {
+      toast({
+        title: 'Ошибка отправки',
+        description: `${(error as Error).message}. Попробуйте другой мессенджер`,
+        variant: 'destructive'
+      });
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const handleVerifyCode = async () => {
-    if (code.length === 6) {
-      if (code === sentCode) {
-        setAttempts(0);
-        setIsLoading(true);
-        try {
-          await loginWithPhone(phone);
-          window.location.href = '/app';
-        } catch (error: any) {
-          toast({
-            title: 'Ошибка входа',
-            description: error.message || 'Не удалось войти',
-            variant: 'destructive'
-          });
-        } finally {
-          setIsLoading(false);
-        }
+    if (code.length !== 6) return;
+    setIsLoading(true);
+    try {
+      await loginWithPhone(phone, code);
+      window.location.href = '/app';
+    } catch (error) {
+      const message = (error as Error).message || 'Не удалось войти';
+      const newAttempts = attempts + 1;
+      setAttempts(newAttempts);
+      setCode('');
+      if (/истёк|не запрашивался/i.test(message)) {
+        setStep('phone');
+        toast({ title: 'Код больше не действует', description: message, variant: 'destructive' });
+      } else if (/Превышено/i.test(message) || newAttempts >= MAX_ATTEMPTS) {
+        startBlock();
+        toast({
+          title: 'Превышен лимит попыток',
+          description: `Запросите новый код через ${Math.floor(BLOCK_DURATION / 60)} минут`,
+          variant: 'destructive'
+        });
       } else {
-        const newAttempts = attempts + 1;
-        setAttempts(newAttempts);
-        
-        if (newAttempts >= MAX_ATTEMPTS) {
-          setStep('blocked');
-          setBlockTime(BLOCK_DURATION);
-          
-          const timer = setInterval(() => {
-            setBlockTime((prev) => {
-              if (prev <= 1) {
-                clearInterval(timer);
-                setStep('phone');
-                setAttempts(0);
-                setCode('');
-                setSentCode('');
-                return 0;
-              }
-              return prev - 1;
-            });
-          }, 1000);
-          
-          toast({
-            title: 'Превышен лимит попыток',
-            description: `Попробуйте снова через ${Math.floor(BLOCK_DURATION / 60)} минут`,
-            variant: 'destructive'
-          });
-        } else {
-          toast({
-            title: 'Неверный код',
-            description: `Осталось попыток: ${MAX_ATTEMPTS - newAttempts}`,
-            variant: 'destructive'
-          });
-        }
-        
-        setCode('');
+        toast({ title: 'Ошибка входа', description: message, variant: 'destructive' });
       }
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -300,7 +256,6 @@ const Login = () => {
                   onClick={() => {
                     setStep('phone');
                     setCode('');
-                    setSentCode('');
                     setAttempts(0);
                   }}
                   className="w-full"

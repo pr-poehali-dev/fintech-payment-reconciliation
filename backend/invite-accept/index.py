@@ -1,4 +1,5 @@
 import json
+import re
 import os
 import psycopg2
 from typing import Dict, Any
@@ -166,6 +167,18 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 }
 
             if phone != invite_phone:
+                return {
+                    'statusCode': 403,
+                    'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+                    'body': json.dumps({'error': 'Это приглашение отправлено на другой номер телефона'}),
+                    'isBase64Encoded': False
+                }
+
+            # Вступает только владелец номера из приглашения: пользователь должен
+            # быть именно с этим телефоном (он подтвердил его кодом при входе).
+            cur.execute('SELECT phone FROM app_users WHERE id = %s', (user_id,))
+            owner_row = cur.fetchone()
+            if not owner_row or re.sub(r'\D', '', owner_row[0] or '') != re.sub(r'\D', '', invite_phone or ''):
                 return {
                     'statusCode': 403,
                     'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},

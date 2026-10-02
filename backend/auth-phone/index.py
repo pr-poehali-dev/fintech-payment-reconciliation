@@ -1,16 +1,148 @@
+import hashlib
+import hmac
 import json
 import os
 import re
+import secrets
+import urllib.error
+import urllib.request
 import psycopg2
-from typing import Dict, Any
+from typing import Dict, Any, Optional, Tuple
+
+SCHEMA = 't_p83864310_fintech_payment_reco'
+MESSENGER_API_URL = 'https://functions.poehali.dev/ace36e55-b169-41f2-9d2b-546f92221bb7'
+CHANNEL_PROVIDERS = {'telegram': 'ek_tg', 'whatsapp': 'ek_wa', 'max': 'ek_max'}
+CHANNEL_LABELS = {'telegram': 'Telegram', 'whatsapp': 'WhatsApp', 'max': 'Max'}
+CODE_TTL_MINUTES = 10
+MAX_ATTEMPTS = 5
+MAX_SENDS_PER_10_MIN = 5
+CORS = {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'}
+
+
+def reply(status: int, payload: Dict[str, Any]) -> Dict[str, Any]:
+    return {'statusCode': status, 'headers': CORS, 'body': json.dumps(payload, ensure_ascii=False), 'isBase64Encoded': False}
+
+
+def normalize_phone(raw: str) -> Optional[str]:
+    phone = re.sub(r'\D', '', raw or '')
+    if len(phone) == 11 and phone.startswith('8'):
+        phone = '7' + phone[1:]
+    return phone if len(phone) == 11 and phone.startswith('7') else None
+
+
+def hash_code(phone: str, code: str) -> str:
+    return hashlib.sha256(f'{phone}:{code}'.encode('utf-8')).hexdigest()
+
+
+def send_to_messenger(channel: str, phone: str, text: str, timeout: float) -> Tuple[Optional[bool], str]:
+    api_key = os.environ.get('MESSENGER_API_KEY', '')
+    if not api_key:
+        return False, 'Отправка сообщений не настроена'
+    req = urllib.request.Request(
+        MESSENGER_API_URL,
+        data=json.dumps({'provider': CHANNEL_PROVIDERS[channel], 'recipient': phone, 'message': text}).encode('utf-8'),
+        headers={'Content-Type': 'application/json', 'X-Api-Key': api_key},
+        method='POST'
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as response:
+            response.read()
+        return True, ''
+    except urllib.error.HTTPError as e:
+        return False, f'{CHANNEL_LABELS[channel]} не принял сообщение (код {e.code})'
+    except (TimeoutError, OSError) as e:
+        if 'timed out' in str(e).lower() or isinstance(e, TimeoutError):
+            return None, ''
+        return False, f'Не удалось связаться с {CHANNEL_LABELS[channel]}'
+    except Exception:
+        return False, f'Не удалось связаться с {CHANNEL_LABELS[channel]}'
+
+
+def send_code(cur, conn, body: Dict[str, Any], context: Any) -> Dict[str, Any]:
+    '''
+    Шаг 1 входа: код генерируется и хранится (только хеш) на сервере,
+    в браузер он не попадает. Не чаще 5 отправок на номер за 10 минут.
+    '''
+    phone = normalize_phone(body.get('phone', ''))
+    channel = body.get('channel') or 'telegram'
+    purpose = 'invite' if body.get('purpose') == 'invite' else 'login'
+    if not phone:
+        return reply(400, {'error': 'Некорректный номер телефона'})
+    if channel not in CHANNEL_PROVIDERS:
+        return reply(400, {'error': 'Неизвестный мессенджер'})
+
+    cur.execute(f'''
+        SELECT COUNT(*) FROM {SCHEMA}.auth_codes
+        WHERE phone = %s AND created_at > NOW() - INTERVAL '10 minutes'
+    ''', (phone,))
+    if cur.fetchone()[0] >= MAX_SENDS_PER_10_MIN:
+        return reply(429, {'error': 'Слишком много запросов кода. Попробуйте через 10 минут'})
+
+    code = f'{secrets.randbelow(900000) + 100000}'
+    text = (f'Ваш код для подтверждения приглашения: {code}' if purpose == 'invite'
+            else f'Ваш код для входа в Сверка: {code}')
+
+    # Код сохраняем ДО отправки: сервис сообщений может отвечать дольше, чем живёт
+    # функция, а сообщение при этом всё равно доходит. Новый код отменяет прежние.
+    cur.execute(f'''
+        UPDATE {SCHEMA}.auth_codes SET used_at = NOW()
+        WHERE phone = %s AND used_at IS NULL
+    ''', (phone,))
+    cur.execute(f'''
+        INSERT INTO {SCHEMA}.auth_codes (phone, code_hash, channel, purpose, expires_at)
+        VALUES (%s, %s, %s, %s, NOW() + INTERVAL '{CODE_TTL_MINUTES} minutes')
+        RETURNING id
+    ''', (phone, hash_code(phone, code), channel, purpose))
+    code_id = cur.fetchone()[0]
+    conn.commit()
+
+    # Ждём ответ сервиса, пока у функции есть время (с запасом 1 с).
+    try:
+        remaining = context.get_remaining_time_in_millis() / 1000.0
+    except Exception:
+        remaining = 5.0
+    ok, error = send_to_messenger(channel, phone, text, max(1.0, min(25.0, remaining - 1.0)))
+    if ok is False:
+        cur.execute(f'UPDATE {SCHEMA}.auth_codes SET used_at = NOW() WHERE id = %s', (code_id,))
+        conn.commit()
+        return reply(502, {'error': error, 'error_code': 'send_failed'})
+    return reply(200, {'success': True, 'channel': channel, 'confirmed': ok is True,
+                       'expires_in': CODE_TTL_MINUTES * 60})
+
+
+def check_code(cur, conn, phone: str, code: str) -> Optional[Dict[str, Any]]:
+    '''
+    Проверка кода: последний неиспользованный неистёкший код номера,
+    не больше 5 попыток. Возвращает ответ-ошибку или None, если код верный.
+    '''
+    cur.execute(f'''
+        SELECT id, code_hash, attempts FROM {SCHEMA}.auth_codes
+        WHERE phone = %s AND used_at IS NULL AND expires_at > NOW()
+        ORDER BY created_at DESC LIMIT 1
+    ''', (phone,))
+    row = cur.fetchone()
+    if not row:
+        return reply(400, {'error': 'Код истёк или не запрашивался. Запросите новый', 'error_code': 'code_expired'})
+    code_id, code_hash, attempts = row
+    if attempts >= MAX_ATTEMPTS:
+        return reply(429, {'error': 'Превышено число попыток. Запросите новый код', 'error_code': 'too_many_attempts'})
+    if not hmac.compare_digest(code_hash, hash_code(phone, re.sub(r'\D', '', code or ''))):
+        cur.execute(f'UPDATE {SCHEMA}.auth_codes SET attempts = attempts + 1 WHERE id = %s RETURNING attempts', (code_id,))
+        left = MAX_ATTEMPTS - cur.fetchone()[0]
+        conn.commit()
+        if left <= 0:
+            return reply(429, {'error': 'Превышено число попыток. Запросите новый код', 'error_code': 'too_many_attempts'})
+        return reply(400, {'error': f'Неверный код. Осталось попыток: {left}', 'error_code': 'wrong_code', 'attempts_left': left})
+    cur.execute(f'UPDATE {SCHEMA}.auth_codes SET used_at = NOW() WHERE id = %s', (code_id,))
+    return None
 
 
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     '''
-    Авторизация по номеру телефона: находит или создаёт пользователя,
-    обновляет last_login_at и возвращает данные пользователя вместе
-    со списком компаний, к которым у него есть доступ
-    Args: phone (в теле POST запроса)
+    Вход по номеру телефона с кодом из мессенджера; код создаётся и проверяется на сервере.
+    action=send: {phone, channel (telegram/whatsapp/max), purpose (login/invite)} - отправить код.
+    action=verify: {phone, code, full_name?} - проверить код, найти или создать пользователя
+    и вернуть его данные со списком компаний.
     Returns: user_id, phone, full_name, is_platform_admin, companies[]
     '''
 
@@ -37,27 +169,28 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             'isBase64Encoded': False
         }
 
-    body = json.loads(event.get('body', '{}'))
-    phone_raw = body.get('phone', '')
+    body = json.loads(event.get('body') or '{}')
+    action = body.get('action') or 'verify'
     full_name = body.get('full_name')
+    phone = normalize_phone(body.get('phone', ''))
 
-    phone = re.sub(r'\D', '', phone_raw)
-    if len(phone) == 11 and phone.startswith('8'):
-        phone = '7' + phone[1:]
-
-    if len(phone) != 11 or not phone.startswith('7'):
-        return {
-            'statusCode': 400,
-            'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
-            'body': json.dumps({'error': 'Некорректный номер телефона'}),
-            'isBase64Encoded': False
-        }
+    if not phone:
+        return reply(400, {'error': 'Некорректный номер телефона'})
+    if action == 'verify' and not body.get('code'):
+        return reply(400, {'error': 'Введите код из сообщения'})
 
     dsn = os.environ['DATABASE_URL']
     conn = psycopg2.connect(dsn)
     cur = conn.cursor()
 
     try:
+        if action == 'send':
+            return send_code(cur, conn, body, context)
+
+        error = check_code(cur, conn, phone, str(body.get('code')))
+        if error:
+            return error
+
         cur.execute('SELECT id, phone, full_name, email FROM app_users WHERE phone = %s', (phone,))
         row = cur.fetchone()
 

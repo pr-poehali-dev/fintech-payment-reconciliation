@@ -1,25 +1,56 @@
 {
   "tests": [
     {
-      "name": "Login with valid phone",
-      "method": "POST",
-      "path": "/",
-      "body": {
-        "phone": "+79997654321",
-        "full_name": "Тест Тестов"
-      },
-      "expectedStatus": 200,
-      "expectedBody": {
-        "success": true
-      },
-      "bodyMatcher": "partial"
-    },
-    {
       "name": "Invalid phone",
       "method": "POST",
       "path": "/",
       "body": {
+        "action": "send",
         "phone": "123"
+      },
+      "expectedStatus": 400,
+      "expectedBody": {
+        "error": "string"
+      },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Verify without code",
+      "method": "POST",
+      "path": "/",
+      "body": {
+        "action": "verify",
+        "phone": "+79997654321"
+      },
+      "expectedStatus": 400,
+      "expectedBody": {
+        "error": "string"
+      },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Verify wrong code without request",
+      "method": "POST",
+      "path": "/",
+      "body": {
+        "action": "verify",
+        "phone": "+79990000001",
+        "code": "000000"
+      },
+      "expectedStatus": 400,
+      "expectedBody": {
+        "error_code": "code_expired"
+      },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Unknown messenger",
+      "method": "POST",
+      "path": "/",
+      "body": {
+        "action": "send",
+        "phone": "+79990000001",
+        "channel": "icq"
       },
       "expectedStatus": 400,
       "expectedBody": {

@@ -36,7 +36,7 @@ const InvitePage = () => {
   const { token } = useParams<{ token: string }>();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { user, loginWithPhone, setCurrentCompanyId, refreshCompanies } = useAuth();
+  const { user, requestCode, loginWithPhone, setCurrentCompanyId, refreshCompanies } = useAuth();
 
   const [isLoadingInfo, setIsLoadingInfo] = useState(true);
   const [invite, setInvite] = useState<InviteInfo | null>(null);
@@ -45,7 +45,6 @@ const InvitePage = () => {
   const [phone, setPhone] = useState('+7');
   const [step, setStep] = useState<'phone' | 'code'>('phone');
   const [code, setCode] = useState('');
-  const [sentCode, setSentCode] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [messenger, setMessenger] = useState<Messenger>('telegram');
   const [failed, setFailed] = useState<Messenger[]>([]);
@@ -123,51 +122,35 @@ const InvitePage = () => {
     if (!isValidPhone(phone)) return;
     setMessenger(via);
     setIsSending(true);
-    const generatedCode = Math.floor(100000 + Math.random() * 900000).toString();
-    setSentCode(generatedCode);
     const label = MESSENGERS[via].label;
-
     try {
-      const res = await fetch(functionUrls['send-message'], {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          provider: MESSENGERS[via].provider,
-          recipient: phone.replace(/\D/g, ''),
-          message: `Ваш код для подтверждения приглашения: ${generatedCode}`
-        })
-      });
-      const data = await res.json();
-
-      if (res.ok && data.success) {
-        setStep('code');
-        setCode('');
-        toast({ title: `Код отправлен в ${label}` });
-      } else {
-        setFailed((f) => (f.includes(via) ? f : [...f, via]));
-        setStep('phone');
-        toast({ title: `Не удалось отправить в ${label}`, description: 'Выберите другой мессенджер', variant: 'destructive' });
-      }
-    } catch {
+      await requestCode(phone.replace(/\D/g, ''), via, 'invite');
+      setStep('code');
+      setCode('');
+      toast({ title: `Код отправлен в ${label}` });
+    } catch (error) {
       setFailed((f) => (f.includes(via) ? f : [...f, via]));
-      toast({ title: 'Ошибка подключения', variant: 'destructive' });
+      setStep('phone');
+      toast({
+        title: `Не удалось отправить в ${label}`,
+        description: `${(error as Error).message}. Выберите другой мессенджер`,
+        variant: 'destructive'
+      });
     } finally {
       setIsSending(false);
     }
   };
 
   const handleVerifyCode = async () => {
-    if (code.length !== 6 || code !== sentCode) {
-      toast({ title: 'Неверный код', variant: 'destructive' });
-      setCode('');
-      return;
-    }
-
+    if (code.length !== 6) return;
     try {
-      const authUser = await loginWithPhone(phone);
+      const authUser = await loginWithPhone(phone, code);
       await acceptInvite(authUser.user_id, phone.replace(/\D/g, ''));
-    } catch (error: any) {
-      toast({ title: 'Ошибка входа', description: error.message, variant: 'destructive' });
+    } catch (error) {
+      const message = (error as Error).message || 'Не удалось войти';
+      setCode('');
+      if (/истёк|не запрашивался|Превышено/i.test(message)) setStep('phone');
+      toast({ title: 'Код не подошёл', description: message, variant: 'destructive' });
     }
   };
 

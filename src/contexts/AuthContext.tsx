@@ -40,7 +40,8 @@ interface AuthContextValue {
   isPlatformAdmin: boolean;
   cronEnabled: boolean;
   setCurrentCompanyId: (id: number) => void;
-  loginWithPhone: (phone: string, fullName?: string) => Promise<AuthUser>;
+  requestCode: (phone: string, channel: string, purpose?: 'login' | 'invite') => Promise<void>;
+  loginWithPhone: (phone: string, code: string, fullName?: string) => Promise<AuthUser>;
   refreshCompanies: () => Promise<void>;
   updateUser: (patch: Partial<Pick<AuthUser, 'full_name' | 'email'>>) => void;
   logout: () => void;
@@ -114,11 +115,23 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  const loginWithPhone = async (phone: string, fullName?: string): Promise<AuthUser> => {
+  const requestCode = async (phone: string, channel: string, purpose: 'login' | 'invite' = 'login') => {
     const res = await fetch(functionUrls['auth-phone'], {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ phone, full_name: fullName })
+      body: JSON.stringify({ action: 'send', phone, channel, purpose })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.success) {
+      throw new Error(data.error || 'Не удалось отправить код');
+    }
+  };
+
+  const loginWithPhone = async (phone: string, code: string, fullName?: string): Promise<AuthUser> => {
+    const res = await fetch(functionUrls['auth-phone'], {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'verify', phone, code, full_name: fullName })
     });
     const data = await res.json();
 
@@ -193,6 +206,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         isPlatformAdmin,
         cronEnabled,
         setCurrentCompanyId,
+        requestCode,
         loginWithPhone,
         refreshCompanies,
         updateUser,
