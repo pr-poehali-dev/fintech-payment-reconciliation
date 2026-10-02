@@ -119,13 +119,24 @@ def fetch_tbank_account_statement(cur, integration_id: int, company_id: int, con
 
 
 def fetch_tochka_statement_window(api_token: str, account_id: str, base_url: str,
-                                   start_date: str, end_date: str, deadline: float) -> Optional[List[Dict[str, Any]]]:
+                                   start_date: str, end_date: str, deadline: float,
+                                   pending_id: Optional[str] = None) -> tuple:
     '''
     Одно окно Init Statement -> поллинг Get Statement для периода [start_date, end_date]
     (обе даты 'YYYY-MM-DD'). deadline - time.monotonic(), после которого поллинг
     прекращается независимо от статуса (используется, чтобы уложиться в таймаут
     Cloud Function при нескольких окнах подряд - см. fetch_tochka_account_statement).
+    pending_id - выписка, заказанная прошлым вызовом и не успевшая сформироваться:
+    повторно её не заказываем, а дожидаемся готовности.
+    Returns: (transactions | None, statement_id | None - если ещё не готова)
     '''
+    if pending_id:
+        txs, status_code = poll_tochka_statement(api_token, account_id, base_url, pending_id, deadline)
+        if txs is not None:
+            return txs, None
+        if status_code is None:
+            return None, pending_id
+        # Выписка у банка пропала/устарела - заказываем заново.
     init_req = urllib.request.Request(
         f'{base_url}/statements',
         data=json.dumps({
@@ -149,43 +160,47 @@ def fetch_tochka_statement_window(api_token: str, account_id: str, base_url: str
             init_data = json.loads(response.read().decode('utf-8'))
     except urllib.error.HTTPError as e:
         print(f'[DEBUG] Tochka init statement HTTP {e.code}: {(e.read().decode("utf-8") if e.fp else "")[:800]}')
-        return None
+        return None, None
     except (urllib.error.URLError, json.JSONDecodeError) as e:
         print(f'[DEBUG] Tochka init statement error: {str(e)}')
-        return None
+        return None, None
 
     statement_id = init_data.get('Data', {}).get('Statement', {}).get('statementId')
     if not statement_id:
         print(f'[DEBUG] Tochka init statement: no statementId in response: {json.dumps(init_data)[:800]}')
-        return None
+        return None, None
 
+    txs, _ = poll_tochka_statement(api_token, account_id, base_url, statement_id, deadline)
+    if txs is None:
+        print(f'[DEBUG] Tochka statement {start_date}..{end_date} not Ready yet, will pick up next run ({statement_id})')
+        return None, statement_id
+    return txs, None
+
+
+def poll_tochka_statement(api_token: str, account_id: str, base_url: str,
+                          statement_id: str, deadline: float) -> tuple:
+    '''Ждёт готовности выписки. Returns: (transactions | None, http_error_code | None).'''
     get_url = f'{base_url}/accounts/{account_id}/statements/{statement_id}'
     get_req = urllib.request.Request(get_url, headers={'Authorization': f'Bearer {api_token}'})
-
-    raw_transactions = None
-    while time.monotonic() < deadline:
+    while True:
         try:
             with urllib.request.urlopen(get_req, timeout=15, context=TOCHKA_SSL_CONTEXT) as response:
                 statement_data = json.loads(response.read().decode('utf-8'))
         except urllib.error.HTTPError as e:
             print(f'[DEBUG] Tochka get statement HTTP {e.code}: {(e.read().decode("utf-8") if e.fp else "")[:800]}')
-            return None
+            return None, e.code
         except (urllib.error.URLError, json.JSONDecodeError) as e:
             print(f'[DEBUG] Tochka get statement error: {str(e)}')
-            return None
+            return None, None
 
         statements = statement_data.get('Data', {}).get('Statement', [])
         statement = statements[0] if isinstance(statements, list) and statements else statements
         status = statement.get('status') if isinstance(statement, dict) else None
         if status == 'Ready':
-            raw_transactions = statement.get('Transaction', [])
-            break
+            return statement.get('Transaction', []), None
+        if time.monotonic() + 0.5 >= deadline:
+            return None, None
         time.sleep(0.5)
-
-    if raw_transactions is None:
-        print(f'[DEBUG] Tochka statement {start_date}..{end_date} never became Ready before deadline')
-
-    return raw_transactions
 
 
 def fetch_tochka_account_statement(cur, integration_id: int, company_id: int, config: Dict[str, Any],
@@ -241,18 +256,33 @@ def fetch_tochka_account_statement(cur, integration_id: int, company_id: int, co
         windows.append((cursor.strftime('%Y-%m-%d'), window_end.strftime('%Y-%m-%d')))
         cursor = window_end
 
+    # Заказанные прошлыми вызовами, но не успевшие сформироваться выписки (окно -> statementId).
+    pending: Dict[str, str] = dict(config.get('tochka_pending_statements') or {})
     raw_transactions: List[Dict[str, Any]] = []
     any_window_succeeded = False
+    still_pending: Dict[str, str] = {}
     with ThreadPoolExecutor(max_workers=min(8, len(windows) or 1)) as executor:
         futures = [
-            executor.submit(fetch_tochka_statement_window, api_token, account_id, base_url, win_start, win_end, deadline)
+            (f'{win_start}_{win_end}', executor.submit(
+                fetch_tochka_statement_window, api_token, account_id, base_url, win_start, win_end, deadline,
+                pending.get(f'{win_start}_{win_end}')))
             for win_start, win_end in windows
         ]
-        for future in futures:
-            window_tx = future.result()
+        for key, future in futures:
+            window_tx, pending_id = future.result()
             if window_tx is not None:
                 raw_transactions.extend(window_tx)
                 any_window_succeeded = True
+            elif pending_id:
+                still_pending[key] = pending_id
+
+    if still_pending != pending:
+        cur.execute('''
+            UPDATE t_p83864310_fintech_payment_reco.user_integrations
+            SET config = jsonb_set(COALESCE(config, '{}'::jsonb), '{tochka_pending_statements}', %s::jsonb)
+            WHERE id = %s
+        ''', (json.dumps(still_pending), integration_id))
+        cur.connection.commit()
 
     if not any_window_succeeded:
         return None

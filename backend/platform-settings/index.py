@@ -27,6 +27,12 @@ TICK_BATCH = 15
 FETCH_ORDERS_URL = 'https://functions.poehali.dev/dc01171b-cd60-4a98-b96c-5d167bc1add8'
 # Окно авто-дозагрузки Екомкассы: документы, обновлённые за последние N часов.
 ECOMKASSA_AUTO_HOURS = 24
+OFD_URL = 'https://functions.poehali.dev/c7fad594-b60b-47fb-8f73-31b629f1e0a2'
+BANK_URL = 'https://functions.poehali.dev/916892e2-fd4d-4106-8d92-a95be195aa99'
+# ОФД - не чаще раза в N минут (сама функция берёт период от прошлой загрузки, но не глубже 3 дней).
+OFD_EVERY_MIN = 10
+# Банк - по частоте из настроек интеграции (sync_interval_hours), без настройки - раз в час.
+BANK_DEFAULT_HOURS = 1
 
 # Интервал (мин) для внешнего планировщика - показывается в админке.
 CRON_INTERVAL_MIN = 1
@@ -91,6 +97,7 @@ def call(url: str, body: Dict[str, Any], timeout: float) -> Optional[str]:
 def tick(cur, conn, settings: Dict[str, Any]) -> Dict[str, Any]:
     '''
     Один шаг планировщика: по каждой компании с активными интеграциями -
+    чеки ОФД, банковская выписка (по частоте интеграции), новые документы Екомкассы,
     очередь автоматизации (+ дубли уведомлений и проверка «платежи без чека за
     вчера») и дозагрузка непробитых чеков Екомкассы. Все вызовы параллельно,
     не дожидаясь их окончания. Компаний больше TICK_BATCH - берём по кругу,
@@ -119,8 +126,33 @@ def tick(cur, conn, settings: Dict[str, Any]) -> Dict[str, Any]:
         ''', (company_ids,))
         ecomkassa_ids = {r[0] for r in cur.fetchall()}
 
+    ofd_ids = set()
+    bank_jobs = []
+    if company_ids:
+        cur.execute(f'''
+            SELECT DISTINCT ui.company_id FROM {SCHEMA}.user_integrations ui
+            JOIN {SCHEMA}.integration_providers p ON p.id = ui.provider_id
+            WHERE p.slug = 'ofdru' AND ui.status = 'active' AND ui.company_id = ANY(%s)
+              AND (ui.last_synced_at IS NULL OR ui.last_synced_at < NOW() - make_interval(mins => %s))
+        ''', (company_ids, OFD_EVERY_MIN))
+        ofd_ids = {r[0] for r in cur.fetchall()}
+        # Выписка - по календарным дням (Москва): с дня прошлой загрузки (минус день запаса) по сегодня.
+        cur.execute(f'''
+            SELECT ui.id, ui.company_id,
+                   to_char(COALESCE(ui.last_synced_at, NOW() - INTERVAL '3 days') + INTERVAL '3 hours' - INTERVAL '1 day', 'YYYY-MM-DD'),
+                   to_char(NOW() + INTERVAL '3 hours', 'YYYY-MM-DD')
+            FROM {SCHEMA}.user_integrations ui
+            JOIN {SCHEMA}.integration_providers p ON p.id = ui.provider_id
+            WHERE p.slug IN ('tbank_account', 'tochka_account') AND ui.status = 'active' AND ui.company_id = ANY(%s)
+              AND (ui.last_synced_at IS NULL
+                   OR ui.last_synced_at < NOW() - make_interval(hours => COALESCE(ui.sync_interval_hours, %s)))
+        ''', (company_ids, BANK_DEFAULT_HOURS))
+        bank_jobs = cur.fetchall()
+
     tasks = []
     for company_id in company_ids:
+        if company_id in ofd_ids:
+            tasks.append((company_id, OFD_URL, {'company_id': company_id}))
         if company_id in ecomkassa_ids:
             # Новые счета/заказы/чеки Екомкассы (и платежи шлюза по ним), если живой хук не пришёл.
             tasks.append((company_id, FETCH_ORDERS_URL, {
@@ -129,6 +161,8 @@ def tick(cur, conn, settings: Dict[str, Any]) -> Dict[str, Any]:
             }))
         tasks.append((company_id, JOBS_URL, {'action': 'run', 'company_id': company_id, 'heartbeat': True}))
         tasks.append((company_id, RESYNC_URL, {'company_id': company_id}))
+    for integration_id, company_id, date_from, date_to in bank_jobs:
+        tasks.append((company_id, BANK_URL, {'integration_id': integration_id, 'date_from': date_from, 'date_to': date_to}))
     errors: Dict[int, List[str]] = {}
     if tasks:
         with ThreadPoolExecutor(max_workers=len(tasks)) as pool:
@@ -136,6 +170,7 @@ def tick(cur, conn, settings: Dict[str, Any]) -> Dict[str, Any]:
                 if err:
                     errors.setdefault(company_id, []).append(err)
     summary = {'companies': len(company_ids), 'total_companies': len(all_ids), 'failed': len(errors),
+               'started': {'ofd': len(ofd_ids), 'bank': len(bank_jobs), 'ecomkassa': len(ecomkassa_ids)},
                'errors': [{'company_id': k, 'errors': v} for k, v in list(errors.items())[:5]],
                'next_offset': next_offset}
     cur.execute(f'''
