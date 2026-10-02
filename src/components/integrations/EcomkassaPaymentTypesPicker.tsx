@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import Icon from '@/components/ui/icon';
 import { ConfigState } from './providerFieldsConfig';
+import { shortPaymentKindName } from '@/lib/paymentKindName';
 import functionUrls from '../../../backend/func2url.json';
 
 interface PaymentType {
@@ -108,7 +109,7 @@ const EcomkassaPaymentTypesPicker = ({ companyId, config, onConfigChange }: Ecom
               checked={selectedIds.includes(String(type.id))}
               onChange={() => toggle(type.id)}
             />
-            <span className="text-sm">{type.description || `Вид оплаты #${type.id}`}</span>
+            <span className="text-sm">{shortPaymentKindName(type.description) || `Вид оплаты #${type.id}`}</span>
           </label>
         ))}
       </div>
