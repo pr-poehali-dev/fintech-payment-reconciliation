@@ -10,6 +10,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { formatDateTime } from '@/lib/formatDate';
 import functionUrls from '../../../backend/func2url.json';
 import PlatformAdminsCard from './PlatformAdminsCard';
+import CronSourcesList, { CronSource } from './CronSourcesList';
 
 const api = (functionUrls as Record<string, string>)['platform-settings'];
 
@@ -20,6 +21,7 @@ interface PlatformSettings {
   cron_last_tick_at: string | null;
   cron_last_result: { companies: number; failed: number } | null;
   metrika_counter_id: string | null;
+  cron_sources: Record<string, boolean>;
 }
 
 interface CompanyOption {
@@ -38,10 +40,12 @@ const AdminSettingsSection = () => {
   const [managingId, setManagingId] = useState<string>('');
   const [cronEnabled, setCronEnabled] = useState(false);
   const [metrikaId, setMetrikaId] = useState('');
+  const [sources, setSources] = useState<CronSource[]>([]);
+  const [sourceValues, setSourceValues] = useState<Record<string, boolean>>({});
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const apply = (data: { settings: PlatformSettings; companies: CompanyOption[]; cron_problems: string[]; cron_interval_min: number }) => {
+  const apply = (data: { settings: PlatformSettings; companies: CompanyOption[]; cron_problems: string[]; cron_interval_min: number; cron_sources?: CronSource[] }) => {
     setSettings(data.settings);
     setCompanies(data.companies || []);
     setProblems(data.cron_problems || []);
@@ -49,6 +53,9 @@ const AdminSettingsSection = () => {
     setManagingId(data.settings.managing_company_id ? String(data.settings.managing_company_id) : '');
     setCronEnabled(data.settings.cron_enabled);
     setMetrikaId(data.settings.metrika_counter_id || '');
+    const list = data.cron_sources || [];
+    setSources(list);
+    setSourceValues(Object.fromEntries(list.map((s) => [s.key, s.enabled])));
   };
 
   const load = useCallback(async () => {
@@ -75,7 +82,8 @@ const AdminSettingsSection = () => {
           requester_user_id: user.user_id,
           managing_company_id: managingId ? Number(managingId) : null,
           cron_enabled: cronEnabled,
-          metrika_counter_id: metrikaId || null
+          metrika_counter_id: metrikaId || null,
+          cron_sources: sourceValues
         })
       });
       const data = await res.json();
@@ -110,7 +118,8 @@ const AdminSettingsSection = () => {
 
   const hasChanges = (managingId || '') !== (settings.managing_company_id ? String(settings.managing_company_id) : '')
     || cronEnabled !== settings.cron_enabled
-    || metrikaId !== (settings.metrika_counter_id || '');
+    || metrikaId !== (settings.metrika_counter_id || '')
+    || sources.some((s) => sourceValues[s.key] !== s.enabled);
   const tickCommand = `curl -s -X POST ${api} -H 'Content-Type: application/json' -H 'X-Cron-Token: ${settings.cron_token}' -d '{"action":"tick"}'`;
 
   return (
@@ -228,6 +237,14 @@ const AdminSettingsSection = () => {
               <Icon name="Info" size={14} className="mt-0.5 shrink-0" />
               <span>Сейчас задачи запускаются из открытых кабинетов клиентов. Если кабинет никто не открывает, задачи ждут ближайшего входа.</span>
             </div>
+          )}
+
+          {sources.length > 0 && (
+            <CronSourcesList
+              sources={sources}
+              values={sourceValues}
+              onChange={(key, enabled) => setSourceValues((prev) => ({ ...prev, [key]: enabled }))}
+            />
           )}
 
           {problems.map((p) => (

@@ -34,6 +34,46 @@ OFD_EVERY_MIN = 10
 # Банк - по частоте из настроек интеграции (sync_interval_hours), без настройки - раз в час.
 BANK_DEFAULT_HOURS = 1
 
+# Источники, которые планировщик загружает сам. Админ включает/выключает каждый
+# (platform_settings.cron_sources: {key: bool}); нет записи - включён.
+CRON_SOURCES = [
+    {'key': 'ecomkassa', 'name': 'Екомкасса: новые счета, заказы и чеки',
+     'hint': 'Не нужно, когда настроены вебхуки Екомкассы по платежам'},
+    {'key': 'ecomkassa_receipts', 'name': 'Екомкасса: дозагрузка непробитых чеков',
+     'hint': 'Довязывает чек к платежу шлюза, если касса пробила его позже'},
+    {'key': 'ofd', 'name': 'ОФД: чеки', 'hint': f'Не чаще раза в {OFD_EVERY_MIN} мин'},
+    {'key': 'bank', 'name': 'Банки: выписки', 'hint': 'По частоте из настроек интеграции, без неё - раз в час'},
+    {'key': 'automation', 'name': 'Автоматизация и уведомления',
+     'hint': 'Очередь сценариев, повторы, рассылка уведомлений, «платежи без чека»'},
+]
+SOURCE_PROVIDERS = {'ecomkassa': ['ecomkassa'], 'ecomkassa_receipts': ['ecomkassa_gateway'],
+                    'ofd': ['ofdru'], 'bank': ['tbank_account', 'tochka_account']}
+
+
+def source_on(settings: Dict[str, Any], key: str) -> bool:
+    return (settings.get('cron_sources') or {}).get(key, True) is not False
+
+
+def cron_sources_view(cur, settings: Dict[str, Any]) -> List[Dict[str, Any]]:
+    '''Источники с отметкой вкл/выкл и подключёнными интеграциями (компания, название, последняя загрузка).'''
+    cur.execute(f'''
+        SELECT p.slug, ui.id, ui.integration_name, c.name, ui.last_synced_at
+        FROM {SCHEMA}.user_integrations ui
+        JOIN {SCHEMA}.integration_providers p ON p.id = ui.provider_id
+        JOIN {SCHEMA}.companies c ON c.id = ui.company_id
+        WHERE ui.status = 'active' AND c.status = 'active'
+        ORDER BY c.name, ui.integration_name
+    ''')
+    by_slug: Dict[str, List[Dict[str, Any]]] = {}
+    for slug, iid, name, company, last in cur.fetchall():
+        by_slug.setdefault(slug, []).append({'id': iid, 'name': name, 'company': company,
+                                             'last_synced_at': last.isoformat() if last else None})
+    out = []
+    for src in CRON_SOURCES:
+        integrations = [i for slug in SOURCE_PROVIDERS.get(src['key'], []) for i in by_slug.get(slug, [])]
+        out.append({**src, 'enabled': source_on(settings, src['key']), 'integrations': integrations})
+    return out
+
 # Интервал (мин) для внешнего планировщика - показывается в админке.
 CRON_INTERVAL_MIN = 1
 
@@ -60,7 +100,7 @@ def is_admin(cur, user_id) -> bool:
 def load_settings(cur) -> Dict[str, Any]:
     cur.execute(f'''
         SELECT s.managing_company_id, c.name, c.inn, s.cron_enabled, s.cron_token,
-               s.cron_last_tick_at, s.cron_last_result, s.updated_at, s.metrika_counter_id
+               s.cron_last_tick_at, s.cron_last_result, s.updated_at, s.metrika_counter_id, s.cron_sources
         FROM {SCHEMA}.platform_settings s
         LEFT JOIN {SCHEMA}.companies c ON c.id = s.managing_company_id
         WHERE s.id = 1
@@ -69,7 +109,7 @@ def load_settings(cur) -> Dict[str, Any]:
     return {
         'managing_company_id': r[0], 'managing_company_name': r[1], 'managing_company_inn': r[2],
         'cron_enabled': r[3], 'cron_token': r[4], 'cron_last_tick_at': r[5],
-        'cron_last_result': r[6], 'updated_at': r[7], 'metrika_counter_id': r[8]
+        'cron_last_result': r[6], 'updated_at': r[7], 'metrika_counter_id': r[8], 'cron_sources': r[9] or {}
     }
 
 
@@ -118,7 +158,7 @@ def tick(cur, conn, settings: Dict[str, Any]) -> Dict[str, Any]:
     next_offset = offset + TICK_BATCH if offset + TICK_BATCH < len(all_ids) else 0
 
     ecomkassa_ids = set()
-    if company_ids:
+    if company_ids and source_on(settings, 'ecomkassa'):
         cur.execute(f'''
             SELECT DISTINCT ui.company_id FROM {SCHEMA}.user_integrations ui
             JOIN {SCHEMA}.integration_providers p ON p.id = ui.provider_id
@@ -128,7 +168,7 @@ def tick(cur, conn, settings: Dict[str, Any]) -> Dict[str, Any]:
 
     ofd_ids = set()
     bank_jobs = []
-    if company_ids:
+    if company_ids and source_on(settings, 'ofd'):
         cur.execute(f'''
             SELECT DISTINCT ui.company_id FROM {SCHEMA}.user_integrations ui
             JOIN {SCHEMA}.integration_providers p ON p.id = ui.provider_id
@@ -136,6 +176,7 @@ def tick(cur, conn, settings: Dict[str, Any]) -> Dict[str, Any]:
               AND (ui.last_synced_at IS NULL OR ui.last_synced_at < NOW() - make_interval(mins => %s))
         ''', (company_ids, OFD_EVERY_MIN))
         ofd_ids = {r[0] for r in cur.fetchall()}
+    if company_ids and source_on(settings, 'bank'):
         # Выписка - по календарным дням (Москва): с дня прошлой загрузки (минус день запаса) по сегодня.
         cur.execute(f'''
             SELECT ui.id, ui.company_id,
@@ -159,8 +200,10 @@ def tick(cur, conn, settings: Dict[str, Any]) -> Dict[str, Any]:
                 'company_id': company_id, 'auto_hours': ECOMKASSA_AUTO_HOURS,
                 'order_types': ['INVC', 'CORD', 'VCHR'], 'statuses': ['PAID', 'COMPLETED'], 'batch_size': 30
             }))
-        tasks.append((company_id, JOBS_URL, {'action': 'run', 'company_id': company_id, 'heartbeat': True}))
-        tasks.append((company_id, RESYNC_URL, {'company_id': company_id}))
+        if source_on(settings, 'automation'):
+            tasks.append((company_id, JOBS_URL, {'action': 'run', 'company_id': company_id, 'heartbeat': True}))
+        if source_on(settings, 'ecomkassa_receipts'):
+            tasks.append((company_id, RESYNC_URL, {'company_id': company_id}))
     for integration_id, company_id, date_from, date_to in bank_jobs:
         tasks.append((company_id, BANK_URL, {'integration_id': integration_id, 'date_from': date_from, 'date_to': date_to}))
     errors: Dict[int, List[str]] = {}
@@ -295,12 +338,14 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 if not cur.fetchone():
                     return respond(400, {'error': 'Компания не найдена'})
             metrika = re.sub(r'\D', '', str(body.get('metrika_counter_id') or ''))[:20] or None
+            keys = {src['key'] for src in CRON_SOURCES}
+            sources = {k: bool(v) for k, v in (body.get('cron_sources') or settings.get('cron_sources') or {}).items() if k in keys}
             cur.execute(f'''
                 UPDATE {SCHEMA}.platform_settings
-                SET managing_company_id = %s, cron_enabled = %s, metrika_counter_id = %s,
+                SET managing_company_id = %s, cron_enabled = %s, metrika_counter_id = %s, cron_sources = %s,
                     updated_by = %s, updated_at = NOW()
                 WHERE id = 1
-            ''', (company_id or None, bool(body.get('cron_enabled')), metrika, requester))
+            ''', (company_id or None, bool(body.get('cron_enabled')), metrika, json.dumps(sources), requester))
             conn.commit()
             settings = load_settings(cur)
 
@@ -313,7 +358,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             'settings': settings,
             'companies': companies,
             'cron_interval_min': CRON_INTERVAL_MIN,
-            'cron_problems': check_cron(settings)
+            'cron_problems': check_cron(settings),
+            'cron_sources': cron_sources_view(cur, settings)
         })
     finally:
         cur.close()
