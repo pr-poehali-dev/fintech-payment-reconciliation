@@ -22,6 +22,9 @@ interface Props {
   onChange: (key: string, enabled: boolean) => void;
 }
 
+const lastSync = (src: CronSource) =>
+  src.integrations.map((i) => i.last_synced_at).filter(Boolean).sort().pop() || null;
+
 const CronSourcesList = ({ sources, values, onChange }: Props) => (
   <div className="space-y-2">
     <div className="text-sm font-medium">Что загружать автоматически</div>
@@ -34,15 +37,10 @@ const CronSourcesList = ({ sources, values, onChange }: Props) => (
               <div className="text-sm font-medium">{src.name}</div>
               <div className="text-xs text-muted-foreground">{src.hint}</div>
               {src.integrations.length > 0 && (
-                <ul className="mt-2 space-y-0.5 text-xs text-muted-foreground">
-                  {src.integrations.map((i) => (
-                    <li key={i.id} className="flex flex-wrap gap-x-2">
-                      <span className="text-foreground">{i.company}</span>
-                      <span>· {i.name || 'Без названия'}</span>
-                      {i.last_synced_at && <span>· загружено {formatDateTime(i.last_synced_at, undefined, true)}</span>}
-                    </li>
-                  ))}
-                </ul>
+                <div className="mt-1 text-xs text-muted-foreground">
+                  Подключено у компаний: {new Set(src.integrations.map((i) => i.company)).size}
+                  {lastSync(src) && <> · последняя загрузка {formatDateTime(lastSync(src)!, undefined, true)}</>}
+                </div>
               )}
             </div>
             <div className="flex shrink-0 items-center gap-2">
