@@ -176,18 +176,23 @@ def call(url: str, body: Dict[str, Any], timeout: float) -> Optional[str]:
 
 def tick(cur, conn, settings: Dict[str, Any]) -> Dict[str, Any]:
     '''
-    Один шаг планировщика: по каждой компании с активными интеграциями -
+    Один шаг планировщика: по каждой компании с активными интеграциями или сценариями
+    (пустые компании пропускаются, каждая задача - только если в компании есть её источник) -
     чеки ОФД, банковская выписка (по частоте интеграции), новые документы Екомкассы,
     очередь автоматизации (+ дубли уведомлений и проверка «платежи без чека за
     вчера») и дозагрузка непробитых чеков Екомкассы. Все вызовы параллельно,
     не дожидаясь их окончания. Компаний больше TICK_BATCH - берём по кругу,
     следующая порция - на следующем шаге.
     '''
+    # Пустые компании (ничего не настроено) пропускаем: нужна хотя бы одна активная
+    # интеграция или активный сценарий автоматизации.
     cur.execute(f'''
         SELECT c.id FROM {SCHEMA}.companies c
         WHERE c.status = 'active'
-          AND EXISTS (SELECT 1 FROM {SCHEMA}.user_integrations ui
-                      WHERE ui.company_id = c.id AND ui.status = 'active')
+          AND (EXISTS (SELECT 1 FROM {SCHEMA}.user_integrations ui
+                       WHERE ui.company_id = c.id AND ui.status = 'active')
+               OR EXISTS (SELECT 1 FROM {SCHEMA}.automation_scenarios s
+                          WHERE s.company_id = c.id AND s.status = 'active' AND s.removed_at IS NULL))
         ORDER BY c.id
     ''')
     all_ids = [r[0] for r in cur.fetchall()]
@@ -210,6 +215,26 @@ def tick(cur, conn, settings: Dict[str, Any]) -> Dict[str, Any]:
     ecomkassa_hours = max(ECOMKASSA_AUTO_HOURS, INTERVAL_PRESETS[source_interval(settings, 'ecomkassa')] // 60 + 2)
     receipts_due = set(due_companies(cur, 'ecomkassa_receipts', company_ids, source_minutes(settings, 'ecomkassa_receipts')))
     automation_due = set(due_companies(cur, 'automation', company_ids, source_minutes(settings, 'automation')))
+    if company_ids:
+        # Дозагрузка чеков - только где есть касса Екомкасса.
+        cur.execute(f'''
+            SELECT DISTINCT ui.company_id FROM {SCHEMA}.user_integrations ui
+            JOIN {SCHEMA}.integration_providers p ON p.id = ui.provider_id
+            WHERE p.slug = 'ecomkassa' AND ui.status = 'active' AND ui.company_id = ANY(%s)
+        ''', (company_ids,))
+        receipts_due &= {r[0] for r in cur.fetchall()}
+        # Автоматизация - только где есть активные сценарии, задачи в очереди или настроены уведомления.
+        cur.execute(f'''
+            SELECT c.id FROM unnest(%s::int[]) AS c(id)
+            WHERE EXISTS (SELECT 1 FROM {SCHEMA}.automation_scenarios s
+                          WHERE s.company_id = c.id AND s.status = 'active' AND s.removed_at IS NULL)
+               OR EXISTS (SELECT 1 FROM {SCHEMA}.automation_jobs j
+                          WHERE j.company_id = c.id AND j.status IN ('new', 'error', 'processing'))
+               OR EXISTS (SELECT 1 FROM {SCHEMA}.notification_preferences np WHERE np.company_id = c.id)
+        ''', (company_ids,))
+        automation_due &= {r[0] for r in cur.fetchall()}
+    else:
+        receipts_due, automation_due = set(), set()
 
     ofd_ids = set()
     bank_jobs = []
