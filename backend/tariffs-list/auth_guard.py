@@ -4,7 +4,8 @@
 - user_id / requester_user_id в запросе заменяются пользователем из сессии,
   поэтому подставить чужой номер пользователя нельзя.
 - company_id / integration_id: пользователь должен быть активным сотрудником компании.
-- Служебные вызовы функций друг другом: заголовок X-Internal-Key.
+- Служебные вызовы функций друг другом: заголовок X-Service-Sign
+  (заголовки со словами key/auth платформа вырезает по пути).
 '''
 import hashlib
 import hmac
@@ -20,7 +21,7 @@ SESSION_DAYS = 30
 CORS_HEADERS = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, X-Session-Id, X-Internal-Key, X-Cron-Token, X-User-Id, X-Auth-Token',
+    'Access-Control-Allow-Headers': 'Content-Type, X-Session-Id, X-Service-Sign, X-Cron-Token, X-User-Id, X-Auth-Token',
     'Access-Control-Max-Age': '86400'
 }
 _internal_key_cache: Dict[str, str] = {}
@@ -57,7 +58,7 @@ def internal_key() -> str:
 
 def internal_headers() -> Dict[str, str]:
     '''Заголовок для вызова другой функции проекта от имени сервера.'''
-    return {'X-Internal-Key': internal_key()}
+    return {'X-Service-Sign': internal_key()}
 
 
 def create_session(cur, user_id: int, event: Dict[str, Any]) -> str:
@@ -110,7 +111,7 @@ def guard(event: Dict[str, Any], *, public: bool = False, public_methods: Iterab
             or any(params.get(k) == '1' for k in public_query):
         return None
 
-    given_key = headers.get('x-internal-key')
+    given_key = headers.get('x-service-sign')
     if given_key and hmac.compare_digest(given_key, internal_key()):
         return None
 
@@ -174,4 +175,3 @@ def guard(event: Dict[str, Any], *, public: bool = False, public_methods: Iterab
     if isinstance(body, dict):
         event['body'] = json.dumps(body, ensure_ascii=False)
     return None
-# rev 2
