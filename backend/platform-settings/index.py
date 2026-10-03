@@ -61,8 +61,32 @@ def source_minutes(settings: Dict[str, Any], key: str) -> int:
     return max(0, m - 2)
 
 
+def daily_due(cur, source: str, company_ids: List[int]) -> List[int]:
+    '''
+    «Раз в день» = после полуночи по часовому поясу компании: источник ещё не запускался
+    планировщиком с 00:00 текущих суток компании. Первый запуск крона после полуночи его и берёт.
+    '''
+    if not company_ids:
+        return []
+    cur.execute(f'''
+        WITH tz AS (
+            SELECT c.id, CASE WHEN EXISTS (SELECT 1 FROM pg_timezone_names n WHERE n.name = c.timezone)
+                              THEN c.timezone ELSE 'Europe/Moscow' END AS zone
+            FROM {SCHEMA}.companies c WHERE c.id = ANY(%s)
+        )
+        SELECT tz.id FROM tz
+        WHERE NOT EXISTS (
+            SELECT 1 FROM {SCHEMA}.cron_source_runs r
+            WHERE r.source = %s AND r.company_id = tz.id
+              AND r.finished_at >= (date_trunc('day', NOW() AT TIME ZONE tz.zone) AT TIME ZONE tz.zone) AT TIME ZONE 'UTC')
+    ''', (company_ids, source))
+    return [r[0] for r in cur.fetchall()]
+
+
 def due_companies(cur, source: str, company_ids: List[int], minutes: int) -> List[int]:
     '''Компании, у которых с прошлого запуска источника планировщиком прошло не меньше minutes.'''
+    if minutes >= INTERVAL_PRESETS['1d'] - 2:
+        return daily_due(cur, source, company_ids)
     if not minutes or not company_ids:
         return list(company_ids)
     cur.execute(f'''
@@ -239,13 +263,16 @@ def tick(cur, conn, settings: Dict[str, Any]) -> Dict[str, Any]:
     ofd_ids = set()
     bank_jobs = []
     if company_ids and source_on(settings, 'ofd'):
+        ofd_daily = source_interval(settings, 'ofd') == '1d'
         cur.execute(f'''
             SELECT DISTINCT ui.company_id FROM {SCHEMA}.user_integrations ui
             JOIN {SCHEMA}.integration_providers p ON p.id = ui.provider_id
             WHERE p.slug = 'ofdru' AND ui.status = 'active' AND ui.company_id = ANY(%s)
-              AND (ui.last_synced_at IS NULL OR ui.last_synced_at < NOW() - make_interval(mins => %s))
-        ''', (company_ids, source_minutes(settings, 'ofd')))
+              AND (%s OR ui.last_synced_at IS NULL OR ui.last_synced_at < NOW() - make_interval(mins => %s))
+        ''', (company_ids, ofd_daily, source_minutes(settings, 'ofd')))
         ofd_ids = {r[0] for r in cur.fetchall()}
+        if ofd_daily:
+            ofd_ids &= set(daily_due(cur, 'ofd', list(ofd_ids)))
     if company_ids and source_on(settings, 'bank'):
         # Выписка - по календарным дням (Москва): с дня прошлой загрузки (минус день запаса) по сегодня.
         cur.execute(f'''
@@ -260,6 +287,9 @@ def tick(cur, conn, settings: Dict[str, Any]) -> Dict[str, Any]:
                                                             make_interval(mins => %s)))
         ''', (company_ids, source_minutes(settings, 'bank')))
         bank_jobs = cur.fetchall()
+        if source_interval(settings, 'bank') == '1d' and bank_jobs:
+            bank_today = set(daily_due(cur, 'bank', list({j[1] for j in bank_jobs})))
+            bank_jobs = [j for j in bank_jobs if j[1] in bank_today]
 
     tick_id = datetime.utcnow().strftime('%Y%m%d%H%M%S')
     tasks = []
