@@ -429,6 +429,22 @@ def create_receipt(cur, job: Dict[str, Any], scenario: Dict[str, Any], data: Dic
             return 'error', {}, 'Нет места расчётов: у магазина Екомкассы не указан адрес - заполните его в сценарии'
         # v4: место расчётов касса берёт из регистрации, если его не передать.
         company = {**r['company'], **({'payment_address': payment_address} if payment_address else {})}
+        if is_v5 and not company.get('email'):
+            # v5 требует почту продавца - берём из учётной записи владельца компании.
+            owner_email = None
+            if cur is not None and job.get('company_id'):
+                cur.execute(f'''
+                    SELECT u.email FROM {SCHEMA}.company_users cu
+                    JOIN {SCHEMA}.roles ro ON ro.id = cu.role_id AND ro.slug = 'owner'
+                    JOIN {SCHEMA}.app_users u ON u.id = cu.user_id
+                    WHERE cu.company_id = %s AND cu.status = 'active' AND COALESCE(u.email, '') <> ''
+                    ORDER BY cu.id LIMIT 1
+                ''', (job['company_id'],))
+                row = cur.fetchone()
+                owner_email = row[0] if row else None
+            if not owner_email:
+                return 'error', {}, 'Нет почты продавца для чека коррекции v5 - укажите почту в профиле владельца компании'
+            company['email'] = owner_email
         if kassa['protocol_version'] != 'v5':
             # АТОЛ v4 (ФФД 1.05): без позиций - только оплаты и суммы НДС по ставкам.
             rates = {'vat0': 0, 'vat5': 5, 'vat7': 7, 'vat10': 10, 'vat18': 18, 'vat20': 20, 'vat22': 22,
