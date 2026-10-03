@@ -128,7 +128,6 @@ const IntegrationCard = ({
             <>
               <Chip>Магазин: {String(cfg.store_id || '—')}</Chip>
               <Chip>Протокол {String(cfg.protocol_version || 'v4')}</Chip>
-              <Chip>Загрузка: {formatDate(integration.last_synced_at ?? null)}</Chip>
             </>
           )}
           {isOFD && (
