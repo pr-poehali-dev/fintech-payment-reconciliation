@@ -62,7 +62,21 @@ def cash_register(cur, integration_id: int) -> Optional[Dict[str, Any]]:
         return None
     return {'id': integration_id, 'token': token, 'store_id': str(config['store_id']),
             'protocol_version': config.get('protocol_version', 'v4'),
+            'store_address': config.get('store_address') or '',
             'refresh': lambda: ensure_valid_token(cur, integration_id, config, force=True)}
+
+
+def store_address(kassa: Dict[str, Any]) -> str:
+    '''Адрес (место расчётов) выбранного магазина: из настроек кассы, иначе из профиля Екомкассы.'''
+    if kassa.get('store_address'):
+        return kassa['store_address']
+    status, data = _call(kassa, 'GET', '/api/mobile/v1/profile/firm')
+    stores = ((data or {}).get('payload') or {}).get('stores') if isinstance(data, dict) else None
+    for st in stores or []:
+        if isinstance(st, dict) and str(st.get('storeId')) == str(kassa['store_id']):
+            kassa['store_address'] = st.get('storeAddress') or ''
+            return kassa['store_address']
+    return ''
 
 
 def company_cash_register(cur, company_id: int) -> Optional[Dict[str, Any]]:

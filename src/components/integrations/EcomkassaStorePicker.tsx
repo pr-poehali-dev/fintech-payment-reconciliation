@@ -139,7 +139,10 @@ const EcomkassaStorePicker = ({ companyId, config, onConfigChange }: EcomkassaSt
           <Label>Магазин</Label>
           <Select
             value={storeId}
-            onValueChange={(value) => onConfigChange({ ...config, store_id: value })}
+            onValueChange={(value) => {
+              const store = stores.find((st) => String(st.id) === value);
+              onConfigChange({ ...config, store_id: value, store_address: store?.address || '' });
+            }}
           >
             <SelectTrigger>
               <SelectValue placeholder="Выберите магазин из списка" />

@@ -111,7 +111,6 @@ const ScenarioDialog = ({ open, onOpenChange, scenario, prefill, integrations, t
   const setCs = (patch: CorrectionSettings) => setForm({ ...form, correction_settings: { ...cs, ...patch } });
   const correctionMissing = isCorrection
     ? [
-        isV5 && !cs.payment_address?.trim() && 'место расчётов',
         !isV5 && !(cs.correction_base_number?.trim() || currentTemplate?.correction_base_number) && 'номер основания',
         !isV5 && !cs.correction_base_name?.trim() && 'описание коррекции'
       ].filter(Boolean)
@@ -292,17 +291,6 @@ const ScenarioDialog = ({ open, onOpenChange, scenario, prefill, integrations, t
                 <p className="text-xs text-muted-foreground">
                   Самостоятельная коррекция · протокол {isV5 ? 'v5 (ФФД 1.2)' : 'v4 (ФФД 1.05)'}. Дата основания — дата платежа.
                 </p>
-                {isV5 && (
-                  <div className="space-y-1">
-                    <Label>Место расчётов</Label>
-                    <Input
-                      placeholder="https://shop.ru или адрес магазина"
-                      value={cs.payment_address || ''}
-                      onChange={(e) => setCs({ payment_address: e.target.value })}
-                    />
-                    <p className="text-xs text-muted-foreground">Сайт для интернет-продаж или адрес точки — как в регистрации кассы</p>
-                  </div>
-                )}
                 <div className="space-y-1">
                   <Label>Номер документа-основания{isV5 ? ' (необязательно)' : ''}</Label>
                   <Input

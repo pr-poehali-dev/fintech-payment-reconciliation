@@ -3,7 +3,7 @@ from datetime import date, datetime, timedelta, timezone
 import json
 from typing import Any, Dict, List, Optional, Tuple
 
-from ecomkassa_client import cash_register, create_courier_order, create_fiscal_receipt, deliver_courier_order, order_status
+from ecomkassa_client import cash_register, create_courier_order, create_fiscal_receipt, deliver_courier_order, order_status, store_address
 from receipt_dictionaries import MEASURES, PAYMENT_OBJECTS_V5
 
 SCHEMA = 't_p83864310_fintech_payment_reco'
@@ -423,7 +423,10 @@ def create_receipt(cur, job: Dict[str, Any], scenario: Dict[str, Any], data: Dic
         payment_address = str(template.get('payment_address') or r['company'].get('payment_address') or '').strip()
         is_v5 = kassa['protocol_version'] == 'v5'
         if is_v5 and not payment_address:
-            return 'error', {}, 'Не указано место расчётов (сайт или адрес) - обязательно для чека коррекции v5, заполните в сценарии'
+            # v5 требует место расчётов - берём адрес выбранного магазина Екомкассы.
+            payment_address = store_address(kassa).strip()
+        if is_v5 and not payment_address:
+            return 'error', {}, 'Нет места расчётов: у магазина Екомкассы не указан адрес - заполните его в сценарии'
         # v4: место расчётов касса берёт из регистрации, если его не передать.
         company = {**r['company'], **({'payment_address': payment_address} if payment_address else {})}
         if kassa['protocol_version'] != 'v5':

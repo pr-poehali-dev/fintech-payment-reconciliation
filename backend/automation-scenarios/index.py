@@ -92,8 +92,6 @@ def validate(cur, company_id: int, body: Dict[str, Any]) -> Optional[str]:
         cs = body.get('correction_settings') or {}
         if not isinstance(cs, dict):
             return 'Некорректные настройки чека коррекции'
-        if template[4] == 'v5' and not str(cs.get('payment_address') or '').strip():
-            return 'Укажите место расчётов (сайт или адрес) - обязательно для чека коррекции в протоколе v5'
         if len(str(cs.get('payment_address') or '')) > 256:
             return 'Место расчётов - не длиннее 256 символов'
         if template[4] != 'v5':
