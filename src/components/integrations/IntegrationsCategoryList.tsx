@@ -16,6 +16,8 @@ interface IntegrationsCategoryListProps {
   formatDate: (dateStr: string | null) => string;
   loadingStatement: number | null;
   onSyncStatement: (integrationId: number) => void;
+  onToggleActive: (integration: UserIntegration, active: boolean) => void;
+  togglingId: number | null;
   onAddNew: () => void;
 }
 
@@ -29,6 +31,8 @@ const IntegrationsCategoryList = ({
   formatDate,
   loadingStatement,
   onSyncStatement,
+  onToggleActive,
+  togglingId,
   onAddNew
 }: IntegrationsCategoryListProps) => {
   return (
@@ -55,6 +59,8 @@ const IntegrationsCategoryList = ({
                     formatDate={formatDate}
                     loadingStatement={loadingStatement}
                     onSyncStatement={onSyncStatement}
+                    onToggleActive={onToggleActive}
+                    togglingId={togglingId}
                   />
                 ))}
               </div>

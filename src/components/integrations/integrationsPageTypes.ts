@@ -32,4 +32,5 @@ export interface UserIntegration {
   config: any;
   webhook_settings: any;
   forward_url?: string;
+  receipts_enabled?: boolean;
 }

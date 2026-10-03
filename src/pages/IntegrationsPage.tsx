@@ -33,6 +33,8 @@ const IntegrationsPage = ({ onSetupReceipts }: IntegrationsPageProps) => {
     copyWebhookUrl,
     formatDate,
     handleSyncStatement,
+    handleToggleActive,
+    togglingId,
     getCategoryIntegrations
   } = useIntegrationsPageData();
 
@@ -74,6 +76,8 @@ const IntegrationsPage = ({ onSetupReceipts }: IntegrationsPageProps) => {
         formatDate={formatDate}
         loadingStatement={loadingStatement}
         onSyncStatement={handleSyncStatement}
+        onToggleActive={handleToggleActive}
+        togglingId={togglingId}
         onAddNew={handleAddNew}
       />
 

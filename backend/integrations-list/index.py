@@ -110,7 +110,11 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 ui.webhook_settings,
                 ui.forward_url,
                 ui.sync_interval_hours,
-                ui.last_synced_at
+                ui.last_synced_at,
+                EXISTS (SELECT 1 FROM automation_scenarios s
+                        WHERE s.source_integration_id = ui.id AND s.trigger_type = 'new_payment'
+                          AND s.action_type IN ('create_receipt', 'create_order') AND s.status = 'active'
+                          AND s.removed_at IS NULL) AS receipts_enabled
             FROM user_integrations ui
             JOIN integration_providers p ON p.id = ui.provider_id
             JOIN integration_categories c ON c.id = p.category_id
@@ -136,7 +140,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 'webhook_settings': row[12],
                 'forward_url': row[13],
                 'sync_interval_hours': row[14],
-                'last_synced_at': row[15].isoformat() if row[15] else None
+                'last_synced_at': row[15].isoformat() if row[15] else None,
+                'receipts_enabled': bool(row[16])
             })
         
         return {

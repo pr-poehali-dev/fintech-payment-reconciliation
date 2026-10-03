@@ -119,6 +119,32 @@ export const useIntegrationsPageData = () => {
     }
   };
 
+  const [togglingId, setTogglingId] = useState<number | null>(null);
+
+  const handleToggleActive = async (integration: UserIntegration, active: boolean) => {
+    if (!companyId) return;
+    const status = active ? 'active' : 'inactive';
+    setTogglingId(integration.id);
+    setUserIntegrations((prev) => prev.map((i) => (i.id === integration.id ? { ...i, status } : i)));
+    try {
+      const res = await fetch(functionUrls['integrations-update'], {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ integration_id: integration.id, company_id: companyId, status })
+      });
+      if (!res.ok) throw new Error();
+      toast({
+        title: active ? 'Интеграция включена' : 'Интеграция выключена',
+        description: active ? undefined : 'Вебхуки и синхронизация по ней не принимаются, пока не включите'
+      });
+    } catch {
+      setUserIntegrations((prev) => prev.map((i) => (i.id === integration.id ? { ...i, status: integration.status } : i)));
+      toast({ title: 'Не удалось переключить', description: 'Попробуйте ещё раз', variant: 'destructive' });
+    } finally {
+      setTogglingId(null);
+    }
+  };
+
   const copyWebhookUrl = (token: string) => {
     const url = `${functionUrls['webhook-receive']}?token=${token}`;
     navigator.clipboard.writeText(url);
@@ -258,6 +284,8 @@ export const useIntegrationsPageData = () => {
     formatDate,
     handleFetchReceipts,
     handleSyncStatement,
+    handleToggleActive,
+    togglingId,
     getCategoryIntegrations
   };
 };

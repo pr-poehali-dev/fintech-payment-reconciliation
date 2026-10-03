@@ -1,8 +1,9 @@
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
 import Icon from '@/components/ui/icon';
 import { UserIntegration } from './integrationsPageTypes';
+import { suggestsReceiptScenario } from './providerFieldsConfig';
 
 interface IntegrationCardProps {
   integration: UserIntegration;
@@ -12,6 +13,8 @@ interface IntegrationCardProps {
   formatDate: (dateStr: string | null) => string;
   loadingStatement: number | null;
   onSyncStatement: (integrationId: number) => void;
+  onToggleActive: (integration: UserIntegration, active: boolean) => void;
+  togglingId: number | null;
 }
 
 const Chip = ({ children, tone = 'muted' }: { children: React.ReactNode; tone?: 'muted' | 'warning' | 'primary' }) => {
@@ -31,8 +34,11 @@ const IntegrationCard = ({
   onCopyWebhookUrl,
   formatDate,
   loadingStatement,
-  onSyncStatement
+  onSyncStatement,
+  onToggleActive,
+  togglingId
 }: IntegrationCardProps) => {
+  const showReceipts = suggestsReceiptScenario(integration.provider_slug);
   const isOFD = integration.category_slug === 'ofd';
   const isBank = integration.category_slug === 'banks';
   const isCrm = integration.category_slug === 'crm';
@@ -50,21 +56,34 @@ const IntegrationCard = ({
   return (
     <Card
       onClick={() => onEdit(integration)}
-      className={`cursor-pointer transition-colors hover:border-primary/40 ${isActive ? '' : 'opacity-60'}`}
+      className="cursor-pointer transition-colors hover:border-primary/40"
     >
-      <CardContent className="space-y-3 p-5">
+      <CardContent className={`space-y-3 p-5 ${isActive ? '' : '[&>*:not(:first-child)]:opacity-60'}`}>
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
-            <div className="truncate font-semibold">{integration.integration_name}</div>
+            <div className={`truncate font-semibold ${isActive ? '' : 'text-muted-foreground'}`}>{integration.integration_name}</div>
             <div className="truncate text-xs text-muted-foreground">{integration.provider_name}</div>
           </div>
           <div className="flex shrink-0 items-center gap-1">
-            <Badge
-              variant="outline"
-              className={isActive ? 'border-success/30 bg-success/15 text-success' : 'text-muted-foreground'}
+            {showReceipts && (
+              <span
+                className={`flex h-8 w-8 items-center justify-center ${integration.receipts_enabled ? 'text-success' : 'text-muted-foreground/60'}`}
+                title={integration.receipts_enabled ? 'Чеки настроены: есть запущенный сценарий в «Автоматизации»' : 'Чеки не настроены: нет запущенного сценария в «Автоматизации»'}
+              >
+                <Icon name="Receipt" size={16} />
+              </span>
+            )}
+            <div
+              className="flex h-8 items-center px-1"
+              title={isActive ? 'Включено — выключить' : 'Выключено — включить'}
+              onClick={(e) => e.stopPropagation()}
             >
-              {isActive ? 'Подключено' : 'Неактивно'}
-            </Badge>
+              <Switch
+                checked={isActive}
+                disabled={togglingId === integration.id}
+                onCheckedChange={(v) => onToggleActive(integration, v)}
+              />
+            </div>
             {isBank && (
               <Button
                 variant="ghost"

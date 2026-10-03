@@ -50,6 +50,29 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     forward_url = body.get('forward_url')
     sync_interval_hours = body.get('sync_interval_hours')
     
+    new_status = body.get('status')
+    if integration_id and company_id and new_status in ('active', 'inactive') and set(body) <= {'integration_id', 'company_id', 'status'}:
+        # Переключатель «включить/выключить»: выключенная интеграция не принимает вебхуки и не синхронизируется.
+        conn = psycopg2.connect(os.environ['DATABASE_URL'])
+        cur = conn.cursor()
+        try:
+            cur.execute('''
+                UPDATE user_integrations SET status = %s, updated_at = CURRENT_TIMESTAMP
+                WHERE id = %s AND company_id = %s AND status IN ('active', 'inactive')
+                RETURNING id
+            ''', (new_status, integration_id, company_id))
+            updated = cur.fetchone()
+            conn.commit()
+        finally:
+            cur.close()
+            conn.close()
+        return {
+            'statusCode': 200 if updated else 404,
+            'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+            'body': json.dumps({'success': bool(updated), 'status': new_status} if updated else {'error': 'Integration not found or access denied'}),
+            'isBase64Encoded': False
+        }
+
     if not integration_id or not company_id:
         return {
             'statusCode': 400,
