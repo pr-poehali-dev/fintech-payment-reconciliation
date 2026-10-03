@@ -38,7 +38,10 @@ const IntegrationCard = ({
   onToggleActive,
   togglingId
 }: IntegrationCardProps) => {
-  const showReceipts = suggestsReceiptScenario(integration.provider_slug);
+  // Шлюз Екомкассы пробивает чеки сам - сценарий не нужен, иконка всегда «настроено».
+  const isGateway = integration.provider_slug === 'ecomkassa_gateway';
+  const showReceipts = isGateway || suggestsReceiptScenario(integration.provider_slug);
+  const receiptsOn = isGateway || !!integration.receipts_enabled;
   const isOFD = integration.category_slug === 'ofd';
   const isBank = integration.category_slug === 'banks';
   const isCrm = integration.category_slug === 'crm';
@@ -67,8 +70,8 @@ const IntegrationCard = ({
           <div className="flex shrink-0 items-center gap-1">
             {showReceipts && (
               <span
-                className={`flex h-8 w-8 items-center justify-center ${integration.receipts_enabled ? 'text-success' : 'text-muted-foreground/60'}`}
-                title={integration.receipts_enabled ? 'Чеки настроены: есть запущенный сценарий в «Автоматизации»' : 'Чеки не настроены: нет запущенного сценария в «Автоматизации»'}
+                className={`flex h-8 w-8 items-center justify-center ${receiptsOn ? 'text-success' : 'text-muted-foreground/60'}`}
+                title={receiptsOn ? 'Чеки создаются' : 'Чеки не создаются'}
               >
                 <Icon name="Receipt" size={16} />
               </span>
