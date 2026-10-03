@@ -83,6 +83,19 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         
         provider_id = provider_row[0]
 
+        if provider_slug == 'ofdru':
+            # Сервер ОФД - всегда боевой, ИНН - из карточки компании: пользователь их не вводит.
+            cur.execute('SELECT inn FROM companies WHERE id = %s', (company_id,))
+            company_inn = ((cur.fetchone() or [None])[0] or '').strip()
+            if not company_inn:
+                return {
+                    'statusCode': 400,
+                    'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+                    'body': json.dumps({'error': 'У компании не указан ИНН - заполните его в настройках компании'}, ensure_ascii=False),
+                    'isBase64Encoded': False
+                }
+            config = {**(config or {}), 'api_url': 'https://ofd.ru', 'inn': company_inn}
+
         # Лимит интеграций по тарифу (пусто - без ограничения).
         cur.execute('''
             SELECT t.max_integrations,

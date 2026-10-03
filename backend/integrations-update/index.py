@@ -90,7 +90,11 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             UPDATE user_integrations
             SET 
                 integration_name = COALESCE(%s, integration_name),
-                config = COALESCE(%s::jsonb, config),
+                config = CASE WHEN %s::jsonb IS NULL THEN config
+                              WHEN provider_id = (SELECT id FROM integration_providers WHERE slug = 'ofdru')
+                              THEN %s::jsonb || jsonb_build_object('api_url', 'https://ofd.ru',
+                                   'inn', COALESCE((SELECT inn FROM companies WHERE id = %s), config->>'inn'))
+                              ELSE %s::jsonb END,
                 webhook_settings = COALESCE(%s::jsonb, webhook_settings),
                 forward_url = %s,
                 sync_interval_hours = COALESCE(%s, sync_interval_hours),
@@ -99,6 +103,9 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             RETURNING id
         ''', (
             integration_name,
+            json.dumps(config) if config else None,
+            json.dumps(config) if config else None,
+            company_id,
             json.dumps(config) if config else None,
             json.dumps(webhook_settings) if webhook_settings else None,
             forward_url,

@@ -143,8 +143,6 @@ export const PROVIDER_FIELDS: Record<string, FieldConfig[]> = {
     { key: 'terminal_password', label: 'Terminal Password', type: 'password', placeholder: '•••••••••' }
   ],
   ofdru: [
-    { key: 'api_url', label: 'API сервер', type: 'text', placeholder: 'https://ofd.ru', default: 'https://ofd.ru', hint: 'Используйте https://demo.ofd.ru для тестирования' },
-    { key: 'inn', label: 'ИНН организации', type: 'text', placeholder: '1234567890', hint: 'ИНН юридического лица (10 или 12 цифр)' },
     { key: 'kkt', label: 'Регистрационный номер ККТ', type: 'text', placeholder: '0000111122223333', hint: 'Номер контрольно-кассовой техники' },
     { key: 'auth_token', label: 'Токен API', type: 'password', hint: 'Получите в ЛК OFD.RU → Настройки → Управление передачей данных → Ключи доступа API OFD' }
   ],
