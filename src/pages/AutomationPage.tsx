@@ -33,7 +33,12 @@ interface IntegrationRow {
   status: string;
 }
 
-const AutomationPage = () => {
+interface AutomationPageProps {
+  prefillSourceId?: number | null;
+  onPrefillUsed?: () => void;
+}
+
+const AutomationPage = ({ prefillSourceId, onPrefillUsed }: AutomationPageProps = {}) => {
   const { currentCompany, companies, user, setCurrentCompanyId } = useAuth();
   const { toast } = useToast();
   const companyId = currentCompany?.id;
@@ -193,10 +198,32 @@ const AutomationPage = () => {
     }
   };
 
+  const [prefill, setPrefill] = useState<Partial<ScenarioForm> | null>(null);
+
   const openCreate = () => {
     setEditing(null);
+    setPrefill(null);
     setDialogOpen(true);
   };
+
+  // Переход из «Интеграций» после подключения платёжки: новый сценарий чеков по ней.
+  useEffect(() => {
+    if (!prefillSourceId || isLoading) return;
+    const source = integrations.find((i) => i.id === prefillSourceId);
+    if (source) {
+      const kassas = integrations.filter((i) => i.category === 'cash_registers');
+      setEditing(null);
+      setPrefill({
+        name: `Чек по оплатам ${source.name}`,
+        trigger_type: 'new_payment',
+        source_integration_id: source.id,
+        action_type: 'create_receipt',
+        target_integration_id: kassas.length === 1 ? kassas[0].id : null
+      });
+      setDialogOpen(true);
+    }
+    onPrefillUsed?.();
+  }, [prefillSourceId, isLoading, integrations, onPrefillUsed]);
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -304,6 +331,7 @@ const AutomationPage = () => {
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         scenario={editing}
+        prefill={prefill}
         integrations={integrations}
         templates={templates}
         isSaving={isSaving}

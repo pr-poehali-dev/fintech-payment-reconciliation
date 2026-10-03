@@ -27,6 +27,7 @@ interface AddIntegrationDialogProps {
   connectedProviderIds: number[];
   companyId: number;
   onSuccess: () => void;
+  onSetupReceipts?: (integrationId: number) => void;
 }
 
 const AddIntegrationDialog = ({
@@ -38,8 +39,10 @@ const AddIntegrationDialog = ({
   allProviders,
   connectedProviderIds,
   companyId,
-  onSuccess
+  onSuccess,
+  onSetupReceipts
 }: AddIntegrationDialogProps) => {
+  const [createdIntegrationId, setCreatedIntegrationId] = useState<number | null>(null);
   const getInitialStep = () => {
     if (editingIntegration) return 2;
     if (initialCategory) return 1;
@@ -152,6 +155,7 @@ const AddIntegrationDialog = ({
         if (response.ok && data.success) {
           reachGoal(GOALS.integrationAdded, { provider: selectedProvider.slug });
           setWebhookUrl(data.webhook_url || '');
+          setCreatedIntegrationId(data.integration_id || null);
           setStep(3);
           toast({
             title: 'Интеграция создана',
@@ -267,6 +271,15 @@ const AddIntegrationDialog = ({
             webhookUrl={webhookUrl}
             onCopyWebhookUrl={copyToClipboard}
             onFinish={handleFinish}
+            onSetupReceipts={
+              onSetupReceipts && createdIntegrationId
+                ? () => {
+                    const id = createdIntegrationId;
+                    handleFinish();
+                    onSetupReceipts(id);
+                  }
+                : undefined
+            }
           />
         )}
       </DialogContent>

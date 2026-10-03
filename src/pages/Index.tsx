@@ -29,6 +29,8 @@ const Index = () => {
   // Меняется при каждом переходе с фильтрами - «Транзакции» пересоздаются и
   // применяют их, даже если раздел уже открыт.
   const [transactionsNavKey, setTransactionsNavKey] = useState(0);
+  // Платёжка, для которой сразу открыть новый сценарий чеков в «Автоматизации».
+  const [receiptSourceId, setReceiptSourceId] = useState<number | null>(null);
 
   // Переход из «Сверки» (плитки, столбцы графика) в «Транзакции» сразу с
   // фильтром на нужный период.
@@ -112,8 +114,21 @@ const Index = () => {
         )}
         {shownModule === 'events' && <EventsPage />}
         {shownModule === 'transactions' && <TransactionsPage key={transactionsNavKey} initialDateFilter={transactionsDateFilter} initialTypeFilter={transactionsTypeFilter} initialUnmatchedOnly={transactionsUnmatchedOnly} />}
-        {shownModule === 'automation' && <AutomationPage />}
-        {shownModule === 'integrations' && <IntegrationsPage />}
+        {shownModule === 'automation' && (
+          <AutomationPage prefillSourceId={receiptSourceId} onPrefillUsed={() => setReceiptSourceId(null)} />
+        )}
+        {shownModule === 'integrations' && (
+          <IntegrationsPage
+            onSetupReceipts={
+              canOpen('automation')
+                ? (id) => {
+                    setReceiptSourceId(id);
+                    handleModuleChange('automation');
+                  }
+                : undefined
+            }
+          />
+        )}
         {shownModule === 'access' && <AccessManagement />}
         {shownModule === 'settings' && <SettingsPlaceholder />}
         {!shownModule && (

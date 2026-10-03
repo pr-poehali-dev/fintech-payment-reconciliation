@@ -35,6 +35,7 @@ interface ScenarioDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   scenario: Scenario | null;
+  prefill?: Partial<ScenarioForm> | null;
   integrations: IntegrationOption[];
   templates: ActionTemplateOption[];
   isSaving: boolean;
@@ -61,7 +62,7 @@ const Step = ({ n, title, children }: { n: number; title: string; children: Reac
   </div>
 );
 
-const ScenarioDialog = ({ open, onOpenChange, scenario, integrations, templates: allTemplates, isSaving, onSave }: ScenarioDialogProps) => {
+const ScenarioDialog = ({ open, onOpenChange, scenario, prefill, integrations, templates: allTemplates, isSaving, onSave }: ScenarioDialogProps) => {
   const [form, setForm] = useState<ScenarioForm>(emptyForm);
   const { currentCompany } = useAuth();
 
@@ -80,7 +81,8 @@ const ScenarioDialog = ({ open, onOpenChange, scenario, integrations, templates:
           }
         : {
             ...emptyForm,
-            action_template: allTemplates.find((t) => t.action_type === emptyForm.action_type)?.code || ''
+            action_template: allTemplates.find((t) => t.action_type === emptyForm.action_type)?.code || '',
+            ...(prefill || {})
           }
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps

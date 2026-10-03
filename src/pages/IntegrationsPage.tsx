@@ -5,7 +5,11 @@ import DeleteIntegrationDialog from '@/components/integrations/DeleteIntegration
 import IntegrationsCategoryList from '@/components/integrations/IntegrationsCategoryList';
 import { useIntegrationsPageData } from '@/components/integrations/useIntegrationsPageData';
 
-const IntegrationsPage = () => {
+interface IntegrationsPageProps {
+  onSetupReceipts?: (integrationId: number) => void;
+}
+
+const IntegrationsPage = ({ onSetupReceipts }: IntegrationsPageProps) => {
   const {
     categories,
     userIntegrations,
@@ -83,6 +87,7 @@ const IntegrationsPage = () => {
         connectedProviderIds={userIntegrations.map(ui => ui.provider_id)}
         companyId={companyId || 0}
         onSuccess={fetchIntegrations}
+        onSetupReceipts={onSetupReceipts}
       />
 
       <DeleteIntegrationDialog

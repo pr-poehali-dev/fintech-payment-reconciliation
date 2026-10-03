@@ -2,21 +2,24 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import Icon from '@/components/ui/icon';
-import { Provider, acceptsIncomingWebhook } from './providerFieldsConfig';
+import { Provider, acceptsIncomingWebhook, suggestsReceiptScenario } from './providerFieldsConfig';
 
 interface IntegrationSuccessStepProps {
   selectedProvider: Provider;
   webhookUrl: string;
   onCopyWebhookUrl: () => void;
   onFinish: () => void;
+  onSetupReceipts?: () => void;
 }
 
 const IntegrationSuccessStep = ({
   selectedProvider,
   webhookUrl,
   onCopyWebhookUrl,
-  onFinish
+  onFinish,
+  onSetupReceipts
 }: IntegrationSuccessStepProps) => {
+  const offerReceipts = !!onSetupReceipts && suggestsReceiptScenario(selectedProvider.slug);
   return (
     <div className="space-y-4">
       <div className="bg-success/10 p-4 rounded-lg">
@@ -80,10 +83,35 @@ const IntegrationSuccessStep = ({
         </div>
       )}
 
-      <div className="flex justify-end gap-2">
-        <Button onClick={onFinish}>
-          Готово
-        </Button>
+      {offerReceipts && (
+        <div className="rounded-lg border border-primary/40 bg-primary/5 p-4 space-y-1">
+          <div className="flex items-center gap-2 font-semibold text-foreground">
+            <Icon name="Receipt" size={18} className="text-primary" />
+            Чеки сами не пробиваются
+          </div>
+          <p className="text-sm text-muted-foreground">
+            Платежи и корзины будут сохраняться, но чтобы по каждой оплате пробивался чек в кассе,
+            нужен сценарий в «Автоматизации». Мы заполним его за вас — останется выбрать кассу и запустить.
+          </p>
+        </div>
+      )}
+
+      <div className="flex flex-wrap justify-end gap-2">
+        {offerReceipts ? (
+          <>
+            <Button variant="outline" onClick={onFinish}>
+              Позже
+            </Button>
+            <Button onClick={onSetupReceipts}>
+              <Icon name="Receipt" size={16} className="mr-2" />
+              Настроить чеки
+            </Button>
+          </>
+        ) : (
+          <Button onClick={onFinish}>
+            Готово
+          </Button>
+        )}
       </div>
     </div>
   );

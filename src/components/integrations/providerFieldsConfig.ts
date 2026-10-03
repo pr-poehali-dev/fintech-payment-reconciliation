@@ -216,4 +216,9 @@ export const buildDefaultConfig = (slug: string): ConfigState => {
   return config;
 };
 
+// Платёжки, по которым чек делаем сами из корзины: после подключения предлагаем сценарий чеков.
+// Шлюз Екомкассы сюда не входит - чек по нему пробивает сама Екомкасса.
+const PROVIDERS_WITH_RECEIPT_SCENARIO = ['tbank', 'alfabank'];
+export const suggestsReceiptScenario = (slug?: string) => !!slug && PROVIDERS_WITH_RECEIPT_SCENARIO.includes(slug);
+
 export const acceptsIncomingWebhook = (slug?: string) => !!slug && PROVIDERS_WITH_INCOMING_WEBHOOK.includes(slug);
