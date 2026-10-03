@@ -144,6 +144,9 @@ def _handle(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             ''', (receipt_id, total_sum, payment_provider, webhook_payment_id))
             resolved += 1
 
+        cur.execute('''
+            UPDATE t_p83864310_fintech_payment_reco.user_integrations SET last_synced_at = NOW() WHERE id = %s
+        ''', (cash_row[0],))
         conn.commit()
 
         return {

@@ -398,6 +398,8 @@ def _handle(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 gw_id = gateway_integration_id or integration_id
                 save_synthetic_payment(cur, gw_id, company_id, order_id, receipt_id, total_sum, report_data)
 
+        # Время синхронизации кассы - для плашки «Синхронизация: N назад».
+        cur.execute(f'UPDATE {SCHEMA}.user_integrations SET last_synced_at = NOW() WHERE id = %s', (integration_id,))
         conn.commit()
 
         next_offset = offset + len(batch)

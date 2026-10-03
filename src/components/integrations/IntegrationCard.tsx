@@ -153,6 +153,7 @@ const IntegrationCard = ({
             <>
               <Chip>Магазин: {String(cfg.store_id || '—')}</Chip>
               <Chip>Протокол {String(cfg.protocol_version || 'v4')}</Chip>
+              <Chip>Синхронизация: {formatDate(integration.last_synced_at ?? null)}</Chip>
             </>
           )}
           {isOFD && (
@@ -160,6 +161,7 @@ const IntegrationCard = ({
               {(Array.isArray(cfg.kkts) ? cfg.kkts : cfg.kkt ? [cfg.kkt] : []).map((k: string) => (
                 <Chip key={k}>РНМ: {k}</Chip>
               ))}
+              <Chip>Синхронизация: {formatDate(integration.last_synced_at ?? null)}</Chip>
             </>
           )}
           {isBank && (

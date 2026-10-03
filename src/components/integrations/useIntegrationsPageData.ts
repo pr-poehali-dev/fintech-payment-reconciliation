@@ -178,6 +178,14 @@ export const useIntegrationsPageData = () => {
 
   const timezone = currentCompany?.timezone || DEFAULT_TIMEZONE;
 
+  const plural = (n: number, one: string, few: string, many: string) => {
+    const m10 = n % 10;
+    const m100 = n % 100;
+    if (m10 === 1 && m100 !== 11) return one;
+    if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return few;
+    return many;
+  };
+
   const formatDate = (dateStr: string | null) => {
     if (!dateStr) return 'Никогда';
     const date = new Date(dateStr);
@@ -188,9 +196,9 @@ export const useIntegrationsPageData = () => {
     const days = Math.floor(diff / 86400000);
 
     if (minutes < 1) return 'Только что';
-    if (minutes < 60) return `${minutes} мин назад`;
-    if (hours < 24) return `${hours} ч назад`;
-    if (days < 7) return `${days} дн назад`;
+    if (minutes < 60) return `${minutes} ${plural(minutes, 'минуту', 'минуты', 'минут')} назад`;
+    if (hours < 24) return `${hours} ${plural(hours, 'час', 'часа', 'часов')} назад`;
+    if (days < 7) return `${days} ${plural(days, 'день', 'дня', 'дней')} назад`;
     return formatDateOnly(dateStr, timezone);
   };
 
