@@ -78,6 +78,7 @@ const IntegrationsPage = ({ onSetupReceipts }: IntegrationsPageProps) => {
         onSyncStatement={handleSyncStatement}
         onToggleActive={handleToggleActive}
         togglingId={togglingId}
+        onSetupReceipts={onSetupReceipts}
         onAddNew={handleAddNew}
       />
 

@@ -15,6 +15,7 @@ interface IntegrationCardProps {
   onSyncStatement: (integrationId: number) => void;
   onToggleActive: (integration: UserIntegration, active: boolean) => void;
   togglingId: number | null;
+  onSetupReceipts?: (integrationId: number) => void;
 }
 
 const Chip = ({ children, tone = 'muted' }: { children: React.ReactNode; tone?: 'muted' | 'warning' | 'primary' }) => {
@@ -36,7 +37,8 @@ const IntegrationCard = ({
   loadingStatement,
   onSyncStatement,
   onToggleActive,
-  togglingId
+  togglingId,
+  onSetupReceipts
 }: IntegrationCardProps) => {
   // Шлюз Екомкассы пробивает чеки сам - сценарий не нужен, иконка всегда «настроено».
   const isGateway = integration.provider_slug === 'ecomkassa_gateway';
@@ -80,7 +82,18 @@ const IntegrationCard = ({
             <div className="truncate text-xs text-muted-foreground">{integration.provider_name}</div>
           </div>
           <div className="flex shrink-0 items-center gap-1">
-            {showReceipts && (
+            {showReceipts && !receiptsOn && onSetupReceipts && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-muted-foreground/60 hover:text-primary"
+                title="Чеки не создаются — настроить"
+                onClick={(e) => stop(e, () => onSetupReceipts(integration.id))}
+              >
+                <Icon name="Receipt" size={16} />
+              </Button>
+            )}
+            {showReceipts && (receiptsOn || !onSetupReceipts) && (
               <span
                 className={`flex h-8 w-8 items-center justify-center ${receiptsOn ? 'text-success' : 'text-muted-foreground/60'}`}
                 title={receiptsOn ? 'Чеки создаются' : 'Чеки не создаются'}
