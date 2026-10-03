@@ -47,13 +47,23 @@ const IntegrationSuccessStep = ({
                 <p className="font-semibold text-foreground mb-2">
                   Инструкция по настройке:
                 </p>
-                <ol className="list-decimal list-inside space-y-1 text-muted-foreground">
-                  <li>Откройте личный кабинет сервиса</li>
-                  <li>Перейдите в раздел уведомлений / вебхуков</li>
-                  <li>Вставьте скопированный URL в поле "URL для уведомлений"</li>
-                  <li>Выберите метод: POST</li>
-                  <li>Сохраните настройки</li>
-                </ol>
+                {selectedProvider.slug === 'alfabank' ? (
+                  <ol className="list-decimal list-inside space-y-1 text-muted-foreground">
+                    <li>Напишите в поддержку интернет-эквайринга Альфа-Банка</li>
+                    <li>Попросите включить callback-уведомления и пришлите им этот URL</li>
+                    <li>Метод GET или POST — подойдёт любой</li>
+                    <li>Нужны операции: deposited (оплата), approved, reversed, refunded</li>
+                    <li>Для чеков магазин должен передавать корзину (orderBundle) при регистрации заказа</li>
+                  </ol>
+                ) : (
+                  <ol className="list-decimal list-inside space-y-1 text-muted-foreground">
+                    <li>Откройте личный кабинет сервиса</li>
+                    <li>Перейдите в раздел уведомлений / вебхуков</li>
+                    <li>Вставьте скопированный URL в поле "URL для уведомлений"</li>
+                    <li>Выберите метод: POST</li>
+                    <li>Сохраните настройки</li>
+                  </ol>
+                )}
               </div>
             </div>
           </div>

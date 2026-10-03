@@ -117,7 +117,27 @@ const TOCHKA_ACCOUNT_FIELDS: FieldConfig[] = [
   }
 ];
 
+export const ALFABANK_NOTIFY_OPTIONS = [
+  { key: 'notify_on_authorized', label: 'Средства удержаны (approved)' },
+  { key: 'notify_on_confirmed', label: 'Оплачен (deposited)' },
+  { key: 'notify_on_rejected', label: 'Отклонён (declined)' },
+  { key: 'notify_on_refunded', label: 'Возврат (refunded)' },
+  { key: 'notify_on_canceled', label: 'Отменён (reversed)' }
+];
+
+const ALFABANK_ENV_OPTIONS: FieldOption[] = [
+  { value: 'prod', label: 'Боевой — payment.alfabank.ru (логин с префиксом r-)' },
+  { value: 'prod_pay', label: 'Боевой — pay.alfabank.ru (логин без префикса)' },
+  { value: 'test', label: 'Тестовый — alfa.rbsuat.com' }
+];
+
 export const PROVIDER_FIELDS: Record<string, FieldConfig[]> = {
+  alfabank: [
+    { key: 'environment', label: 'Сервер банка', type: 'select', options: ALFABANK_ENV_OPTIONS, default: 'prod', required: false, hint: 'Адрес зависит от логина: уточните у поддержки Альфа-Банка, если не уверены' },
+    { key: 'user_name', label: 'Логин API-пользователя', type: 'text', placeholder: 'r-shop-api', hint: 'Учётная запись магазина с окончанием -api из письма Альфа-Банка' },
+    { key: 'password', label: 'Пароль API-пользователя', type: 'password', placeholder: '•••••••••' },
+    { key: 'callback_secret', label: 'Ключ контрольной суммы уведомлений', type: 'password', required: false, hint: 'Необязательно. Симметричный ключ из поддержки банка — тогда проверяем подпись каждого уведомления. Без ключа подлинность проверяем запросом статуса заказа в банке' }
+  ],
   tbank: [
     { key: 'terminal_id', label: 'Terminal ID', type: 'text', placeholder: '1234567890', hint: 'Найдите в ЛК Т-Банк → Настройки → Терминалы' },
     { key: 'terminal_password', label: 'Terminal Password', type: 'password', placeholder: '•••••••••' }
@@ -185,7 +205,7 @@ export const PROVIDER_FIELDS: Record<string, FieldConfig[]> = {
 
 // Провайдеры, для которых наш сервис принимает входящие вебхуки.
 // Только для них имеет смысл показывать URL для вебхука и переадресацию.
-const PROVIDERS_WITH_INCOMING_WEBHOOK = ['tbank', 'ecomkassa_gateway'];
+const PROVIDERS_WITH_INCOMING_WEBHOOK = ['tbank', 'alfabank', 'ecomkassa_gateway'];
 
 export const buildDefaultConfig = (slug: string): ConfigState => {
   const fields = PROVIDER_FIELDS[slug] || [];

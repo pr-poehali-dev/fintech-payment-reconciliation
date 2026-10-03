@@ -9,6 +9,7 @@ from typing import Dict, Any
 from form_parser import parse_webhook_body
 from inbox import save_event, mark_processed
 import tbank_handler
+import alfabank_handler
 import bitrix24_handler
 import crm_link
 from ecomkassa_token import ensure_valid_token as ensure_kassa_token
@@ -19,7 +20,7 @@ from auth_guard import guard
 
 CORS_HEADERS = {
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type',
     'Access-Control-Max-Age': '86400'
 }
@@ -29,6 +30,7 @@ CORS_HEADERS = {
 # в одну и ту же секунду.
 EVENT_TYPE_BY_PROVIDER = {
     'tbank': 'payment_status_changed',
+    'alfabank': 'payment_status_changed',
     'bitrix24': 'deal_updated',
     'amocrm': 'lead_updated',
     'ecomkassa_gateway': 'payment_status_changed'
@@ -81,7 +83,10 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             'isBase64Encoded': False
         }
 
-    if method != 'POST':
+    params = event.get('queryStringParameters', {}) or {}
+    # Альфа-Банк по умолчанию шлёт уведомление GET-запросом с параметрами в ссылке.
+    is_get_callback = method == 'GET' and params.get('token') and params.get('mdOrder')
+    if method != 'POST' and not is_get_callback:
         return {
             'statusCode': 200,
             'headers': {'Content-Type': 'application/json; charset=utf-8'},
@@ -89,7 +94,6 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             'isBase64Encoded': False
         }
 
-    params = event.get('queryStringParameters', {}) or {}
     webhook_token = params.get('token', '')
 
     if not webhook_token:
@@ -109,7 +113,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         raw_body = base64.b64decode(raw_body).decode('utf-8', errors='replace')
 
     try:
-        webhook_data = parse_webhook_body(raw_body, content_type)
+        webhook_data = {} if is_get_callback else parse_webhook_body(raw_body, content_type)
     except Exception:
         return {
             'statusCode': 400,
@@ -153,6 +157,14 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
         integration_id, company_id, config, webhook_settings, provider_slug, forward_url = integration_row
 
+        if provider_slug == 'alfabank':
+            # Параметры уведомления могут быть и в ссылке (GET), и в теле (POST) - собираем вместе,
+            # без нашего token: он не входит в контрольную сумму банка.
+            merged = {k: v for k, v in params.items() if k != 'token'}
+            if isinstance(webhook_data, dict):
+                merged.update({k: v for k, v in webhook_data.items() if not isinstance(v, (dict, list))})
+            webhook_data = merged
+
         config = json.loads(config) if isinstance(config, str) else (config or {})
         webhook_settings = json.loads(webhook_settings) if isinstance(webhook_settings, str) else (webhook_settings or {})
 
@@ -178,6 +190,19 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     'statusCode': 403,
                     'headers': {'Content-Type': 'application/json'},
                     'body': json.dumps({'error': handler_error}),
+                    'isBase64Encoded': False
+                }
+        elif provider_slug == 'alfabank':
+            signature_valid, webhook_payment_id, handler_error = alfabank_handler.process(
+                cur, integration_id, company_id, config, webhook_settings, webhook_data
+            )
+            if not signature_valid:
+                mark_processed(cur, event_id, 'rejected', handler_error)
+                conn.commit()
+                return {
+                    'statusCode': 403,
+                    'headers': {'Content-Type': 'application/json'},
+                    'body': json.dumps({'error': handler_error}, ensure_ascii=False),
                     'isBase64Encoded': False
                 }
         elif provider_slug == 'bitrix24':

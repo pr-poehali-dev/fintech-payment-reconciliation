@@ -45,6 +45,16 @@
         "error": "Token required"
       },
       "bodyMatcher": "partial"
+    },
+    {
+      "name": "Alfa-Bank GET callback with unknown token",
+      "method": "GET",
+      "path": "/?token=unknown-token&mdOrder=3ff6962a-7dcc-4283-ab50-a6d7dd3386fe&orderNumber=10747&operation=deposited&status=1",
+      "expectedStatus": 404,
+      "expectedBody": {
+        "error": "string"
+      },
+      "bodyMatcher": "partial"
     }
   ]
 }

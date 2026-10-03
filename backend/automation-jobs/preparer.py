@@ -3,6 +3,7 @@ from typing import Any, Dict, Optional, Tuple
 
 from ecomkassa_client import company_cash_register, get_receipt_atol
 import bitrix_crm
+import alfabank_api
 
 SCHEMA = 't_p83864310_fintech_payment_reco'
 
@@ -43,8 +44,20 @@ def _cart(cur, integration_id: int, provider_payment_id: str) -> Optional[Dict[s
             'fiscal': r[4] or {}, 'fiscalized': bool(r[5]), 'receipt_id': r[6]}
 
 
+def _fetch_alfabank_cart(cur, company_id: int, payment: Dict[str, Any]) -> Optional[str]:
+    '''Запрос заказа с корзиной у Альфа-Банка (getOrderStatusExtended) и сохранение корзины.'''
+    cur.execute(f'SELECT config FROM {SCHEMA}.user_integrations WHERE id = %s', (payment['integration_id'],))
+    row = cur.fetchone()
+    config = row[0] if row and isinstance(row[0], dict) else json.loads((row or [None])[0] or '{}')
+    order, err = alfabank_api.get_order_status(config, str(payment['payment_id']), payment.get('order_id'), timeout=8)
+    if not order:
+        return err
+    alfabank_api.save_cart(cur, payment['integration_id'], company_id, str(payment['payment_id']), order)
+    return None
+
+
 # Провайдеры, у которых корзина приходит в уведомлении и без неё чек не собрать.
-CART_FROM_PROVIDER = {'tbank': 'Т-Банк'}
+CART_FROM_PROVIDER = {'tbank': 'Т-Банк', 'alfabank': 'Альфа-Банк'}
 
 
 def prepare(cur, job: Dict[str, Any], scenario: Dict[str, Any]) -> Tuple[str, Dict[str, Any], str]:
@@ -76,9 +89,18 @@ def prepare(cur, job: Dict[str, Any], scenario: Dict[str, Any]) -> Tuple[str, Di
     provider_name = CART_FROM_PROVIDER.get(payment['provider_slug'])
     if provider_name:
         cart = _cart(cur, payment['integration_id'], str(payment['payment_id']))
+        if (not cart or not cart['items']) and payment['provider_slug'] == 'alfabank':
+            # У Альфа-Банка состав заказа не приходит в уведомлении - дозапрашиваем у банка.
+            cart_error = _fetch_alfabank_cart(cur, job['company_id'], payment)
+            cart = _cart(cur, payment['integration_id'], str(payment['payment_id']))
+            if not cart:
+                return 'error', data, f'Не удалось получить корзину заказа у Альфа-Банка: {cart_error}'
         if not cart:
             return 'error', data, f'Ждём корзину от {provider_name} (уведомление с составом чека ещё не пришло)'
         if not cart['items']:
+            if payment['provider_slug'] == 'alfabank':
+                return 'error', data, ('В заказе Альфа-Банка нет корзины товаров (orderBundle) - '
+                                       'магазин должен передавать её при регистрации заказа')
             return 'error', data, f'{provider_name} прислал уведомление без товаров'
         receipt = cart['receipt']
         data['items'] = cart['items']

@@ -10,6 +10,7 @@ SCHEMA = 't_p83864310_fintech_payment_reco'
 
 PROVIDER_TYPE_LABELS = {
     'tbank': 'Касса (эквайринг)',
+    'alfabank': 'Касса (эквайринг)',
     'tochka': 'Касса (эквайринг)',
     'yookassa': 'Касса (эквайринг)',
     'bitrix24': 'CRM',
