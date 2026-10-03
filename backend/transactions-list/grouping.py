@@ -128,7 +128,7 @@ def matches_filters(
     if numeric is not None:
         value, raw = numeric
         amount_matches = abs(abs(float(t.get('amount') or 0)) - value) < 0.005
-        m = re.search(r'#\s*(\S+)', t.get('title') or '')
+        m = re.search(r'[#№]\s*(\S+)', t.get('title') or '')
         doc_number = m.group(1) if m else None
         number_matches = raw == doc_number or raw == str(t.get('reference') or '')
         return amount_matches or number_matches

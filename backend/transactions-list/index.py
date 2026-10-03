@@ -72,6 +72,26 @@ def classify_receipt_sign(operation_type: Optional[str]) -> int:
     return 1
 
 
+def receipt_kind_title(title: Optional[str]) -> Optional[str]:
+    '''
+    «KIND|<тип операции>|<коррекция 0/1>|<номер>» -> «Чек прихода №1», «Чек коррекции прихода №2»,
+    «Чек возврата прихода №3», «Чек расхода №4». Тип - из ОФД (OperationType) или Екомкассы (isSale).
+    '''
+    if not title or not title.startswith('KIND|'):
+        return title
+    _, op, corr, number = (title.split('|', 3) + ['', '', ''])[:4]
+    o = (op or '').strip().lower().replace('_', ' ')
+    if o in ('refund income', 'incomereturn', 'income return', 'sell refund', 'возврат прихода'):
+        kind = 'возврата прихода'
+    elif o in ('refund expense', 'expensereturn', 'expense return', 'buy refund', 'возврат расхода'):
+        kind = 'возврата расхода'
+    elif o in ('expense', 'buy', 'расход'):
+        kind = 'расхода'
+    else:
+        kind = 'прихода'
+    return f"Чек {'коррекции ' if corr == '1' else ''}{kind} №{number}"
+
+
 def compute_signed_amount(row: Dict[str, Any]) -> float:
     '''
     Сумма транзакции с учётом знака - именно она используется в суммах для
@@ -308,7 +328,9 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     NULL::date AS settlement_date,
                     ofd.total_sum AS amount,
                     ofd.operation_type AS status,
-                    ('Чек #' || COALESCE(ofd.doc_number, ofd.receipt_id)) AS title,
+                    ('KIND|' || COALESCE(ofd.operation_type, '') || '|' ||
+                        CASE WHEN (ofd.raw_data->>'IsCorrection') = 'true' THEN '1' ELSE '0' END || '|' ||
+                        COALESCE(ofd.doc_number, ofd.receipt_id)) AS title,
                     'ОФД' AS subtitle,
                     ui.integration_name AS integration_name,
                     ofd.receipt_id AS reference,
@@ -347,7 +369,13 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     NULL::date AS settlement_date,
                     ekr.total_sum AS amount,
                     ekr.status AS status,
-                    ('Чек #' || COALESCE(ekr.doc_number, ekr.order_id, ekr.id::text)) AS title,
+                    ('KIND|' || COALESCE(
+                        om.operation_type,
+                        CASE WHEN ekr.is_sale IS NOT NULL THEN CASE WHEN ekr.is_sale THEN 'Income' ELSE 'Refund Income' END END,
+                        CASE WHEN ad.operation LIKE 'sell_refund%%' THEN 'Refund Income' END,
+                        ekr.raw_data->'payload'->>'operation_type', '') || '|' ||
+                        CASE WHEN COALESCE(ekr.is_correction, ad.operation LIKE '%%correction', false) THEN '1' ELSE '0' END || '|' ||
+                        COALESCE(ekr.doc_number, ekr.order_id, ekr.id::text)) AS title,
                     CASE WHEN ekr.order_type = 'CORD' AND ad.operation LIKE 'sell_refund%%' THEN 'Закрывающий чек возврата'
                          WHEN ekr.order_type = 'CORD' THEN 'Закрывающий чек заказа'
                          WHEN ad.operation LIKE 'sell_refund%%' OR rp.id IS NOT NULL THEN 'Чек возврата'
@@ -711,6 +739,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 del group['webhook_history']
 
         for row in final_rows:
+            row['title'] = receipt_kind_title(row.get('title'))
             row['signed_amount'] = compute_signed_amount(row)
             row.pop('linked_ofd_status', None)
             row['manual_group_id'] = manual_links.get((row['type'], row['source'], row['id']))

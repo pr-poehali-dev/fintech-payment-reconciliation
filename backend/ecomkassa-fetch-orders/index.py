@@ -92,7 +92,8 @@ def find_gateway_integration(cur, company_id: int) -> Optional[int]:
 
 
 def save_receipt(cur, integration_id: int, company_id: int, order_id: Any,
-                  legacy_no: Any, order_type: Optional[str], report_data: Dict[str, Any]) -> Tuple[Optional[int], Optional[float]]:
+                  legacy_no: Any, order_type: Optional[str], report_data: Dict[str, Any],
+                  is_sale: Optional[bool] = None, is_correction: Optional[bool] = None) -> Tuple[Optional[int], Optional[float]]:
     '''
     Сохраняет фискальный чек/заказ по ответу report() в ecomkassa_receipts - тот
     же формат, что использует обработчик вебхука шлюза (см.
@@ -115,9 +116,12 @@ def save_receipt(cur, integration_id: int, company_id: int, order_id: Any,
     cur.execute(f'''
         INSERT INTO {SCHEMA}.ecomkassa_receipts (
             integration_id, company_id, order_id, legacy_no, status,
-            total_sum, doc_number, doc_datetime, raw_data, payment_provider, order_type
-        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            total_sum, doc_number, doc_datetime, raw_data, payment_provider, order_type,
+            is_sale, is_correction
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         ON CONFLICT (integration_id, order_id) DO UPDATE SET
+            is_sale = COALESCE(EXCLUDED.is_sale, {SCHEMA}.ecomkassa_receipts.is_sale),
+            is_correction = COALESCE(EXCLUDED.is_correction, {SCHEMA}.ecomkassa_receipts.is_correction),
             status = EXCLUDED.status,
             total_sum = COALESCE(EXCLUDED.total_sum, {SCHEMA}.ecomkassa_receipts.total_sum),
             doc_number = COALESCE(EXCLUDED.doc_number, {SCHEMA}.ecomkassa_receipts.doc_number),
@@ -129,11 +133,20 @@ def save_receipt(cur, integration_id: int, company_id: int, order_id: Any,
     ''', (
         integration_id, company_id, str(order_id), str(legacy_no) if legacy_no else str(order_id),
         status, total_sum, str(doc_number) if doc_number else None, doc_datetime,
-        json.dumps(report_data), payment_provider, order_type
+        json.dumps(report_data), payment_provider, order_type, is_sale, is_correction
     ))
     result = cur.fetchone()
     receipt_id = result[0] if result else None
     merge_after_ecomkassa(cur, receipt_id)
+    if receipt_id:
+        # Документ отправлен нашим сценарием (чек, коррекция, заказ) - довязываем его к платежу
+        # по UUID кассы или нашему номеру документа, даже если уведомление кассы не пришло.
+        cur.execute(f'''
+            UPDATE {SCHEMA}.automation_documents
+            SET ecom_uuid = COALESCE(ecom_uuid, %s), receipt_id = %s, status = %s, updated_at = NOW()
+            WHERE kassa_integration_id = %s AND (ecom_uuid = %s OR external_id = %s)
+        ''', (str(order_id), receipt_id, status, integration_id, str(order_id),
+              str(report_data.get('external_id') or legacy_no or order_id)))
     return receipt_id, float(total_sum) if total_sum else None
 
 
@@ -386,7 +399,8 @@ def _handle(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 continue
 
             receipt_id, total_sum = save_receipt(
-                cur, integration_id, company_id, order_id, external_id, order_type, report_data
+                cur, integration_id, company_id, order_id, external_id, order_type, report_data,
+                item.get('isSale'), item.get('isCorrection')
             )
             if not receipt_id:
                 skipped += 1
