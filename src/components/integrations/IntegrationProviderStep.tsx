@@ -17,18 +17,18 @@ const IntegrationProviderStep = ({
   onBack
 }: IntegrationProviderStepProps) => {
   return (
-    <div className="space-y-3">
+    <div className="space-y-3 min-w-0">
       {selectedCategory.providers.map((prov) => {
         const isConnected = connectedProviderIds.includes(prov.id);
         return (
           <button
             key={prov.id}
             onClick={() => onSelectProvider(prov)}
-            className="w-full flex items-center justify-between gap-4 p-4 rounded-lg border border-border hover:border-primary hover:bg-muted/50 transition-colors text-left"
+            className="w-full min-w-0 flex items-center justify-between gap-4 p-4 rounded-lg border border-border hover:border-primary hover:bg-muted/50 transition-colors text-left"
           >
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <div className="font-semibold">{prov.name}</div>
-              <div className="text-xs text-muted-foreground truncate">{prov.description}</div>
+              <div className="text-xs text-muted-foreground line-clamp-2 break-words whitespace-normal">{prov.description}</div>
             </div>
             {isConnected && (
               <Badge variant="outline" className="shrink-0">

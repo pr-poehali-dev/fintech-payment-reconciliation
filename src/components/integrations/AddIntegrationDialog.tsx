@@ -201,7 +201,7 @@ const AddIntegrationDialog = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-2xl w-[calc(100vw-2rem)] overflow-hidden">
         <DialogHeader>
           <DialogTitle>
             {editingIntegration
