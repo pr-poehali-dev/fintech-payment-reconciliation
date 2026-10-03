@@ -67,8 +67,12 @@ def validate(cur, company_id: int, body: Dict[str, Any]) -> Optional[str]:
     action = body.get('action_type')
     if action not in ACTIONS:
         return 'Неизвестное действие'
+    if trigger == 'discrepancy' and action != 'create_receipt':
+        return 'Для расхождения доступно только действие «Создать чек»'
     cur.execute(f'''
-        SELECT action_type, is_active, provider_id FROM {SCHEMA}.automation_action_templates WHERE code = %s
+        SELECT action_type, is_active, provider_id, receipt_type, protocol_version, correction_date_source,
+               correction_base_number
+        FROM {SCHEMA}.automation_action_templates WHERE code = %s
     ''', (body.get('action_template'),))
     template = cur.fetchone()
     if not template or template[0] != action:
@@ -84,9 +88,19 @@ def validate(cur, company_id: int, body: Dict[str, Any]) -> Optional[str]:
         target = cur.fetchone()
         if not target or target[0] != template[2]:
             return 'Шаблон рассчитан на другую кассу'
+    if template[3] == 'correction' and template[4] != 'v5' and not (template[6] or '').strip():
+        return ('В шаблоне «Чек коррекции» не указан номер документа-основания - он обязателен для протокола v4. '
+                'Заполните его в админке → «Шаблоны действий»')
     mapping = body.get('field_mapping') or {}
     if not isinstance(mapping, dict):
         return 'Некорректная настройка сопоставления полей'
+    if trigger == 'discrepancy':
+        try:
+            delay = int(mapping.get('delay_minutes') or 60)
+        except (TypeError, ValueError):
+            return 'Укажите, через сколько минут после оплаты считать, что чека нет'
+        if delay < 5 or delay > 10080:
+            return 'Задержка расхождения - от 5 минут до 7 суток'
     if trigger == 'crm_order':
         if mapping.get('entity', 'deal') not in ('deal', 'lead'):
             return 'Выберите объект CRM: сделки или лиды'

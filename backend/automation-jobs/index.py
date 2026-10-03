@@ -98,10 +98,11 @@ def claim_jobs(cur, company_id=None, job_id=None) -> List[Dict[str, Any]]:
         ) c
         WHERE u.id = c.id
         RETURNING u.id, u.scenario_id, u.source_type, u.source_id, u.attempts, u.company_id, u.step, u.prepared_data,
-                  c.prev_status
+                  c.prev_status, u.payload
     ''', args)
     return [{'id': r[0], 'scenario_id': r[1], 'source_type': r[2], 'source_id': r[3], 'attempts': r[4],
-             'company_id': r[5], 'step': r[6], 'prepared_data': r[7], 'was_stuck': r[8] == 'processing'}
+             'company_id': r[5], 'step': r[6], 'prepared_data': r[7], 'was_stuck': r[8] == 'processing',
+             'payload': r[9] or {}}
             for r in cur.fetchall()]
 
 
@@ -199,6 +200,55 @@ def run_action(cur, job: Dict[str, Any], scenario: Dict[str, Any], data: Dict[st
     return status
 
 
+TRANSACTIONS_URL = 'https://functions.poehali.dev/d977ccf7-aaab-48a4-b418-798c34bc70ec'
+# Расхождение смотрит платежи не старше этого окна: старые разбираются вручную, не пробиваем историю.
+DISCREPANCY_WINDOW_HOURS = 72
+
+
+def enqueue_discrepancies(cur, conn, company_id) -> int:
+    '''
+    Сценарий «Расхождение»: оплаченные платежи компании без чека кассы и ОФД, с оплаты которых
+    прошло не меньше delay_minutes сценария (и не больше окна). На каждый - задание на чек
+    (обычно коррекции) по корзине платежа. Один платёж - одно задание на сценарий.
+    '''
+    if not company_id:
+        return 0
+    cur.execute(f'''
+        SELECT id, COALESCE((field_mapping->>'delay_minutes')::int, 60)
+        FROM {SCHEMA}.automation_scenarios
+        WHERE company_id = %s AND trigger_type = 'discrepancy' AND status = 'active' AND removed_at IS NULL
+    ''', (company_id,))
+    scenarios = cur.fetchall()
+    if not scenarios:
+        return 0
+    created = 0
+    min_delay = min(d for _, d in scenarios)
+    url = (f'{TRANSACTIONS_URL}?company_id={company_id}&paged=1&missing_receipts=1'
+           f'&older_than_min={min_delay}&newer_than_hours={DISCREPANCY_WINDOW_HOURS}')
+    with urllib.request.urlopen(urllib.request.Request(url, headers=internal_headers()), timeout=20) as resp:
+        data = json.loads(resp.read().decode('utf-8'))
+    now_utc = datetime.utcnow()
+    for scenario_id, delay in scenarios:
+        for p in data.get('payments') or []:
+            paid_at = datetime.fromisoformat(str(p['occurred_at'])).replace(tzinfo=None) if p.get('occurred_at') else None
+            if not paid_at or paid_at > now_utc - timedelta(minutes=delay):
+                continue
+            cur.execute(f'''
+                INSERT INTO {SCHEMA}.automation_jobs (company_id, scenario_id, source_type, source_id, payload)
+                VALUES (%s, %s, 'payment', %s, %s)
+                ON CONFLICT (scenario_id, source_type, source_id) DO NOTHING
+                RETURNING id
+            ''', (company_id, scenario_id, str(p['id']),
+                  json.dumps({'webhook_payment_id': p['id'], 'reason': 'discrepancy'}, ensure_ascii=False)))
+            row = cur.fetchone()
+            if row:
+                created += 1
+                log(cur, row[0], 'info',
+                    f"Расхождение: платёж {p.get('title')} на {float(p.get('amount') or 0):.2f} ₽ без чека дольше {delay} мин")
+    conn.commit()
+    return created
+
+
 def run(cur, conn, company_id=None, job_id=None) -> Dict[str, int]:
     jobs = claim_jobs(cur, company_id, job_id)
     result: Dict[str, int] = {}
@@ -260,6 +310,12 @@ def _handle(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             body = json.loads(event.get('body') or '{}')
             action = body.get('action')
             if action == 'run':
+                if body.get('company_id'):
+                    try:
+                        enqueue_discrepancies(cur, conn, body['company_id'])
+                    except Exception as e:
+                        conn.rollback()
+                        print(f'discrepancy scan failed: {e}')
                 processed = run(cur, conn, body.get('company_id'))
                 if body.get('heartbeat') and body.get('company_id'):
                     # Сигнал из открытого кабинета: заодно - неотправленные дубли

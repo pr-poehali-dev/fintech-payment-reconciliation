@@ -101,6 +101,22 @@ def create_courier_order(kassa: Dict[str, Any], operation: str, body: Dict[str, 
     return None, f'Екомкасса не создала заказ ({status}: {str(data)[:300]})'
 
 
+def create_fiscal_receipt(kassa: Dict[str, Any], operation: str, body: Dict[str, Any]) -> Tuple[Optional[Dict[str, Any]], str]:
+    '''
+    POST /fiscalorder/{v4|v5}/{storeId}/{operation} - чек напрямую (формат АТОЛ Онлайн):
+    sell, sell_refund, sell_correction, sell_refund_correction. Касса ставит чек в очередь
+    и отвечает uuid со статусом wait; итог (done/fail) приходит на callback_url.
+    Повтор с тем же external_id второй чек не пробивает.
+    '''
+    version = kassa.get('protocol_version') or 'v4'
+    status, data = _call(kassa, 'POST', f"/fiscalorder/{version}/{kassa['store_id']}/{operation}", body, timeout=20.0)
+    if status == 200 and isinstance(data, dict) and data.get('uuid') and data.get('status') != 'fail':
+        return data, ''
+    err = (data or {}).get('error') if isinstance(data, dict) else None
+    text = err.get('text') if isinstance(err, dict) else str(data)[:300]
+    return None, f'Екомкасса не приняла чек ({status}: {text})'
+
+
 def deliver_courier_order(kassa: Dict[str, Any], order_id: str, body: Dict[str, Any]) -> Tuple[Optional[Dict[str, Any]], str]:
     '''
     POST /api/mobile/v1/courier/:orderId/deliver - подтверждение доставки (оплата) заказа.

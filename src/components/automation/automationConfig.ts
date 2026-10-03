@@ -45,10 +45,10 @@ export interface IntegrationOption {
 }
 
 // sourceCategories: категории интеграций для выбора источника (null - внутренний источник)
-export const TRIGGERS: Record<TriggerType, { label: string; icon: string; description: string; sourceCategories: string[] | null; needsMapping: boolean }> = {
+export const TRIGGERS: Record<TriggerType, { label: string; icon: string; description: string; sourceCategories: string[] | null; needsMapping: boolean; actions?: ActionType[] }> = {
   new_payment: { label: 'Новый платёж', icon: 'CreditCard', description: 'Пришёл вебхук об оплате от эквайринга', sourceCategories: ['payments'], needsMapping: false },
   crm_order: { label: 'Заказ в CRM', icon: 'Users', description: 'Сделка или заказ в CRM перешли в нужную стадию', sourceCategories: ['crm'], needsMapping: true },
-  discrepancy: { label: 'Расхождение', icon: 'TriangleAlert', description: 'Сверка нашла платёж без чека или чек без денег', sourceCategories: null, needsMapping: false }
+  discrepancy: { label: 'Расхождение', icon: 'TriangleAlert', description: 'Оплаченный платёж так и не получил чек — пробиваем чек (обычно коррекции) по его корзине', sourceCategories: null, needsMapping: false, actions: ['create_receipt'] }
 };
 
 export const ACTIONS: Record<ActionType, { label: string; icon: string }> = {
@@ -65,6 +65,18 @@ export interface ActionTemplateOption {
 }
 
 export const TARGET_CATEGORIES = ['cash_registers'];
+
+// «Расхождение»: через сколько минут после оплаты считать, что чека нет.
+export const DISCREPANCY_DELAY_OPTIONS = [
+  { value: 5, label: '5 минут' },
+  { value: 15, label: '15 минут' },
+  { value: 30, label: '30 минут' },
+  { value: 60, label: '1 час' },
+  { value: 180, label: '3 часа' },
+  { value: 720, label: '12 часов' },
+  { value: 1440, label: '1 сутки' }
+];
+export const DEFAULT_DISCREPANCY_DELAY = 60;
 
 // Сопоставление полей CRM для сценария «Заказ в CRM» (хранится в field_mapping сценария).
 // Ссылка на поле - «объект.КОД»: deal.OPPORTUNITY, contact.EMAIL, company.UF_CRM_123.

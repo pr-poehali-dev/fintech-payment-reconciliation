@@ -78,6 +78,17 @@ def prepare(cur, job: Dict[str, Any], scenario: Dict[str, Any]) -> Tuple[str, Di
         return 'skipped', {'payment': payment}, f"Платёж в статусе {payment['status']} - документ не нужен"
     if payment['receipt_id'] and scenario['action_template'] == 'regular':
         return 'skipped', {'payment': payment}, 'По платежу уже есть чек в кассе'
+    if (job.get('payload') or {}).get('reason') == 'discrepancy':
+        # Расхождение: пока задание ждало, чек мог прийти - перепроверяем, чтобы не задвоить.
+        has_receipt = payment['receipt_id'] is not None
+        if not has_receipt:
+            cur.execute(f'''
+                SELECT EXISTS (SELECT 1 FROM {SCHEMA}.automation_documents d
+                               WHERE d.payment_row_id = %s AND d.doc_kind = 'receipt' AND d.job_id <> %s)
+            ''', (payment['id'], job['id']))
+            has_receipt = bool(cur.fetchone()[0])
+        if has_receipt:
+            return 'skipped', {'payment': payment}, 'Чек по платежу уже есть или его пробивает другое задание - второй не нужен'
 
     data: Dict[str, Any] = {
         'payment': payment,

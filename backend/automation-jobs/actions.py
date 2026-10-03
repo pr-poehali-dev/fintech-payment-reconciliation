@@ -3,7 +3,7 @@ from datetime import date, datetime, timedelta, timezone
 import json
 from typing import Any, Dict, List, Optional, Tuple
 
-from ecomkassa_client import cash_register, create_courier_order, deliver_courier_order, order_status
+from ecomkassa_client import cash_register, create_courier_order, create_fiscal_receipt, deliver_courier_order, order_status
 from receipt_dictionaries import MEASURES, PAYMENT_OBJECTS_V5
 
 SCHEMA = 't_p83864310_fintech_payment_reco'
@@ -348,4 +348,98 @@ def create_order(cur, job: Dict[str, Any], scenario: Dict[str, Any], data: Dict[
     )
 
 
-ACTIONS = {'create_order': create_order}
+def create_receipt(cur, job: Dict[str, Any], scenario: Dict[str, Any], data: Dict[str, Any]) -> Tuple[str, Dict[str, Any], str]:
+    '''
+    Чек напрямую в Екомкассе (без заказа): обычный, агентский или коррекции - по шаблону действия.
+    Состав - из собранной корзины (Т-Банк, Альфа, Екомкасса, CRM). Нет корзины - чек не пробиваем.
+    Номер внешнего документа - make_external_id: повтор задания второй чек не пробьёт.
+    Returns: (статус, результат, сообщение в журнал): done / error.
+    '''
+    kassa = cash_register(cur, scenario['target_integration_id'])
+    if not kassa:
+        return 'error', {}, 'Касса сценария не найдена, отключена или без номера магазина'
+    if not kassa['token']:
+        return 'error', {}, 'Нет токена Екомкассы и не удалось получить новый - переподключите кассу (логин и пароль)'
+    template = scenario.get('template') or {}
+    kassa['protocol_version'] = template.get('protocol_version') or kassa.get('protocol_version') or 'v4'
+    items = _atol_items(data)
+    if not items:
+        return 'error', {}, 'Нет корзины товаров - чек не пробит. Проверьте платёж и пробейте чек вручную'
+    items = apply_template(items, template)
+    total = round(sum(float(i.get('sum') or 0) for i in items), 2)
+
+    source_company = dict(data.get('source_company') or {})
+    if not source_company.get('inn') and cur is not None and job.get('company_id'):
+        cur.execute(f'SELECT inn FROM {SCHEMA}.companies WHERE id = %s', (job['company_id'],))
+        row = cur.fetchone()
+        if row and row[0]:
+            source_company['inn'] = row[0]
+    customer = data.get('customer') or {}
+    # ИНН покупателя касса принимает только из 10 или 12 цифр - иначе не передаём (и имя без ИНН тоже).
+    customer_inn = re.sub(r'\D', '', str(customer.get('inn') or ''))
+    if len(customer_inn) not in (10, 12):
+        customer_inn = ''
+    client = {k: v for k, v in {'email': customer.get('email') or template.get('default_email'),
+                                'phone': customer.get('phone'),
+                                'name': customer.get('name') if customer_inn else None,
+                                'inn': customer_inn}.items() if v}
+    if not client.get('email') and not client.get('phone'):
+        return 'error', {}, 'Нет почты или телефона покупателя - укажите почту по умолчанию в шаблоне действия'
+    company = {k: v for k, v in {'inn': source_company.get('inn'), 'sno': data.get('taxation') or source_company.get('sno'),
+                                 'payment_address': source_company.get('payment_address'),
+                                 'email': source_company.get('email')}.items() if v}
+    operation = document_operation(template)
+    correction, err = correction_info(template, data)
+    if err:
+        return 'error', {}, err
+    payment_type = template.get('payment_type')
+    payments = [{'type': int(payment_type if payment_type is not None else 1), 'sum': total}]
+    external_id = make_external_id(job, data, source_company.get('inn'), operation)
+    body = {
+        'external_id': external_id,
+        'timestamp': datetime.now(MSK).strftime('%d.%m.%Y %H:%M:%S'),
+        'receipt': {'client': client, 'company': company, 'items': items, 'payments': payments, 'total': total}
+    }
+    if template.get('cashier_name'):
+        body['receipt']['cashier'] = template['cashier_name']
+    apply_agent(body['receipt'], template)
+    if correction and kassa['protocol_version'] != 'v5':
+        # АТОЛ v4 (ФФД 1.05): чек коррекции - отдельный блок correction без позиций,
+        # только сумма, налог и основание (тег 1173/1174). Позиции/агент не передаются.
+        r = body.pop('receipt')
+        # Суммы НДС по ставкам позиций: ставка «10%» из суммы с НДС = sum*10/110 и т.д.
+        rates = {'vat0': 0, 'vat5': 5, 'vat7': 7, 'vat10': 10, 'vat18': 18, 'vat20': 20, 'vat22': 22,
+                 'vat105': 5, 'vat107': 7, 'vat110': 10, 'vat118': 18, 'vat120': 20, 'vat122': 22}
+        vats: Dict[str, float] = {}
+        for item in r['items']:
+            vt = (item.get('vat') or {}).get('type') or 'none'
+            rate = rates.get(vt, 0)
+            amount = float(item.get('sum') or 0)
+            vats[vt] = vats.get(vt, 0.0) + (round(amount * rate / (100 + rate), 2) if rate else 0.0)
+        body['correction'] = {
+            'company': r['company'],
+            'correction_info': {**correction, 'base_name': template.get('correction_base_name') or 'Самостоятельно'},
+            'payments': r['payments'],
+            'vats': [{'type': vt, 'sum': round(v, 2)} for vt, v in vats.items()],
+            **({'cashier': r['cashier']} if r.get('cashier') else {})
+        }
+    elif correction:
+        body['receipt']['correction_info'] = correction
+    notify_url = callback_url(cur, job.get('company_id'))
+    if notify_url:
+        body['service'] = {'callback_url': notify_url}
+    advance = round(sum(float(p['sum']) for p in payments if int(p['type']) == 2), 2)
+    register_document(cur, job, scenario, kassa['id'], external_id, operation, total, advance, doc_kind='receipt')
+    result, err = create_fiscal_receipt(kassa, operation, body)
+    if not result:
+        return 'error', {'request': body}, err
+    receipt_uuid = str(result.get('uuid'))
+    register_document(cur, job, scenario, kassa['id'], external_id, operation, total, advance, receipt_uuid, doc_kind='receipt')
+    kind = 'чек коррекции' if correction else 'чек'
+    return 'done', {'request': body, 'response': result, 'external_id': external_id}, (
+        f"Екомкасса приняла {kind} #{receipt_uuid} на {total:.2f} ₽, шаблон «{template.get('name')}» "
+        f"(статус кассы: {result.get('status')}, итог придёт уведомлением)"
+    )
+
+
+ACTIONS = {'create_order': create_order, 'create_receipt': create_receipt}

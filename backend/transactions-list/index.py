@@ -5,6 +5,7 @@ import psycopg2
 from typing import Dict, Any, Optional
 from decimal import Decimal
 from zoneinfo import ZoneInfo
+from datetime import datetime, timedelta
 
 from grouping import group_transactions, node_key, matches_filters, latest_time, local_date
 from auth_guard import guard
@@ -780,7 +781,12 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         if params.get('missing_receipts') == '1':
             # Проверка для уведомлений: оплаченные платежи за день (по часовому поясу
             # компании), в группе которых нет ни одного чека - ни кассы, ни ОФД.
+            # older_than_min/newer_than_hours - для сценария «Расхождение»: платежи без чека,
+            # с оплаты которых прошло не меньше N минут (но не старше окна, чтобы не тянуть историю).
             day = params.get('date')
+            older_min = params.get('older_than_min')
+            newer_hours = params.get('newer_than_hours')
+            now_utc = datetime.utcnow()
             missing = []
             for g in all_groups:
                 if any(t['type'] in ('receipt_kassa', 'receipt_ofd') for t in g):
@@ -790,8 +796,18 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                         continue
                     if day and local_date(t.get('occurred_at'), company_tz) != day:
                         continue
+                    if older_min or newer_hours:
+                        paid_at = datetime.fromisoformat(str(t.get('occurred_at'))).replace(tzinfo=None) \
+                            if t.get('occurred_at') else None
+                        if not paid_at:
+                            continue
+                        if older_min and paid_at > now_utc - timedelta(minutes=int(older_min)):
+                            continue
+                        if newer_hours and paid_at < now_utc - timedelta(hours=int(newer_hours)):
+                            continue
                     missing.append({'id': t['id'], 'title': t['title'], 'amount': t.get('amount'),
-                                    'integration_name': t.get('integration_name')})
+                                    'integration_name': t.get('integration_name'),
+                                    'occurred_at': t.get('occurred_at')})
             return json_ok({'success': True, 'date': day, 'payments': missing,
                             'count': len(missing),
                             'amount': round(sum(float(m['amount'] or 0) for m in missing), 2)})

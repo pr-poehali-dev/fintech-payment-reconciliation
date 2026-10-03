@@ -13,6 +13,8 @@ import {
   ActionTemplateOption,
   ActionType,
   DEFAULT_CRM_MAPPING,
+  DEFAULT_DISCREPANCY_DELAY,
+  DISCREPANCY_DELAY_OPTIONS,
   IntegrationOption,
   MAPPING_FIELDS,
   Scenario,
@@ -120,7 +122,28 @@ const ScenarioDialog = ({ open, onOpenChange, scenario, prefill, integrations, t
     !itemsInvalid &&
     !isSaving;
 
-  const setTrigger = (value: TriggerType) => setForm({ ...form, trigger_type: value, source_integration_id: null });
+  const setTrigger = (value: TriggerType) => {
+    const allowed = TRIGGERS[value].actions;
+    const actionType = allowed && !allowed.includes(form.action_type) ? allowed[0] : form.action_type;
+    setForm({
+      ...form,
+      trigger_type: value,
+      source_integration_id: null,
+      action_type: actionType,
+      action_template:
+        actionType === form.action_type
+          ? form.action_template
+          : allTemplates.find((t) => t.action_type === actionType)?.code || '',
+      field_mapping:
+        value === 'discrepancy'
+          ? { delay_minutes: Number(form.field_mapping.delay_minutes) || DEFAULT_DISCREPANCY_DELAY }
+          : form.trigger_type === 'discrepancy'
+            ? {}
+            : form.field_mapping
+    });
+  };
+  const actionKeys = (trigger.actions || (Object.keys(ACTIONS) as ActionType[]));
+  const delayMinutes = Number(form.field_mapping.delay_minutes) || DEFAULT_DISCREPANCY_DELAY;
   const setAction = (value: ActionType) =>
     setForm({ ...form, action_type: value, action_template: allTemplates.find((t) => t.action_type === value)?.code || '' });
 
@@ -189,9 +212,33 @@ const ScenarioDialog = ({ open, onOpenChange, scenario, prefill, integrations, t
             </Step>
           )}
 
+          {form.trigger_type === 'discrepancy' && (
+            <Step n={step++} title="Когда считать, что чека нет">
+              <Select
+                value={String(delayMinutes)}
+                onValueChange={(v) => setForm({ ...form, field_mapping: { ...form.field_mapping, delay_minutes: Number(v) } })}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {DISCREPANCY_DELAY_OPTIONS.map((o) => (
+                    <SelectItem key={o.value} value={String(o.value)}>
+                      Через {o.label} после оплаты
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Проверяются оплаченные платежи всех платёжек компании. Если за это время не пришёл ни чек кассы, ни чек ОФД —
+                пробиваем чек по корзине платежа. Нет корзины — чек не пробиваем, задание останавливается с ошибкой.
+              </p>
+            </Step>
+          )}
+
           <Step n={step++} title="Действие">
-            <div className="grid grid-cols-2 gap-2">
-              {(Object.keys(ACTIONS) as ActionType[]).map((key) => (
+            <div className={`grid gap-2 ${actionKeys.length > 1 ? 'grid-cols-2' : 'grid-cols-1'}`}>
+              {actionKeys.map((key) => (
                 <button
                   key={key}
                   type="button"
