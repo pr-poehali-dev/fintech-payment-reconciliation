@@ -61,7 +61,19 @@ const IntegrationCard = ({
       onClick={() => onEdit(integration)}
       className="cursor-pointer transition-colors hover:border-primary/40"
     >
-      <CardContent className={`space-y-3 p-5 ${isActive ? '' : '[&>*:not(:first-child)]:opacity-60'}`}>
+      <CardContent className="flex items-center gap-4 p-5">
+        <div
+          className="flex shrink-0 items-center self-stretch border-r border-border pr-4"
+          title={isActive ? 'Включено — выключить' : 'Выключено — включить'}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <Switch
+            checked={isActive}
+            disabled={togglingId === integration.id}
+            onCheckedChange={(v) => onToggleActive(integration, v)}
+          />
+        </div>
+        <div className={`min-w-0 flex-1 space-y-3 ${isActive ? '' : '[&>*:not(:first-child)]:opacity-60'}`}>
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
             <div className={`truncate font-semibold ${isActive ? '' : 'text-muted-foreground'}`}>{integration.integration_name}</div>
@@ -76,17 +88,6 @@ const IntegrationCard = ({
                 <Icon name="Receipt" size={16} />
               </span>
             )}
-            <div
-              className="flex h-8 items-center px-1"
-              title={isActive ? 'Включено — выключить' : 'Выключено — включить'}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <Switch
-                checked={isActive}
-                disabled={togglingId === integration.id}
-                onCheckedChange={(v) => onToggleActive(integration, v)}
-              />
-            </div>
             {isBank && (
               <Button
                 variant="ghost"
@@ -160,6 +161,7 @@ const IntegrationCard = ({
               {integration.forward_url && <Chip tone="primary">Переадресация</Chip>}
             </>
           )}
+        </div>
         </div>
       </CardContent>
     </Card>
