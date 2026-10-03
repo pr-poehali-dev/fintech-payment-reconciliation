@@ -421,9 +421,11 @@ def create_receipt(cur, job: Dict[str, Any], scenario: Dict[str, Any], data: Dic
     if correction:
         r = body.pop('receipt')
         payment_address = str(template.get('payment_address') or r['company'].get('payment_address') or '').strip()
-        if not payment_address:
-            return 'error', {}, 'Не указано место расчётов (сайт или адрес) - обязательно для чека коррекции, заполните в сценарии'
-        company = {**r['company'], 'payment_address': payment_address}
+        is_v5 = kassa['protocol_version'] == 'v5'
+        if is_v5 and not payment_address:
+            return 'error', {}, 'Не указано место расчётов (сайт или адрес) - обязательно для чека коррекции v5, заполните в сценарии'
+        # v4: место расчётов касса берёт из регистрации, если его не передать.
+        company = {**r['company'], **({'payment_address': payment_address} if payment_address else {})}
         if kassa['protocol_version'] != 'v5':
             # АТОЛ v4 (ФФД 1.05): без позиций - только оплаты и суммы НДС по ставкам.
             rates = {'vat0': 0, 'vat5': 5, 'vat7': 7, 'vat10': 10, 'vat18': 18, 'vat20': 20, 'vat22': 22,
