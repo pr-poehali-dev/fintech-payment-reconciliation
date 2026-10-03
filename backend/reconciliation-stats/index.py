@@ -173,6 +173,16 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
     dsn = os.environ['DATABASE_URL']
     conn = psycopg2.connect(dsn)
+    # Время платежей и чеков в базе - UTC; день считаем по часовому поясу компании
+    # (как в «Транзакциях»), иначе вечерние операции уезжают на соседние сутки.
+    tz_cur = conn.cursor()
+    tz_cur.execute(f'''
+        SELECT CASE WHEN EXISTS (SELECT 1 FROM pg_timezone_names n WHERE n.name = c.timezone)
+                    THEN c.timezone ELSE 'Europe/Moscow' END
+        FROM {SCHEMA}.companies c WHERE c.id = %s
+    ''', (company_id,))
+    company_tz = (tz_cur.fetchone() or ['Europe/Moscow'])[0]
+    tz_cur.close()
     cur = conn.cursor()
 
     try:
@@ -192,7 +202,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     wp.integration_id,
                     wp.payment_id,
                     MAX(wp.amount) AS amount,
-                    MIN(COALESCE(er.doc_datetime, wp.created_at))::date AS payment_date,
+                    MIN(((COALESCE(er.doc_datetime, wp.created_at) AT TIME ZONE 'UTC') AT TIME ZONE %s)::date) AS payment_date,
                     (array_agg(wp.status ORDER BY wp.created_at DESC))[1] AS latest_status,
                     (array_agg(wp.payment_provider ORDER BY wp.created_at DESC))[1] AS payment_provider,
                     MAX(ui.integration_name) AS integration_name,
@@ -209,7 +219,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             SELECT payment_date, latest_status, amount, payment_provider, integration_name, provider_slug
             FROM latest
             WHERE payment_date BETWEEN %s AND %s
-        ''', (company_id, date_from, date_to))
+        ''', (company_tz, company_id, date_from, date_to))
 
         payments_rows = cur.fetchall()
         cur.execute(f'''
@@ -258,7 +268,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         # receipts_ofd_total/receipts_ofd_count.
         cur.execute(f'''
             SELECT
-                ekr.doc_datetime::date AS receipt_date,
+                ((ekr.doc_datetime AT TIME ZONE 'UTC') AT TIME ZONE %s)::date AS receipt_date,
                 ekr.total_sum,
                 COALESCE(om.operation_type,
                          CASE WHEN adv.operation LIKE 'sell_refund%%' THEN 'Refund Income' END,
@@ -290,8 +300,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
               AND ekr.removed_at IS NULL
               AND ekr.status IS DISTINCT FROM 'cancelled'
               AND ekr.status IS DISTINCT FROM 'wait'
-              AND ekr.doc_datetime::date BETWEEN %s AND %s
-        ''', (company_id, date_from, date_to))
+              AND ((ekr.doc_datetime AT TIME ZONE 'UTC') AT TIME ZONE %s)::date BETWEEN %s AND %s
+        ''', (company_tz, company_id, company_tz, date_from, date_to))
 
         receipts_rows = cur.fetchall()
         receipts_total = 0.0
@@ -318,12 +328,12 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
         # 2б. Чеки ОФД отдельно - контрольная точка "касса vs ОФД".
         cur.execute(f'''
-            SELECT ofd.total_sum, ofd.operation_type, ofd.doc_datetime::date
+            SELECT ofd.total_sum, ofd.operation_type, ((ofd.doc_datetime AT TIME ZONE 'UTC') AT TIME ZONE %s)::date
             FROM {SCHEMA}.ofd_receipts ofd
             WHERE ofd.company_id = %s
               AND ofd.removed_at IS NULL
-              AND ofd.doc_datetime::date BETWEEN %s AND %s
-        ''', (company_id, date_from, date_to))
+              AND ((ofd.doc_datetime AT TIME ZONE 'UTC') AT TIME ZONE %s)::date BETWEEN %s AND %s
+        ''', (company_tz, company_id, company_tz, date_from, date_to))
 
         receipts_ofd_total = 0.0
         receipts_ofd_count = 0

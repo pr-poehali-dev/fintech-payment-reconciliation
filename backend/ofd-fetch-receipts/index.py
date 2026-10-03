@@ -5,7 +5,8 @@ import urllib.request
 import urllib.error
 import urllib.parse
 from typing import Dict, Any, Optional, Tuple
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone as dt_timezone
+from zoneinfo import ZoneInfo
 from cron_report import record_cron_run
 from auth_guard import guard
 
@@ -69,6 +70,26 @@ def fetch_kkt_receipts(cur, integration_id: int, company_id: int, config: Dict[s
     else:
         receipts = []
 
+    # OFD.RU отдаёт DocDateTime в местном времени кассы, а в базе всё время - в UTC
+    # (как у Екомкассы и платежей). Переводим из часового пояса компании.
+    cur.execute('SELECT timezone FROM t_p83864310_fintech_payment_reco.companies WHERE id = %s', (company_id,))
+    tz_name = ((cur.fetchone() or [None])[0] or 'Europe/Moscow')
+    try:
+        company_tz = ZoneInfo(tz_name)
+    except Exception:
+        company_tz = ZoneInfo('Europe/Moscow')
+
+    def to_utc(value: Any) -> Any:
+        if not value:
+            return value
+        try:
+            local = datetime.fromisoformat(str(value).replace('Z', ''))
+        except ValueError:
+            return value
+        if local.tzinfo is None:
+            local = local.replace(tzinfo=company_tz)
+        return local.astimezone(dt_timezone.utc).replace(tzinfo=None).isoformat()
+
     inserted_count = 0
     skipped: list = []
     for receipt in receipts:
@@ -97,7 +118,7 @@ def fetch_kkt_receipts(cur, integration_id: int, company_id: int, config: Dict[s
                 float(receipt.get('CashSumm', 0)) / 100,
                 float(receipt.get('ECashSumm', 0)) / 100,
                 receipt.get('DocNumber'),
-                receipt.get('DocDateTime'),
+                to_utc(receipt.get('DocDateTime')),
                 receipt.get('FnNumber'),
                 json.dumps(receipt)
             ))
