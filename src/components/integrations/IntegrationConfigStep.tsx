@@ -5,6 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import Icon from '@/components/ui/icon';
 import TbankAccountPicker from './TbankAccountPicker';
 import EcomkassaStorePicker from './EcomkassaStorePicker';
+import OfdKktPicker from './OfdKktPicker';
 import EcomkassaPaymentTypesPicker from './EcomkassaPaymentTypesPicker';
 import TochkaAuthMethodPicker from './TochkaAuthMethodPicker';
 import {
@@ -62,6 +63,7 @@ const IntegrationConfigStep = ({
   const isTochkaAccount = selectedProvider.slug === 'tochka_account';
   const isEcomkassa = selectedProvider.slug === 'ecomkassa';
   const isEcomkassaGateway = selectedProvider.slug === 'ecomkassa_gateway';
+  const isOfd = selectedProvider.slug === 'ofdru';
 
   const isConfigValid = () => {
     if (isTbankAccount && !String(config.account_number ?? '').trim()) {
@@ -73,6 +75,10 @@ const IntegrationConfigStep = ({
     }
 
     if (isEcomkassa && (!config.token || !String(config.store_id ?? '').trim())) {
+      return false;
+    }
+
+    if (isOfd && (!String(config.auth_token ?? '').trim() || !String(config.kkt ?? '').trim())) {
       return false;
     }
 
@@ -218,6 +224,16 @@ const IntegrationConfigStep = ({
           companyId={companyId}
           accountNumber={String(config.account_number ?? '')}
           onAccountNumberChange={(value) => onConfigChange({ ...config, account_number: value })}
+        />
+      )}
+
+      {isOfd && (
+        <OfdKktPicker
+          companyId={companyId}
+          config={config}
+          onConfigChange={onConfigChange}
+          visiblePassword={!!visiblePasswords.auth_token}
+          onTogglePasswordVisibility={() => onTogglePasswordVisibility('auth_token')}
         />
       )}
 

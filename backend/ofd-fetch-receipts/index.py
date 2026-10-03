@@ -307,11 +307,80 @@ def _handle(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         conn.close()
 
 
+def list_kkts(body: Dict[str, Any]) -> Dict[str, Any]:
+    '''
+    Список касс из OFD.RU по токену API и ИНН компании (GET /api/integration/v2/inn/{inn}/kkts).
+    ИНН берём из карточки компании - пользователь вводит только токен.
+    '''
+    import ssl
+    from russian_ca import RUSSIAN_TRUSTED_CA
+
+    def reply(code: int, payload: Dict[str, Any]) -> Dict[str, Any]:
+        return {'statusCode': code, 'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+                'body': json.dumps(payload, ensure_ascii=False), 'isBase64Encoded': False}
+
+    token = str(body.get('auth_token') or '').strip()
+    company_id = body.get('company_id')
+    integration_id = body.get('integration_id')
+    if not company_id:
+        return reply(400, {'error': 'Не выбрана компания'})
+    conn = psycopg2.connect(os.environ['DATABASE_URL'])
+    cur = conn.cursor()
+    try:
+        cur.execute('SELECT inn FROM t_p83864310_fintech_payment_reco.companies WHERE id = %s', (company_id,))
+        inn = ((cur.fetchone() or [None])[0] or '').strip()
+        if not token and integration_id:
+            # Правка интеграции: токен уже сохранён, повторно его не просим.
+            cur.execute('''SELECT config FROM t_p83864310_fintech_payment_reco.user_integrations
+                           WHERE id = %s AND company_id = %s''', (integration_id, company_id))
+            row = cur.fetchone()
+            saved = (row[0] if row and isinstance(row[0], dict) else json.loads((row or [None])[0] or '{}'))
+            token = str(saved.get('auth_token') or '')
+    finally:
+        cur.close()
+        conn.close()
+    if not inn:
+        return reply(400, {'error': 'У компании не указан ИНН - заполните его в настройках компании'})
+    if not token:
+        return reply(400, {'error': 'Введите токен API OFD.RU'})
+
+    ctx = ssl.create_default_context()
+    ctx.load_verify_locations(cadata=RUSSIAN_TRUSTED_CA)
+    url = f'https://ofd.ru/api/integration/v2/inn/{inn}/kkts?' + urllib.parse.urlencode({'AuthToken': token})
+    try:
+        with urllib.request.urlopen(url, timeout=15, context=ctx) as resp:
+            data = json.loads(resp.read().decode('utf-8'))
+    except urllib.error.HTTPError as e:
+        if e.code in (401, 403):
+            return reply(400, {'error': f'OFD.RU не принял токен для ИНН {inn}: проверьте токен и что он выдан для этой организации',
+                               'error_code': 'invalid_credentials'})
+        return reply(502, {'error': f'OFD.RU ответил ошибкой {e.code}'})
+    except Exception as e:
+        return reply(502, {'error': f'Не удалось связаться с OFD.RU: {str(e)[:120]}'})
+
+    kkts = []
+    for k in data.get('Data') or []:
+        if not isinstance(k, dict) or not k.get('KktRegId'):
+            continue
+        kkts.append({
+            'kkt': k.get('KktRegId'), 'serial': k.get('SerialNumber'), 'model': k.get('KktModel'),
+            'address': k.get('FiscalAddress'), 'place': k.get('FiscalPlace'),
+            'fn_end': k.get('FnEndDate'), 'contract_end': k.get('ContractEndDate'),
+            'last_doc': k.get('LastDocOnKktDateTime'),
+        })
+    return reply(200, {'success': True, 'inn': inn, 'kkts': kkts})
+
+
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     '''Точка входа: обработка запроса + итог для админки, если вызвал планировщик.'''
     denied = guard(event)
     if denied:
         return denied
+
+    if event.get('httpMethod') == 'POST':
+        body = json.loads(event.get('body') or '{}') or {}
+        if body.get('action') == 'list_kkts':
+            return list_kkts(body)
 
     resp = _handle(event, context)
     if event.get('httpMethod', 'POST') == 'POST':

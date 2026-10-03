@@ -141,10 +141,8 @@ export const PROVIDER_FIELDS: Record<string, FieldConfig[]> = {
     { key: 'terminal_id', label: 'Terminal ID', type: 'text', placeholder: '1234567890', hint: 'Найдите в ЛК Т-Банк → Настройки → Терминалы' },
     { key: 'terminal_password', label: 'Terminal Password', type: 'password', placeholder: '•••••••••', hint: 'Terminal ID и пароль проверим у Т-Банка при сохранении' }
   ],
-  ofdru: [
-    { key: 'kkt', label: 'Регистрационный номер ККТ', type: 'text', placeholder: '0000111122223333', hint: 'Номер контрольно-кассовой техники' },
-    { key: 'auth_token', label: 'Токен API', type: 'password', hint: 'Получите в ЛК OFD.RU → Настройки → Управление передачей данных → Ключи доступа API OFD' }
-  ],
+  // Токен и касса вводятся в OfdKktPicker: по токену и ИНН компании загружаем список касс из OFD.RU.
+  ofdru: [],
   bitrix24: [
     { key: 'webhook_url', label: 'Входящий вебхук Битрикс24', type: 'text', placeholder: 'https://yourcompany.bitrix24.ru/rest/1/xxxxxxxxxx/', hint: 'Битрикс24 → Разработчикам → Другое → Входящий вебхук. Права: crm' },
     { key: 'sync_schedule', label: 'Обмен по расписанию', type: 'checkbox', default: true, required: false, hint: 'Клиенты и статусы синхронизируются сами, без кнопки' },
