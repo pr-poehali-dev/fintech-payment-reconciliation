@@ -16,6 +16,7 @@ export interface Scenario {
   target_integration_id: number | null;
   target_integration_name: string | null;
   field_mapping: Record<string, string>;
+  correction_settings?: CorrectionSettings;
   status: ScenarioStatus;
   jobs_total: number;
   jobs_errors: number;
@@ -62,6 +63,18 @@ export interface ActionTemplateOption {
   name: string;
   action_type: ActionType;
   description: string | null;
+  receipt_type?: string;
+  protocol_version?: string;
+  correction_base_number?: string | null;
+}
+
+// Поля чека коррекции, которые задаются в сценарии (АТОЛ Онлайн):
+// v4 (ФФД 1.05) - номер (1179) и описание (1177) основания обязательны;
+// v5 (ФФД 1.2) - номер основания необязателен, описания нет. Место расчётов (1187) - в обеих.
+export interface CorrectionSettings {
+  correction_base_number?: string;
+  correction_base_name?: string;
+  payment_address?: string;
 }
 
 export const TARGET_CATEGORIES = ['cash_registers'];

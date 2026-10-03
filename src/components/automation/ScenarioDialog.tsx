@@ -12,6 +12,7 @@ import {
   ActionTemplate,
   ActionTemplateOption,
   ActionType,
+  CorrectionSettings,
   DEFAULT_CRM_MAPPING,
   DEFAULT_DISCREPANCY_DELAY,
   DISCREPANCY_DELAY_OPTIONS,
@@ -31,6 +32,7 @@ export interface ScenarioForm {
   action_template: ActionTemplate;
   target_integration_id: number | null;
   field_mapping: Record<string, unknown>;
+  correction_settings: CorrectionSettings;
 }
 
 interface ScenarioDialogProps {
@@ -51,7 +53,8 @@ const emptyForm: ScenarioForm = {
   action_type: 'create_receipt',
   action_template: 'regular',
   target_integration_id: null,
-  field_mapping: {}
+  field_mapping: {},
+  correction_settings: {}
 };
 
 const Step = ({ n, title, children }: { n: number; title: string; children: React.ReactNode }) => (
@@ -79,7 +82,8 @@ const ScenarioDialog = ({ open, onOpenChange, scenario, prefill, integrations, t
             action_type: scenario.action_type,
             action_template: scenario.action_template,
             target_integration_id: scenario.target_integration_id,
-            field_mapping: scenario.field_mapping || {}
+            field_mapping: scenario.field_mapping || {},
+            correction_settings: scenario.correction_settings || {}
           }
         : {
             ...emptyForm,
@@ -101,6 +105,17 @@ const ScenarioDialog = ({ open, onOpenChange, scenario, prefill, integrations, t
     templates.push({ code: form.action_template, name: scenario.action_template_name || form.action_template, action_type: form.action_type, description: null });
   }
   const currentTemplate = templates.find((t) => t.code === form.action_template);
+  const isCorrection = form.action_type === 'create_receipt' && currentTemplate?.receipt_type === 'correction';
+  const isV5 = currentTemplate?.protocol_version === 'v5';
+  const cs = form.correction_settings || {};
+  const setCs = (patch: CorrectionSettings) => setForm({ ...form, correction_settings: { ...cs, ...patch } });
+  const correctionMissing = isCorrection
+    ? [
+        !cs.payment_address?.trim() && 'место расчётов',
+        !isV5 && !(cs.correction_base_number?.trim() || currentTemplate?.correction_base_number) && 'номер основания',
+        !isV5 && !cs.correction_base_name?.trim() && 'описание коррекции'
+      ].filter(Boolean)
+    : [];
   let step = 1;
 
   const sourceIntegration = integrations.find((i) => i.id === form.source_integration_id);
@@ -119,6 +134,7 @@ const ScenarioDialog = ({ open, onOpenChange, scenario, prefill, integrations, t
     !!form.target_integration_id &&
     !!currentTemplate &&
     missingMapping.length === 0 &&
+    correctionMissing.length === 0 &&
     !itemsInvalid &&
     !isSaving;
 
@@ -269,6 +285,47 @@ const ScenarioDialog = ({ open, onOpenChange, scenario, prefill, integrations, t
             </Select>
             {currentTemplate?.description && <p className="text-xs text-muted-foreground">{currentTemplate.description}</p>}
           </Step>
+
+          {isCorrection && (
+            <Step n={step++} title="Чек коррекции">
+              <div className="space-y-3 rounded-lg border border-primary/30 bg-primary/5 p-4">
+                <p className="text-xs text-muted-foreground">
+                  Самостоятельная коррекция · протокол {isV5 ? 'v5 (ФФД 1.2)' : 'v4 (ФФД 1.05)'}. Дата основания — дата платежа.
+                </p>
+                <div className="space-y-1">
+                  <Label>Место расчётов</Label>
+                  <Input
+                    placeholder="https://shop.ru или адрес магазина"
+                    value={cs.payment_address || ''}
+                    onChange={(e) => setCs({ payment_address: e.target.value })}
+                  />
+                  <p className="text-xs text-muted-foreground">Сайт для интернет-продаж или адрес точки — как в регистрации кассы</p>
+                </div>
+                <div className="space-y-1">
+                  <Label>Номер документа-основания{isV5 ? ' (необязательно)' : ''}</Label>
+                  <Input
+                    placeholder={currentTemplate?.correction_base_number || 'Например, 1 или номер акта'}
+                    value={cs.correction_base_number || ''}
+                    onChange={(e) => setCs({ correction_base_number: e.target.value })}
+                  />
+                </div>
+                {!isV5 && (
+                  <div className="space-y-1">
+                    <Label>Описание коррекции</Label>
+                    <Input
+                      placeholder="Не пробит чек при оплате"
+                      value={cs.correction_base_name || ''}
+                      onChange={(e) => setCs({ correction_base_name: e.target.value })}
+                    />
+                    <p className="text-xs text-muted-foreground">Причина коррекции — попадёт в чек</p>
+                  </div>
+                )}
+                {correctionMissing.length > 0 && (
+                  <p className="text-xs text-destructive">Заполните: {correctionMissing.join(', ')}</p>
+                )}
+              </div>
+            </Step>
+          )}
 
           <Step n={step++} title="Касса">
             <Select

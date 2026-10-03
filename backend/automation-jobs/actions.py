@@ -68,9 +68,9 @@ def document_operation(template: Dict[str, Any]) -> str:
 
 def correction_info(template: Dict[str, Any], data: Dict[str, Any]) -> Tuple[Optional[Dict[str, Any]], str]:
     '''
-    correction_info для чека коррекции - только самостоятельная (type = self):
-    v4 - base_date (дата документа основания) + base_number (обязателен);
-    v5 - base_date (дата корректируемого расчёта), без номера.
+    correction_info чека коррекции (только самостоятельная, type = self), по АТОЛ Онлайн:
+    v4 (ФФД 1.05) - base_date, base_number, base_name - все обязательны (теги 1178, 1179, 1177);
+    v5 (ФФД 1.2) - base_date (дата корректируемого расчёта), base_number - если указан.
     '''
     if template.get('receipt_type') != 'correction':
         return None, ''
@@ -83,12 +83,18 @@ def correction_info(template: Dict[str, Any], data: Dict[str, Any]) -> Tuple[Opt
             return None, 'Нет даты платежа для основания коррекции'
         base_date = datetime.fromisoformat(paid_at).date()
     info = {'type': 'self', 'base_date': base_date.strftime('%d.%m.%Y')}
+    number = str(template.get('correction_base_number') or '').strip()
     if template.get('protocol_version') == 'v5':
+        if number:
+            info['base_number'] = number
         return info, ''
-    number = template.get('correction_base_number')
+    name = str(template.get('correction_base_name') or '').strip()
     if not number:
-        return None, 'В шаблоне не указан номер документа основания коррекции (обязателен для v4)'
+        return None, 'Не указан номер документа-основания коррекции (обязателен для v4) - заполните в сценарии'
+    if not name:
+        return None, 'Не указано описание коррекции (обязательно для v4) - заполните в сценарии'
     info['base_number'] = number
+    info['base_name'] = name
     return info, ''
 
 
@@ -403,28 +409,32 @@ def create_receipt(cur, job: Dict[str, Any], scenario: Dict[str, Any], data: Dic
     if template.get('cashier_name'):
         body['receipt']['cashier'] = template['cashier_name']
     apply_agent(body['receipt'], template)
-    if correction and kassa['protocol_version'] != 'v5':
-        # АТОЛ v4 (ФФД 1.05): чек коррекции - отдельный блок correction без позиций,
-        # только сумма, налог и основание (тег 1173/1174). Позиции/агент не передаются.
+    if correction:
         r = body.pop('receipt')
-        # Суммы НДС по ставкам позиций: ставка «10%» из суммы с НДС = sum*10/110 и т.д.
-        rates = {'vat0': 0, 'vat5': 5, 'vat7': 7, 'vat10': 10, 'vat18': 18, 'vat20': 20, 'vat22': 22,
-                 'vat105': 5, 'vat107': 7, 'vat110': 10, 'vat118': 18, 'vat120': 20, 'vat122': 22}
-        vats: Dict[str, float] = {}
-        for item in r['items']:
-            vt = (item.get('vat') or {}).get('type') or 'none'
-            rate = rates.get(vt, 0)
-            amount = float(item.get('sum') or 0)
-            vats[vt] = vats.get(vt, 0.0) + (round(amount * rate / (100 + rate), 2) if rate else 0.0)
-        body['correction'] = {
-            'company': r['company'],
-            'correction_info': {**correction, 'base_name': template.get('correction_base_name') or 'Самостоятельно'},
-            'payments': r['payments'],
-            'vats': [{'type': vt, 'sum': round(v, 2)} for vt, v in vats.items()],
-            **({'cashier': r['cashier']} if r.get('cashier') else {})
-        }
-    elif correction:
-        body['receipt']['correction_info'] = correction
+        payment_address = str(template.get('payment_address') or r['company'].get('payment_address') or '').strip()
+        if not payment_address:
+            return 'error', {}, 'Не указано место расчётов (сайт или адрес) - обязательно для чека коррекции, заполните в сценарии'
+        company = {**r['company'], 'payment_address': payment_address}
+        if kassa['protocol_version'] != 'v5':
+            # АТОЛ v4 (ФФД 1.05): без позиций - только оплаты и суммы НДС по ставкам.
+            rates = {'vat0': 0, 'vat5': 5, 'vat7': 7, 'vat10': 10, 'vat18': 18, 'vat20': 20, 'vat22': 22,
+                     'vat105': 5, 'vat107': 7, 'vat110': 10, 'vat118': 18, 'vat120': 20, 'vat122': 22}
+            vats: Dict[str, float] = {}
+            for item in r['items']:
+                vt = (item.get('vat') or {}).get('type') or 'none'
+                rate = rates.get(vt, 0)
+                amount = float(item.get('sum') or 0)
+                vats[vt] = vats.get(vt, 0.0) + (round(amount * rate / (100 + rate), 2) if rate else 0.0)
+            body['correction'] = {
+                'company': company,
+                'correction_info': correction,
+                'payments': r['payments'],
+                'vats': [{'type': vt, 'sum': round(v, 2)} for vt, v in vats.items()],
+                **({'cashier': r['cashier']} if r.get('cashier') else {})
+            }
+        else:
+            # АТОЛ v5 (ФФД 1.2): как обычный чек (покупатель, позиции, итог) + основание коррекции.
+            body['correction'] = {**r, 'company': company, 'correction_info': correction}
     notify_url = callback_url(cur, job.get('company_id'))
     if notify_url:
         body['service'] = {'callback_url': notify_url}

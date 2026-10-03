@@ -88,9 +88,19 @@ def validate(cur, company_id: int, body: Dict[str, Any]) -> Optional[str]:
         target = cur.fetchone()
         if not target or target[0] != template[2]:
             return 'Шаблон рассчитан на другую кассу'
-    if template[3] == 'correction' and template[4] != 'v5' and not (template[6] or '').strip():
-        return ('В шаблоне «Чек коррекции» не указан номер документа-основания - он обязателен для протокола v4. '
-                'Заполните его в админке → «Шаблоны действий»')
+    if template[3] == 'correction':
+        cs = body.get('correction_settings') or {}
+        if not isinstance(cs, dict):
+            return 'Некорректные настройки чека коррекции'
+        if not str(cs.get('payment_address') or '').strip():
+            return 'Укажите место расчётов (сайт или адрес) для чека коррекции'
+        if len(str(cs.get('payment_address'))) > 256:
+            return 'Место расчётов - не длиннее 256 символов'
+        if template[4] != 'v5':
+            if not str(cs.get('correction_base_number') or template[6] or '').strip():
+                return 'Укажите номер документа-основания коррекции (обязателен для протокола v4)'
+            if not str(cs.get('correction_base_name') or '').strip():
+                return 'Укажите описание коррекции (обязательно для протокола v4)'
     mapping = body.get('field_mapping') or {}
     if not isinstance(mapping, dict):
         return 'Некорректная настройка сопоставления полей'
@@ -149,6 +159,16 @@ def _match_integration(cur, company_id: int, src: Dict[str, Any]) -> Optional[in
     return rows[0][0] if rows and not url else None
 
 
+CORRECTION_KEYS = ('correction_base_number', 'correction_base_name', 'payment_address')
+
+
+def clean_correction(value: Any) -> Dict[str, str]:
+    '''Поля чека коррекции сценария: номер и описание основания, место расчётов.'''
+    if not isinstance(value, dict):
+        return {}
+    return {k: str(value[k]).strip()[:256] for k in CORRECTION_KEYS if str(value.get(k) or '').strip()}
+
+
 def copy_to_company(cur, conn, company_id: int, body: Dict[str, Any]) -> Dict[str, Any]:
     '''
     Копия сценария в другую компанию пользователя. Источник ищется в целевой компании
@@ -168,13 +188,13 @@ def copy_to_company(cur, conn, company_id: int, body: Dict[str, Any]) -> Dict[st
         return {'status': 403, 'body': {'error': 'Нет доступа к одной из компаний'}}
     cur.execute(f'''
         SELECT name, trigger_type, source_integration_id, action_type, action_template,
-               target_integration_id, field_mapping
+               target_integration_id, field_mapping, correction_settings
         FROM {SCHEMA}.automation_scenarios WHERE id = %s AND company_id = %s AND removed_at IS NULL
     ''', (body.get('id'), company_id))
     r = cur.fetchone()
     if not r:
         return {'status': 404, 'body': {'error': 'Сценарий не найден'}}
-    name, trigger, src_id, action, template, kassa_id, mapping = r
+    name, trigger, src_id, action, template, kassa_id, mapping, correction = r
     mapping = json.loads(mapping) if isinstance(mapping, str) else (mapping or {})
 
     kassa = _integration(cur, kassa_id)
@@ -201,7 +221,7 @@ def copy_to_company(cur, conn, company_id: int, body: Dict[str, Any]) -> Dict[st
 
     payload = {'name': body.get('name') or name, 'trigger_type': trigger, 'source_integration_id': new_src,
                'action_type': action, 'action_template': template, 'target_integration_id': new_kassa,
-               'field_mapping': mapping, 'id': 'copy'}
+               'field_mapping': mapping, 'id': 'copy', 'correction_settings': correction or {}}
     error = validate(cur, target_id, payload)
     if error:
         conn.rollback()
@@ -219,10 +239,11 @@ def copy_to_company(cur, conn, company_id: int, body: Dict[str, Any]) -> Dict[st
     cur.execute(f'''
         INSERT INTO {SCHEMA}.automation_scenarios
             (company_id, name, trigger_type, source_integration_id, action_type,
-             action_template, target_integration_id, field_mapping, status)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'stopped')
+             action_template, target_integration_id, field_mapping, status, correction_settings)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'stopped', %s)
         RETURNING id
-    ''', (target_id, payload['name'][:200], trigger, new_src, action, template, new_kassa, json.dumps(mapping)))
+    ''', (target_id, payload['name'][:200], trigger, new_src, action, template, new_kassa, json.dumps(mapping),
+          json.dumps(clean_correction(correction), ensure_ascii=False)))
     new_id = cur.fetchone()[0]
     conn.commit()
     return {'status': 200, 'body': {'success': True, 'id': new_id, 'company_id': target_id,
@@ -264,7 +285,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                        s.action_type, s.action_template, s.target_integration_id, ti.integration_name,
                        s.field_mapping, s.status, s.created_at, s.updated_at,
                        COUNT(j.id), COUNT(j.id) FILTER (WHERE j.status = 'error'), MAX(j.created_at),
-                       MAX(t.name)
+                       MAX(t.name), s.correction_settings
                 FROM {SCHEMA}.automation_scenarios s
                 LEFT JOIN {SCHEMA}.automation_action_templates t ON t.code = s.action_template
                 LEFT JOIN {SCHEMA}.user_integrations si ON si.id = s.source_integration_id
@@ -282,7 +303,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 'field_mapping': r[9] or {}, 'status': r[10],
                 'created_at': r[11], 'updated_at': r[12],
                 'jobs_total': r[13], 'jobs_errors': r[14], 'last_job_at': r[15],
-                'action_template_name': r[16]
+                'action_template_name': r[16], 'correction_settings': r[17] or {}
             } for r in cur.fetchall()]
             return respond(200, {'success': True, 'scenarios': scenarios})
 
@@ -311,14 +332,15 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             cur.execute(f'''
                 INSERT INTO {SCHEMA}.automation_scenarios
                     (company_id, name, trigger_type, source_integration_id, action_type,
-                     action_template, target_integration_id, field_mapping, status)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'stopped')
+                     action_template, target_integration_id, field_mapping, status, correction_settings)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'stopped', %s)
                 RETURNING id
             ''', (
                 company_id, body['name'].strip(), body['trigger_type'],
                 body.get('source_integration_id') if TRIGGERS[body['trigger_type']] else None,
                 body['action_type'], body['action_template'], body['target_integration_id'],
-                json.dumps(body.get('field_mapping') or {})
+                json.dumps(body.get('field_mapping') or {}),
+                json.dumps(clean_correction(body.get('correction_settings')), ensure_ascii=False)
             ))
             new_id = cur.fetchone()[0]
             conn.commit()
@@ -343,13 +365,16 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 cur.execute(f'''
                     UPDATE {SCHEMA}.automation_scenarios SET
                         name = %s, trigger_type = %s, source_integration_id = %s, action_type = %s,
-                        action_template = %s, target_integration_id = %s, field_mapping = %s, updated_at = NOW()
+                        action_template = %s, target_integration_id = %s, field_mapping = %s,
+                        correction_settings = %s, updated_at = NOW()
                     WHERE id = %s AND company_id = %s AND removed_at IS NULL RETURNING id
                 ''', (
                     body['name'].strip(), body['trigger_type'],
                     body.get('source_integration_id') if TRIGGERS[body['trigger_type']] else None,
                     body['action_type'], body['action_template'], body['target_integration_id'],
-                    json.dumps(body.get('field_mapping') or {}), scenario_id, company_id
+                    json.dumps(body.get('field_mapping') or {}),
+                    json.dumps(clean_correction(body.get('correction_settings')), ensure_ascii=False),
+                    scenario_id, company_id
                 ))
             if not cur.fetchone():
                 conn.rollback()

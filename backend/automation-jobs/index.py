@@ -112,7 +112,8 @@ def process_job(cur, job: Dict[str, Any]) -> str:
                s.removed_at, t.operation, t.paid, t.name, t.protocol_version, t.receipt_type, t.payment_method,
                t.payment_object, t.measure, t.payment_type, t.default_email,
                t.correction_type, t.correction_date_source, t.correction_base_date, t.correction_base_number,
-               t.auto_deliver, t.cashier_name, t.agent_settings
+               t.auto_deliver, t.cashier_name, t.agent_settings, t.correction_base_name, t.payment_address,
+               s.correction_settings
         FROM {SCHEMA}.automation_scenarios s
         LEFT JOIN {SCHEMA}.automation_action_templates t ON t.code = s.action_template
         WHERE s.id = %s
@@ -127,7 +128,12 @@ def process_job(cur, job: Dict[str, Any]) -> str:
                              'default_email': r[17], 'correction_type': r[18],
                              'correction_date_source': r[19], 'correction_base_date': r[20],
                              'correction_base_number': r[21], 'auto_deliver': bool(r[22]),
-                             'cashier_name': r[23], 'agent_settings': r[24]}}
+                             'cashier_name': r[23], 'agent_settings': r[24],
+                             'correction_base_name': r[25], 'payment_address': r[26]}}
+    # Поля коррекции из сценария (номер/описание основания, место расчётов) важнее шаблона.
+    for key, value in (r[27] or {}).items():
+        if value not in (None, ''):
+            scenario['template'][key] = value
 
     if r[7] is not None:
         status, data, message = 'skipped', {}, 'Сценарий удалён'
