@@ -135,12 +135,11 @@ export const PROVIDER_FIELDS: Record<string, FieldConfig[]> = {
   alfabank: [
     { key: 'environment', label: 'Сервер банка', type: 'select', options: ALFABANK_ENV_OPTIONS, default: 'prod', required: false, hint: 'Адрес зависит от логина: уточните у поддержки Альфа-Банка, если не уверены' },
     { key: 'user_name', label: 'Логин API-пользователя', type: 'text', placeholder: 'r-shop-api', hint: 'Учётная запись магазина с окончанием -api из письма Альфа-Банка' },
-    { key: 'password', label: 'Пароль API-пользователя', type: 'password', placeholder: '•••••••••' },
-    { key: 'callback_secret', label: 'Ключ контрольной суммы уведомлений', type: 'password', required: false, hint: 'Необязательно. Симметричный ключ из поддержки банка — тогда проверяем подпись каждого уведомления. Без ключа подлинность проверяем запросом статуса заказа в банке' }
+    { key: 'password', label: 'Пароль API-пользователя', type: 'password', placeholder: '•••••••••', hint: 'Логин и пароль проверим у банка при сохранении' }
   ],
   tbank: [
     { key: 'terminal_id', label: 'Terminal ID', type: 'text', placeholder: '1234567890', hint: 'Найдите в ЛК Т-Банк → Настройки → Терминалы' },
-    { key: 'terminal_password', label: 'Terminal Password', type: 'password', placeholder: '•••••••••' }
+    { key: 'terminal_password', label: 'Terminal Password', type: 'password', placeholder: '•••••••••', hint: 'Terminal ID и пароль проверим у Т-Банка при сохранении' }
   ],
   ofdru: [
     { key: 'kkt', label: 'Регистрационный номер ККТ', type: 'text', placeholder: '0000111122223333', hint: 'Номер контрольно-кассовой техники' },

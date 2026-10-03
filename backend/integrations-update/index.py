@@ -3,6 +3,7 @@ import os
 import psycopg2
 from typing import Dict, Any
 from auth_guard import guard
+import credentials_check
 
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     '''
@@ -84,7 +85,31 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     dsn = os.environ['DATABASE_URL']
     conn = psycopg2.connect(dsn)
     cur = conn.cursor()
-    
+
+    creds_message = None
+    if config:
+        cur.execute('''
+            SELECT p.slug, ui.config FROM user_integrations ui
+            JOIN integration_providers p ON p.id = ui.provider_id
+            WHERE ui.id = %s AND ui.company_id = %s
+        ''', (integration_id, company_id))
+        row = cur.fetchone()
+        if row:
+            saved = row[1] if isinstance(row[1], dict) else json.loads(row[1] or '{}')
+            new_config = {**saved, **config}
+            # Проверяем у банка, только если поменялись данные входа - лишних запросов при правке названия нет.
+            if any(new_config.get(k) != saved.get(k) for k in new_config):
+                creds_ok, creds_message = credentials_check.check(row[0], new_config)
+                if not creds_ok:
+                    cur.close()
+                    conn.close()
+                    return {
+                        'statusCode': 400,
+                        'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+                        'body': json.dumps({'error': creds_message, 'error_code': 'invalid_credentials'}, ensure_ascii=False),
+                        'isBase64Encoded': False
+                    }
+
     try:
         cur.execute('''
             UPDATE user_integrations
@@ -131,8 +156,9 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
             'body': json.dumps({
                 'success': True,
-                'message': 'Integration updated successfully'
-            }),
+                'message': 'Integration updated successfully',
+                'warning': creds_message
+            }, ensure_ascii=False),
             'isBase64Encoded': False
         }
         

@@ -126,11 +126,11 @@ const AddIntegrationDialog = ({
         const data = await response.json();
 
         if (response.ok && data.success) {
-          toast({ title: 'Интеграция обновлена' });
+          toast(data.warning ? { title: 'Интеграция обновлена', description: data.warning } : { title: 'Интеграция обновлена' });
           handleFinish();
         } else {
           toast({
-            title: 'Ошибка',
+            title: data.error_code === 'invalid_credentials' ? 'Банк не принял данные' : 'Ошибка',
             description: data.error || 'Не удалось обновить',
             variant: 'destructive'
           });
@@ -159,11 +159,11 @@ const AddIntegrationDialog = ({
           setStep(3);
           toast({
             title: 'Интеграция создана',
-            description: 'Теперь настройте подключение на стороне сервиса'
+            description: data.warning || 'Теперь настройте подключение на стороне сервиса'
           });
         } else {
           toast({
-            title: 'Ошибка',
+            title: data.error_code === 'invalid_credentials' ? 'Банк не принял данные' : 'Ошибка',
             description: data.error || 'Не удалось создать интеграцию',
             variant: 'destructive'
           });

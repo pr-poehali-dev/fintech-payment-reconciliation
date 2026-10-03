@@ -4,6 +4,7 @@ import secrets
 import psycopg2
 from typing import Dict, Any
 from auth_guard import guard
+import credentials_check
 
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     '''
@@ -83,6 +84,16 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         
         provider_id = provider_row[0]
 
+        # Логин/пароль платёжки проверяем у банка до сохранения (см. credentials_check).
+        creds_ok, creds_message = credentials_check.check(provider_slug, config or {})
+        if not creds_ok:
+            return {
+                'statusCode': 400,
+                'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+                'body': json.dumps({'error': creds_message, 'error_code': 'invalid_credentials'}, ensure_ascii=False),
+                'isBase64Encoded': False
+            }
+
         if provider_slug == 'ofdru':
             # Сервер ОФД - всегда боевой, ИНН - из карточки компании: пользователь их не вводит.
             cur.execute('SELECT inn FROM companies WHERE id = %s', (company_id,))
@@ -143,8 +154,9 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 'success': True,
                 'integration_id': integration_id,
                 'webhook_url': webhook_url,
-                'webhook_token': token
-            }),
+                'webhook_token': token,
+                'warning': creds_message
+            }, ensure_ascii=False),
             'isBase64Encoded': False
         }
         
