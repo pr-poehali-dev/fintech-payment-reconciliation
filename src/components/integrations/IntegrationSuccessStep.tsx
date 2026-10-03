@@ -55,7 +55,7 @@ const IntegrationSuccessStep = ({
                     <li>Напишите в поддержку интернет-эквайринга Альфа-Банка</li>
                     <li>Попросите включить callback-уведомления и пришлите им этот URL</li>
                     <li>Метод GET или POST — подойдёт любой</li>
-                    <li>Нужны операции: deposited (оплата), approved, reversed, refunded</li>
+                    <li>Нужны операции: deposited (оплата), approved, reversed, refunded — для карт и СБП они одинаковые</li>
                     <li>Для чеков магазин должен передавать корзину (orderBundle) при регистрации заказа</li>
                   </ol>
                 ) : (

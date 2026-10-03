@@ -99,6 +99,9 @@ def prepare(cur, job: Dict[str, Any], scenario: Dict[str, Any]) -> Tuple[str, Di
             return 'error', data, f'Ждём корзину от {provider_name} (уведомление с составом чека ещё не пришло)'
         if not cart['items']:
             if payment['provider_slug'] == 'alfabank':
+                if payment.get('payment_provider') == 'СБП' and not payment.get('order_id'):
+                    return 'error', data, ('Оплата по статическому QR-коду СБП - у такого платежа нет корзины. '
+                                           'Для чека нужен заказ с корзиной (динамический QR или платёжная страница)')
                 return 'error', data, ('В заказе Альфа-Банка нет корзины товаров (orderBundle) - '
                                        'магазин должен передавать её при регистрации заказа')
             return 'error', data, f'{provider_name} прислал уведомление без товаров'

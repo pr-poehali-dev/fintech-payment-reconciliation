@@ -82,6 +82,27 @@ def ssl_context() -> ssl.SSLContext:
     return _ssl_context['ctx']
 
 
+# paymentWay из getOrderStatusExtended -> способ оплаты для отчётов.
+PAYMENT_WAYS = {
+    'SBP_C2B': 'СБП', 'SBP_C2B_BINDING': 'СБП', 'CARD': 'Карта', 'CARD_BINDING': 'Карта',
+    'CARD_MOTO': 'Карта', 'ALFAPAY': 'AlfaPay', 'ALFAPAY_BINDING': 'AlfaPay', 'ALFA_ALFACLICK': 'Альфа-Клик',
+    'APPLE_PAY': 'Apple Pay', 'APPLE_PAY_BINDING': 'Apple Pay', 'GOOGLE_PAY_CARD': 'Google Pay',
+    'GOOGLE_PAY_CARD_BINDING': 'Google Pay', 'GOOGLE_PAY_TOKENIZED_BINDING': 'Google Pay',
+    'YANDEX_PAY_CARD': 'Яндекс Pay', 'YANDEX_PAY_CARD_BINDING': 'Яндекс Pay', 'MIR_PAY': 'Мир Pay',
+    'MIR_PAY_BINDING': 'Мир Pay', 'SAMSUNG_PAY': 'Samsung Pay',
+}
+
+
+def payment_way(order: Optional[Dict[str, Any]], params: Dict[str, Any]) -> Optional[str]:
+    '''Способ оплаты: СБП / карта / кошельки. Статический QR СБП узнаём по templateId в уведомлении.'''
+    way = str((order or {}).get('paymentWay') or ((order or {}).get('cardAuthInfo') or {}).get('paymentWay') or '').upper()
+    if way:
+        return PAYMENT_WAYS.get(way, way)
+    if params.get('templateId') or (order or {}).get('sbpC2bInfo'):
+        return 'СБП'
+    return None
+
+
 def _int(value: Any) -> Optional[int]:
     try:
         return int(str(value).strip())
@@ -266,8 +287,8 @@ def process(cur, integration_id: int, company_id: int, config: Dict[str, Any],
     cur.execute(f'''
         INSERT INTO {SCHEMA}.webhook_payments (
             integration_id, company_id, payment_id, terminal_key, amount, order_id, status, payment_status,
-            error_code, customer_email, customer_phone, pan, card_type, exp_date, raw_data
-        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            error_code, customer_email, customer_phone, pan, card_type, exp_date, raw_data, payment_provider
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         ON CONFLICT (integration_id, payment_id, status) DO NOTHING
         RETURNING id
     ''', (
@@ -276,7 +297,7 @@ def process(cur, integration_id: int, company_id: int, config: Dict[str, Any],
         str((order or {}).get('actionCode') if order and order.get('actionCode') is not None else '')[:10] or None,
         customer.get('email'), customer.get('phone'),
         card.get('maskedPan') or card.get('pan'), card.get('paymentSystem'),
-        card.get('expiration'), json.dumps(raw, ensure_ascii=False)
+        card.get('expiration'), json.dumps(raw, ensure_ascii=False), payment_way(order, params)
     ))
     row = cur.fetchone()
     # Корзину не получили - платёж всё равно принят: автоматизация дозапросит её у банка сама.

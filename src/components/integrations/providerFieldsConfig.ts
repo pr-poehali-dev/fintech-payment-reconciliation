@@ -119,7 +119,7 @@ const TOCHKA_ACCOUNT_FIELDS: FieldConfig[] = [
 
 export const ALFABANK_NOTIFY_OPTIONS = [
   { key: 'notify_on_authorized', label: 'Средства удержаны (approved)' },
-  { key: 'notify_on_confirmed', label: 'Оплачен (deposited)' },
+  { key: 'notify_on_confirmed', label: 'Оплачен (deposited) — картой и по СБП' },
   { key: 'notify_on_rejected', label: 'Отклонён (declined)' },
   { key: 'notify_on_refunded', label: 'Возврат (refunded)' },
   { key: 'notify_on_canceled', label: 'Отменён (reversed)' }
