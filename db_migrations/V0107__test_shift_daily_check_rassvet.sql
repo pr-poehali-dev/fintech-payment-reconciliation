@@ -1,0 +1,1 @@
+UPDATE t_p83864310_fintech_payment_reco.notification_checks SET period = '2026-10-02-test' WHERE company_id = 4 AND kind = 'missing_receipts' AND period = '2026-10-02';

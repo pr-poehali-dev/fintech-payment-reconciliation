@@ -1,5 +1,7 @@
 import json
 import os
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 import urllib.request
 import psycopg2
 from typing import Dict, Any, List
@@ -263,16 +265,22 @@ def _handle(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     # Сигнал из открытого кабинета: заодно - неотправленные дубли
                     # уведомлений и ежедневная проверка «платежи без чека за вчера»,
                     # только если по компании есть что делать (без лишних вызовов).
+                    # «Вчера» по часовому поясу компании считаем в коде: функции поясов в SQL платформа запрещает.
+                    cur.execute(f'SELECT timezone FROM {SCHEMA}.companies WHERE id = %s', (body['company_id'],))
+                    tz_row = cur.fetchone()
+                    try:
+                        company_tz = ZoneInfo((tz_row[0] if tz_row else None) or 'Europe/Moscow')
+                    except Exception:
+                        company_tz = ZoneInfo('Europe/Moscow')
+                    yesterday = (datetime.now(company_tz).date() - timedelta(days=1)).isoformat()
                     cur.execute(f'''
                         SELECT
                             EXISTS (SELECT 1 FROM {SCHEMA}.notification_deliveries d
                                     JOIN {SCHEMA}.notifications n ON n.id = d.notification_id
                                     WHERE n.company_id = %s AND d.status = 'pending'),
                             NOT EXISTS (SELECT 1 FROM {SCHEMA}.notification_checks c
-                                        WHERE c.company_id = %s AND c.kind = 'missing_receipts'
-                                          AND c.period = to_char((NOW() AT TIME ZONE COALESCE(
-                                              (SELECT timezone FROM {SCHEMA}.companies WHERE id = %s), 'Europe/Moscow'))::date - 1, 'YYYY-MM-DD'))
-                    ''', (body['company_id'], body['company_id'], body['company_id']))
+                                        WHERE c.company_id = %s AND c.kind = 'missing_receipts' AND c.period = %s)
+                    ''', (body['company_id'], body['company_id'], yesterday))
                     pending, daily_due = cur.fetchone()
                     if pending or daily_due:
                         signal_notifications(body['company_id'], daily=daily_due)

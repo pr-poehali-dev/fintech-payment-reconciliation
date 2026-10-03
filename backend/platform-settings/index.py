@@ -30,6 +30,8 @@ FETCH_ORDERS_URL = 'https://functions.poehali.dev/dc01171b-cd60-4a98-b96c-5d167b
 # Окно авто-дозагрузки Екомкассы: документы, обновлённые за последние N часов.
 ECOMKASSA_AUTO_HOURS = 24
 OFD_URL = 'https://functions.poehali.dev/c7fad594-b60b-47fb-8f73-31b629f1e0a2'
+# Ежедневная проверка «платежи без чека за вчера» (backend/notifications, action=dispatch, daily).
+NOTIFICATIONS_URL = 'https://functions.poehali.dev/8f4541fc-6ff8-4816-a954-324e4278743d'
 BANK_URL = 'https://functions.poehali.dev/916892e2-fd4d-4106-8d92-a95be195aa99'
 
 # Источники, которые планировщик загружает сам. Админ включает/выключает каждый
@@ -316,6 +318,31 @@ def tick(cur, conn, settings: Dict[str, Any]) -> Dict[str, Any]:
             bank_today = set(daily_due(cur, 'bank', list({j[1] for j in bank_jobs})))
             bank_jobs = [j for j in bank_jobs if j[1] in bank_today]
 
+    # «Платежи без чека за вчера» - раз в сутки после 00:00 по поясу компании, только где есть
+    # платёжки (без них таких платежей не бывает). Проверка дня в отправщике атомарна - не задвоится.
+    daily_check_ids = set()
+    if company_ids:
+        cur.execute(f'''
+            SELECT c.id, c.timezone,
+                   ARRAY(SELECT nc.period FROM {SCHEMA}.notification_checks nc
+                         WHERE nc.company_id = c.id AND nc.kind = 'missing_receipts'
+                         ORDER BY nc.checked_at DESC LIMIT 3)
+            FROM {SCHEMA}.companies c
+            WHERE c.id = ANY(%s)
+              AND EXISTS (SELECT 1 FROM {SCHEMA}.user_integrations ui
+                          JOIN {SCHEMA}.integration_providers p ON p.id = ui.provider_id
+                          JOIN {SCHEMA}.integration_categories ic ON ic.id = p.category_id
+                          WHERE ui.company_id = c.id AND ui.status = 'active' AND ic.slug = 'payments')
+        ''', (company_ids,))
+        for cid, zone, recent_periods in cur.fetchall():
+            try:
+                zone_info = ZoneInfo(zone or 'Europe/Moscow')
+            except Exception:
+                zone_info = ZoneInfo('Europe/Moscow')
+            yesterday = (datetime.now(zone_info).date() - timedelta(days=1)).isoformat()
+            if yesterday not in (recent_periods or []):
+                daily_check_ids.add(cid)
+
     tick_id = datetime.utcnow().strftime('%Y%m%d%H%M%S')
     tasks = []
     for company_id in company_ids:
@@ -331,6 +358,8 @@ def tick(cur, conn, settings: Dict[str, Any]) -> Dict[str, Any]:
             tasks.append((company_id, JOBS_URL, {'action': 'run', 'company_id': company_id, 'heartbeat': True}))
         if source_on(settings, 'ecomkassa_receipts') and company_id in receipts_due:
             tasks.append((company_id, RESYNC_URL, {'company_id': company_id}))
+    for company_id in daily_check_ids:
+        tasks.append((company_id, NOTIFICATIONS_URL, {'action': 'dispatch', 'company_id': company_id, 'daily': True}))
     for integration_id, company_id, date_from, date_to in bank_jobs:
         tasks.append((company_id, BANK_URL, {'integration_id': integration_id, 'company_id': company_id,
                                              'date_from': date_from, 'date_to': date_to}))
@@ -344,7 +373,8 @@ def tick(cur, conn, settings: Dict[str, Any]) -> Dict[str, Any]:
                     errors.setdefault(company_id, []).append(err)
     summary = {'companies': len(company_ids), 'total_companies': len(all_ids), 'failed': len(errors),
                'started': {'ofd': len(ofd_ids), 'bank': len(bank_jobs), 'ecomkassa': len(ecomkassa_ids),
-                           'ecomkassa_receipts': len(receipts_due), 'automation': len(automation_due)},
+                           'ecomkassa_receipts': len(receipts_due), 'automation': len(automation_due),
+                           'missing_receipts_check': len(daily_check_ids)},
                'errors': [{'company_id': k, 'errors': v} for k, v in list(errors.items())[:5]],
                'next_offset': next_offset}
     cur.execute(f'''
