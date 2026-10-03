@@ -50,7 +50,14 @@ const IntegrationSuccessStep = ({
                 <p className="font-semibold text-foreground mb-2">
                   Инструкция по настройке:
                 </p>
-                {selectedProvider.slug === 'alfabank' ? (
+                {selectedProvider.slug === 'tochka_acquiring' ? (
+                  <ol className="list-decimal list-inside space-y-1 text-muted-foreground">
+                    <li>Вебхук в Точке создаётся через API (метод Create Webhook) с этим URL</li>
+                    <li>Событие — acquiringInternetPayment (оплаты по платёжным ссылкам)</li>
+                    <li>Для чеков передавайте товары (Items) при создании платёжной ссылки</li>
+                    <li>Подпись каждого вебхука проверяем ключом Точки автоматически</li>
+                  </ol>
+                ) : selectedProvider.slug === 'alfabank' ? (
                   <ol className="list-decimal list-inside space-y-1 text-muted-foreground">
                     <li>Напишите в поддержку интернет-эквайринга Альфа-Банка</li>
                     <li>Попросите включить callback-уведомления и пришлите им этот URL</li>

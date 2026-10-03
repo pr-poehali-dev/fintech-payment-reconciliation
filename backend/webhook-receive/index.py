@@ -10,6 +10,7 @@ from form_parser import parse_webhook_body
 from inbox import save_event, mark_processed
 import tbank_handler
 import alfabank_handler
+import tochka_acquiring_handler
 import bitrix24_handler
 import crm_link
 from ecomkassa_token import ensure_valid_token as ensure_kassa_token
@@ -31,6 +32,7 @@ CORS_HEADERS = {
 EVENT_TYPE_BY_PROVIDER = {
     'tbank': 'payment_status_changed',
     'alfabank': 'payment_status_changed',
+    'tochka_acquiring': 'payment_status_changed',
     'bitrix24': 'deal_updated',
     'amocrm': 'lead_updated',
     'ecomkassa_gateway': 'payment_status_changed'
@@ -190,6 +192,24 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     'statusCode': 403,
                     'headers': {'Content-Type': 'application/json'},
                     'body': json.dumps({'error': handler_error}),
+                    'isBase64Encoded': False
+                }
+        elif provider_slug == 'tochka_acquiring':
+            signature_valid, webhook_payment_id, handler_error, decoded = tochka_acquiring_handler.process(
+                cur, integration_id, company_id, config, webhook_settings, raw_body, webhook_data
+            )
+            if decoded:
+                # В событии храним расшифрованные данные, а не голую строку JWT.
+                cur.execute('''
+                    UPDATE t_p83864310_fintech_payment_reco.webhook_events SET raw_payload = %s WHERE id = %s
+                ''', (json.dumps({'decoded': decoded, 'jwt': raw_body[:4000]}, ensure_ascii=False), event_id))
+            if not signature_valid:
+                mark_processed(cur, event_id, 'rejected', handler_error)
+                conn.commit()
+                return {
+                    'statusCode': 403,
+                    'headers': {'Content-Type': 'application/json'},
+                    'body': json.dumps({'error': handler_error}, ensure_ascii=False),
                     'isBase64Encoded': False
                 }
         elif provider_slug == 'alfabank':

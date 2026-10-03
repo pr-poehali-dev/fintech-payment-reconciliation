@@ -4,6 +4,7 @@ from typing import Any, Dict, Optional, Tuple
 from ecomkassa_client import company_cash_register, get_receipt_atol
 import bitrix_crm
 import alfabank_api
+import tochka_acquiring_api
 
 SCHEMA = 't_p83864310_fintech_payment_reco'
 
@@ -56,8 +57,20 @@ def _fetch_alfabank_cart(cur, company_id: int, payment: Dict[str, Any]) -> Optio
     return None
 
 
+def _fetch_tochka_cart(cur, company_id: int, payment: Dict[str, Any]) -> Optional[str]:
+    '''Операция с корзиной у Точки (Get Payment Operation Info) и сохранение корзины.'''
+    cur.execute(f'SELECT config FROM {SCHEMA}.user_integrations WHERE id = %s', (payment['integration_id'],))
+    row = cur.fetchone()
+    config = row[0] if row and isinstance(row[0], dict) else json.loads((row or [None])[0] or '{}')
+    op, err = tochka_acquiring_api.get_operation(str(config.get('api_token') or ''), str(payment['payment_id']), timeout=8)
+    if not op:
+        return err
+    tochka_acquiring_api.save_cart(cur, payment['integration_id'], company_id, str(payment['payment_id']), op)
+    return None
+
+
 # Провайдеры, у которых корзина приходит в уведомлении и без неё чек не собрать.
-CART_FROM_PROVIDER = {'tbank': 'Т-Банк', 'alfabank': 'Альфа-Банк'}
+CART_FROM_PROVIDER = {'tbank': 'Т-Банк', 'alfabank': 'Альфа-Банк', 'tochka_acquiring': 'Точка'}
 
 
 def prepare(cur, job: Dict[str, Any], scenario: Dict[str, Any]) -> Tuple[str, Dict[str, Any], str]:
@@ -100,15 +113,19 @@ def prepare(cur, job: Dict[str, Any], scenario: Dict[str, Any]) -> Tuple[str, Di
     provider_name = CART_FROM_PROVIDER.get(payment['provider_slug'])
     if provider_name:
         cart = _cart(cur, payment['integration_id'], str(payment['payment_id']))
-        if (not cart or not cart['items']) and payment['provider_slug'] == 'alfabank':
-            # У Альфа-Банка состав заказа не приходит в уведомлении - дозапрашиваем у банка.
-            cart_error = _fetch_alfabank_cart(cur, job['company_id'], payment)
+        if (not cart or not cart['items']) and payment['provider_slug'] in ('alfabank', 'tochka_acquiring'):
+            # У Альфа-Банка и Точки состав заказа не приходит в уведомлении - дозапрашиваем у банка.
+            fetch = _fetch_alfabank_cart if payment['provider_slug'] == 'alfabank' else _fetch_tochka_cart
+            cart_error = fetch(cur, job['company_id'], payment)
             cart = _cart(cur, payment['integration_id'], str(payment['payment_id']))
             if not cart:
-                return 'error', data, f'Не удалось получить корзину заказа у Альфа-Банка: {cart_error}'
+                return 'error', data, f'Не удалось получить корзину заказа у {provider_name}: {cart_error}'
         if not cart:
             return 'error', data, f'Ждём корзину от {provider_name} (уведомление с составом чека ещё не пришло)'
         if not cart['items']:
+            if payment['provider_slug'] == 'tochka_acquiring':
+                return 'error', data, ('В платёжной ссылке Точки нет товаров - для чека передавайте Items '
+                                       'при создании ссылки (метод с чеком payments_with_receipt)')
             if payment['provider_slug'] == 'alfabank':
                 if payment.get('payment_provider') == 'СБП' and not payment.get('order_id'):
                     return 'error', data, ('Оплата по статическому QR-коду СБП - у такого платежа нет корзины. '

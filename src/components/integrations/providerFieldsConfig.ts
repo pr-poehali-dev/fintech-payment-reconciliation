@@ -132,7 +132,16 @@ const ALFABANK_ENV_OPTIONS: FieldOption[] = [
   { value: 'test', label: 'Тестовый — alfa.rbsuat.com' }
 ];
 
+export const TOCHKA_ACQUIRING_NOTIFY_OPTIONS = [
+  { key: 'notify_on_authorized', label: 'Средства заморожены (двухэтапная оплата)' },
+  { key: 'notify_on_confirmed', label: 'Оплачен — картой, по СБП, Долями' }
+];
+
 export const PROVIDER_FIELDS: Record<string, FieldConfig[]> = {
+  tochka_acquiring: [
+    { key: 'api_token', label: 'JWT-токен Точки', type: 'password', placeholder: 'eyJhbGciOi…', hint: 'Интернет-банк Точки → Интеграции и API → Подключить → токен с разрешением «Интернет-эквайринг». Проверим его у банка при сохранении' },
+    { key: 'merchant_id', label: 'Торговая точка (merchantId)', type: 'text', required: false, placeholder: '200000000012345', hint: 'Необязательно. Если точек несколько — укажите нужную, иначе принимаем оплаты всех точек' }
+  ],
   alfabank: [
     { key: 'environment', label: 'Сервер банка', type: 'select', options: ALFABANK_ENV_OPTIONS, default: 'prod', required: false, hint: 'Адрес зависит от логина: уточните у поддержки Альфа-Банка, если не уверены' },
     { key: 'user_name', label: 'Логин API-пользователя', type: 'text', placeholder: 'r-shop-api', hint: 'Учётная запись магазина с окончанием -api из письма Альфа-Банка' },
@@ -201,7 +210,7 @@ export const PROVIDER_FIELDS: Record<string, FieldConfig[]> = {
 
 // Провайдеры, для которых наш сервис принимает входящие вебхуки.
 // Только для них имеет смысл показывать URL для вебхука и переадресацию.
-const PROVIDERS_WITH_INCOMING_WEBHOOK = ['tbank', 'alfabank', 'ecomkassa_gateway'];
+const PROVIDERS_WITH_INCOMING_WEBHOOK = ['tbank', 'alfabank', 'tochka_acquiring', 'ecomkassa_gateway'];
 
 export const buildDefaultConfig = (slug: string): ConfigState => {
   const fields = PROVIDER_FIELDS[slug] || [];
@@ -214,7 +223,7 @@ export const buildDefaultConfig = (slug: string): ConfigState => {
 
 // Платёжки, по которым чек делаем сами из корзины: после подключения предлагаем сценарий чеков.
 // Шлюз Екомкассы сюда не входит - чек по нему пробивает сама Екомкасса.
-const PROVIDERS_WITH_RECEIPT_SCENARIO = ['tbank', 'alfabank'];
+const PROVIDERS_WITH_RECEIPT_SCENARIO = ['tbank', 'alfabank', 'tochka_acquiring'];
 export const suggestsReceiptScenario = (slug?: string) => !!slug && PROVIDERS_WITH_RECEIPT_SCENARIO.includes(slug);
 
 export const acceptsIncomingWebhook = (slug?: string) => !!slug && PROVIDERS_WITH_INCOMING_WEBHOOK.includes(slug);

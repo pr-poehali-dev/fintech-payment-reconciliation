@@ -104,9 +104,63 @@ def check_alfabank(config: Dict[str, Any]) -> Result:
     return True, None
 
 
+TOCHKA_API = 'https://enter.tochka.com/uapi'
+
+
+def _tochka_get(path: str, token: str) -> Tuple[Optional[Dict[str, Any]], Optional[int], Optional[str]]:
+    req = urllib.request.Request(f'{TOCHKA_API}{path}', headers={'Authorization': f'Bearer {token}'})
+    try:
+        with urllib.request.urlopen(req, timeout=8, context=ssl_context()) as resp:
+            return json.loads(resp.read().decode('utf-8')), resp.status, None
+    except urllib.error.HTTPError as e:
+        return None, e.code, None
+    except Exception as e:
+        return None, None, str(e)[:120]
+
+
+def check_tochka_acquiring(config: Dict[str, Any]) -> Result:
+    '''
+    Точка эквайринг: токен JWT из интернет-банка. Проверяем по списку клиентов (customers) и
+    торговых точек эквайринга (retailers): 401 - токен неверный/просрочен; 403 на retailers -
+    у токена нет права «Интернет-эквайринг» (без него корзину заказа не получить).
+    '''
+    token = str(config.get('api_token') or '').strip()
+    if not token:
+        return False, 'Вставьте JWT-токен Точки'
+    data, status, err = _tochka_get('/open-banking/v1.0/customers', token)
+    if err:
+        return _unavailable('Точка', err)
+    if status in (401, 403):
+        return False, 'Точка не приняла токен - проверьте, что он скопирован целиком и не истёк'
+    codes = [c.get('customerCode') for c in ((data or {}).get('Data') or {}).get('Customer', [])
+             if c.get('customerType') == 'Business' and c.get('customerCode')]
+    if not codes:
+        return False, 'У токена нет доступа к бизнес-клиенту Точки'
+    data, status, err = _tochka_get(f'/acquiring/v1.0/retailers?customerCode={codes[0]}', token)
+    if err:
+        return _unavailable('Точка', err)
+    if status in (401, 403):
+        return False, ('У токена нет права «Интернет-эквайринг» - выпустите токен с этим разрешением '
+                       '(нужно для чтения заказа и корзины)')
+    retailers = ((data or {}).get('Data') or {}).get('Retailer') or []
+    merchant = str(config.get('merchant_id') or '').strip()
+    if merchant and retailers and not any(str(r.get('merchantId')) == merchant for r in retailers):
+        return False, f'В Точке нет торговой точки с merchantId {merchant}'
+    # Список точек доступен и без права на операции - проверяем само чтение операций (нужно для корзины).
+    _, status, err = _tochka_get(f'/acquiring/v1.0/payments?customerCode={codes[0]}&perPage=1', token)
+    if err:
+        return _unavailable('Точка', err)
+    if status in (401, 403):
+        return False, ('У токена нет права читать операции интернет-эквайринга (ReadAcquiringData) - '
+                       'выпустите в интернет-банке Точки токен с разрешением «Интернет-эквайринг»: '
+                       'без него не получить корзину заказа для чека')
+    return True, None
+
+
 CHECKERS: Dict[str, Callable[[Dict[str, Any]], Result]] = {
     'tbank': check_tbank,
     'alfabank': check_alfabank,
+    'tochka_acquiring': check_tochka_acquiring,
 }
 
 
