@@ -46,8 +46,9 @@ export interface FieldConfig {
 }
 
 export const SYNC_INTERVAL_OPTIONS: FieldOption[] = [
-  { value: '24', label: '1 раз в сутки (каждые 24 часа)' },
-  { value: '12', label: '2 раза в сутки (каждые 12 часов)' }
+  { value: '1', label: 'Раз в час' },
+  { value: '12', label: 'Раз в 12 часов' },
+  { value: '24', label: 'Раз в сутки (в 00:00 по времени компании)' }
 ];
 
 export const ECOMKASSA_PROTOCOL_OPTIONS: FieldOption[] = [
@@ -113,7 +114,7 @@ const TOCHKA_ACCOUNT_FIELDS: FieldConfig[] = [
     options: SYNC_INTERVAL_OPTIONS,
     default: '24',
     required: false,
-    hint: 'Пока реально работает только кнопка «Синхронизировать сейчас» — настройка сохранится на будущее'
+    hint: 'Как часто загружать выписку автоматически. «Синхронизировать сейчас» работает в любой момент'
   }
 ];
 
@@ -172,7 +173,7 @@ export const PROVIDER_FIELDS: Record<string, FieldConfig[]> = {
       options: SYNC_INTERVAL_OPTIONS,
       default: '24',
       required: false,
-      hint: 'Пока реально работает только кнопка «Синхронизировать сейчас» — настройка сохранится на будущее'
+      hint: 'Как часто загружать выписку автоматически. «Синхронизировать сейчас» работает в любой момент'
     }
   ],
   tochka_account: TOCHKA_ACCOUNT_FIELDS,

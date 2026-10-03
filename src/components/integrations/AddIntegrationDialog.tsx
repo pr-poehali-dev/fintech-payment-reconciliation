@@ -10,7 +10,8 @@ import {
   Provider,
   UserIntegration,
   acceptsIncomingWebhook,
-  buildDefaultConfig
+  buildDefaultConfig,
+  PROVIDER_FIELDS
 } from './providerFieldsConfig';
 import IntegrationCategoryStep from './IntegrationCategoryStep';
 import IntegrationProviderStep from './IntegrationProviderStep';
@@ -104,9 +105,13 @@ const AddIntegrationDialog = ({
 
     setIsLoading(true);
     try {
+      // У банков частота сохраняется всегда - если список не трогали, берём значение по умолчанию.
+      const intervalField = (PROVIDER_FIELDS[selectedProvider.slug] || []).find((f) => f.key === 'sync_interval_hours');
       const syncIntervalHours = config.sync_interval_hours
         ? Number(config.sync_interval_hours)
-        : undefined;
+        : intervalField?.default
+          ? Number(intervalField.default)
+          : undefined;
 
       if (editingIntegration) {
         const response = await fetch(functionUrls['integrations-update'], {

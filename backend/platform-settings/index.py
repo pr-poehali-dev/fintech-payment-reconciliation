@@ -5,7 +5,8 @@ import socket
 import urllib.error
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone as dt_timezone
+from zoneinfo import ZoneInfo
 from typing import Any, Dict, List, Optional
 
 import psycopg2
@@ -61,6 +62,17 @@ def source_minutes(settings: Dict[str, Any], key: str) -> int:
     return max(0, m - 2)
 
 
+def company_midnight_utc(zone_name: Optional[str]) -> datetime:
+    '''Начало текущих суток компании (00:00 по её часовому поясу) в UTC без tzinfo, как в базе.'''
+    try:
+        zone = ZoneInfo(zone_name or 'Europe/Moscow')
+    except Exception:
+        zone = ZoneInfo('Europe/Moscow')
+    local_now = datetime.now(dt_timezone.utc).astimezone(zone)
+    midnight = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
+    return midnight.astimezone(dt_timezone.utc).replace(tzinfo=None)
+
+
 def daily_due(cur, source: str, company_ids: List[int]) -> List[int]:
     '''
     «Раз в день» = после полуночи по часовому поясу компании: источник ещё не запускался
@@ -69,18 +81,11 @@ def daily_due(cur, source: str, company_ids: List[int]) -> List[int]:
     if not company_ids:
         return []
     cur.execute(f'''
-        WITH tz AS (
-            SELECT c.id, CASE WHEN EXISTS (SELECT 1 FROM pg_timezone_names n WHERE n.name = c.timezone)
-                              THEN c.timezone ELSE 'Europe/Moscow' END AS zone
-            FROM {SCHEMA}.companies c WHERE c.id = ANY(%s)
-        )
-        SELECT tz.id FROM tz
-        WHERE NOT EXISTS (
-            SELECT 1 FROM {SCHEMA}.cron_source_runs r
-            WHERE r.source = %s AND r.company_id = tz.id
-              AND r.finished_at >= (date_trunc('day', NOW() AT TIME ZONE tz.zone) AT TIME ZONE tz.zone) AT TIME ZONE 'UTC')
-    ''', (company_ids, source))
-    return [r[0] for r in cur.fetchall()]
+        SELECT c.id, c.timezone,
+               (SELECT MAX(r.finished_at) FROM {SCHEMA}.cron_source_runs r WHERE r.source = %s AND r.company_id = c.id)
+        FROM {SCHEMA}.companies c WHERE c.id = ANY(%s)
+    ''', (source, company_ids))
+    return [cid for cid, zone, last in cur.fetchall() if last is None or last < company_midnight_utc(zone)]
 
 
 def due_companies(cur, source: str, company_ids: List[int], minutes: int) -> List[int]:
@@ -274,19 +279,39 @@ def tick(cur, conn, settings: Dict[str, Any]) -> Dict[str, Any]:
         if ofd_daily:
             ofd_ids &= set(daily_due(cur, 'ofd', list(ofd_ids)))
     if company_ids and source_on(settings, 'bank'):
+        # Частота выписки - из настройки интеграции (1 / 12 / 24 часа, по умолчанию 24).
+        # «Раз в сутки» = первый запуск после 00:00 по часовому поясу компании.
+        # Настройка админки - нижняя граница: чаще неё банк не дёргаем.
+        # Последняя попытка = позже из успешной загрузки и запуска кроном (выписка Точки
+        # готовится асинхронно, и до её готовности last_synced_at не меняется).
         # Выписка - по календарным дням (Москва): с дня прошлой загрузки (минус день запаса) по сегодня.
         cur.execute(f'''
             SELECT ui.id, ui.company_id,
                    to_char(COALESCE(ui.last_synced_at, NOW() - INTERVAL '3 days') + INTERVAL '3 hours' - INTERVAL '1 day', 'YYYY-MM-DD'),
-                   to_char(NOW() + INTERVAL '3 hours', 'YYYY-MM-DD')
+                   to_char(NOW() + INTERVAL '3 hours', 'YYYY-MM-DD'),
+                   COALESCE(ui.sync_interval_hours, 24),
+                   GREATEST(ui.last_synced_at, r.finished_at),
+                   c.timezone
             FROM {SCHEMA}.user_integrations ui
             JOIN {SCHEMA}.integration_providers p ON p.id = ui.provider_id
+            JOIN {SCHEMA}.companies c ON c.id = ui.company_id
+            LEFT JOIN {SCHEMA}.cron_source_runs r
+                   ON r.source = 'bank' AND r.company_id = ui.company_id AND r.item_key = ui.id::text
             WHERE p.slug IN ('tbank_account', 'tochka_account') AND ui.status = 'active' AND ui.company_id = ANY(%s)
-              AND (ui.last_synced_at IS NULL
-                   OR ui.last_synced_at < NOW() - COALESCE(make_interval(hours => ui.sync_interval_hours),
-                                                            make_interval(mins => %s)))
-        ''', (company_ids, source_minutes(settings, 'bank')))
-        bank_jobs = cur.fetchall()
+        ''', (company_ids,))
+        now_utc = datetime.utcnow()
+        floor_minutes = source_minutes(settings, 'bank')
+        bank_jobs = []
+        for ui_id, cid, d_from, d_to, hours, last_try, zone in cur.fetchall():
+            if last_try is not None:
+                if floor_minutes and last_try > now_utc - timedelta(minutes=floor_minutes):
+                    continue
+                if hours >= 24:
+                    if last_try >= company_midnight_utc(zone):
+                        continue
+                elif last_try > now_utc - timedelta(minutes=hours * 60 - 2):
+                    continue
+            bank_jobs.append((ui_id, cid, d_from, d_to))
         if source_interval(settings, 'bank') == '1d' and bank_jobs:
             bank_today = set(daily_due(cur, 'bank', list({j[1] for j in bank_jobs})))
             bank_jobs = [j for j in bank_jobs if j[1] in bank_today]

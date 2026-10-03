@@ -172,9 +172,13 @@ const IntegrationCard = ({
                 <Chip>Счёт: {String(cfg.account_number || '—')}</Chip>
               )}
               <Chip>Синхронизация: {formatDate(integration.last_synced_at ?? null)}</Chip>
-              {integration.sync_interval_hours ? (
-                <Chip>{integration.sync_interval_hours === 12 ? '2 раза в сутки' : '1 раз в сутки'}</Chip>
-              ) : null}
+              <Chip>
+                {integration.sync_interval_hours === 1
+                  ? 'Раз в час'
+                  : integration.sync_interval_hours === 12
+                    ? 'Раз в 12 часов'
+                    : 'Раз в сутки'}
+              </Chip>
               {cfg.purpose_keywords && String(cfg.purpose_keywords).trim() ? (
                 <Chip>Ключевые слова: {String(cfg.purpose_keywords)}</Chip>
               ) : null}
