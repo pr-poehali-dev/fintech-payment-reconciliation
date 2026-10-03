@@ -103,6 +103,7 @@ const Login = () => {
     const formatted = formatPhoneNumber(e.target.value, phone);
     if (formatted.replace(/\D/g, '').length <= 11) {
       setPhone(formatted);
+      if (isValidPhone(formatted) && !selectedMessenger) setSelectedMessenger(messengers[0].id);
     }
   };
 
@@ -149,14 +150,6 @@ const Login = () => {
                       placeholder="+7 (___) ___-__-__"
                       className="pl-14 h-14 text-lg border-2 focus:border-primary transition-all"
                     />
-                    <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
-                      <Button variant="ghost" size="icon" className="h-8 w-8">
-                        <Icon name="Phone" size={18} className="text-muted-foreground" />
-                      </Button>
-                      <Button variant="ghost" size="icon" className="h-8 w-8">
-                        <Icon name="Mail" size={18} className="text-muted-foreground" />
-                      </Button>
-                    </div>
                   </div>
 
                   <div className="space-y-2">
@@ -208,6 +201,7 @@ const Login = () => {
                 <div className="space-y-6">
                   <div className="flex justify-center">
                     <InputOTP
+                      autoFocus
                       maxLength={6}
                       value={code}
                       onChange={(value) => setCode(value)}
@@ -278,7 +272,7 @@ const Login = () => {
                       Слишком много попыток
                     </h3>
                     <p className="text-muted-foreground">
-                      Вы ввели неверный код 3 раза.
+                      Вы ввели неверный код {MAX_ATTEMPTS} раз.
                       <br />
                       Попробуйте снова через:
                     </p>

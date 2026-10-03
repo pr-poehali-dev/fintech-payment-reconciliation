@@ -296,7 +296,7 @@ const InvitePage = () => {
             ) : (
               <>
                 <div className="flex justify-center">
-                  <InputOTP maxLength={6} value={code} onChange={setCode}>
+                  <InputOTP autoFocus maxLength={6} value={code} onChange={setCode}>
                     <InputOTPGroup>
                       <InputOTPSlot index={0} className="w-12 h-14 text-xl" />
                       <InputOTPSlot index={1} className="w-12 h-14 text-xl" />
