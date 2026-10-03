@@ -3,6 +3,7 @@ import os
 import re
 import psycopg2
 from typing import Dict, Any
+from auth_guard import guard
 
 SCHEMA = 't_p83864310_fintech_payment_reco'
 
@@ -32,6 +33,10 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     Args: user_id, full_name (обязательно), email (опционально, пустая строка - очистить)
     Returns: success, user {user_id, phone, full_name, email}
     '''
+    denied = guard(event)
+    if denied:
+        return denied
+
     method = event.get('httpMethod', 'PUT')
 
     if method == 'OPTIONS':

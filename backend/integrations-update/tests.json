@@ -1,7 +1,7 @@
 {
   "tests": [
     {
-      "name": "Update integration successfully",
+      "name": "Без входа доступ закрыт",
       "method": "PUT",
       "path": "/",
       "body": {
@@ -13,20 +13,31 @@
           "terminal_password": "pass"
         }
       },
-      "expectedStatus": 200,
+      "expectedStatus": 401,
       "expectedBody": {
-        "success": true
+        "error_code": "session_required"
       },
       "bodyMatcher": "partial"
     },
     {
-      "name": "Missing parameters",
+      "name": "Чужая/поддельная сессия не принимается",
       "method": "PUT",
       "path": "/",
-      "body": {},
-      "expectedStatus": 400,
+      "headers": {
+        "X-Session-Id": "fake-session-token"
+      },
+      "body": {
+        "integration_id": 12,
+        "company_id": 1,
+        "integration_name": "Updated name",
+        "config": {
+          "terminal_id": "123",
+          "terminal_password": "pass"
+        }
+      },
+      "expectedStatus": 401,
       "expectedBody": {
-        "error": "string"
+        "error_code": "session_required"
       },
       "bodyMatcher": "partial"
     }

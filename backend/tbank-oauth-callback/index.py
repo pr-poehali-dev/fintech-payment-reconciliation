@@ -9,6 +9,7 @@ from tbank_oauth import (
     is_production_configured,
     SANDBOX_TOKEN
 )
+from auth_guard import guard
 
 CORS_HEADERS = {
     'Access-Control-Allow-Origin': '*',
@@ -26,6 +27,10 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
          демо-режим песочницы для компании без перехода по внешней ссылке)
     POST { code, state, company_id, redirect_uri } -> обмен кода на токен, сохранение гранта
     '''
+    denied = guard(event)
+    if denied:
+        return denied
+
 
     method = event.get('httpMethod', 'GET')
 

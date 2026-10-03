@@ -1,22 +1,25 @@
 {
   "tests": [
     {
-      "name": "List companies without user_id",
+      "name": "Без входа доступ закрыт",
       "method": "GET",
       "path": "/",
-      "expectedStatus": 400,
+      "expectedStatus": 401,
       "expectedBody": {
-        "error": "string"
+        "error_code": "session_required"
       },
       "bodyMatcher": "partial"
     },
     {
-      "name": "List companies for demo user",
+      "name": "Чужая/поддельная сессия не принимается",
       "method": "GET",
-      "path": "/?user_id=1",
-      "expectedStatus": 200,
+      "path": "/",
+      "headers": {
+        "X-Session-Id": "fake-session-token"
+      },
+      "expectedStatus": 401,
       "expectedBody": {
-        "success": true
+        "error_code": "session_required"
       },
       "bodyMatcher": "partial"
     }

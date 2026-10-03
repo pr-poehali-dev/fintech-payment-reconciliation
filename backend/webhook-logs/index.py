@@ -2,12 +2,17 @@ import json
 import os
 import psycopg2
 from typing import Dict, Any
+from auth_guard import guard
 
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     '''
     Получение логов переадресации вебхуков
     GET /webhook-logs?company_id=123&integration_id=456&limit=50
     '''
+    denied = guard(event)
+    if denied:
+        return denied
+
     method: str = event.get('httpMethod', 'GET')
     
     if method == 'OPTIONS':

@@ -7,6 +7,7 @@ from typing import Dict, Any, List
 from preparer import prepare, retry_delay, log
 from actions import ACTIONS
 from cron_report import record_cron_run
+from auth_guard import guard, internal_headers
 
 NOTIFICATIONS_URL = 'https://functions.poehali.dev/8f4541fc-6ff8-4816-a954-324e4278743d'
 
@@ -228,7 +229,7 @@ def signal_notifications(company_id=None, daily: bool = False):
         req = urllib.request.Request(
             NOTIFICATIONS_URL,
             data=json.dumps({'action': 'dispatch', 'company_id': company_id, 'daily': daily}).encode('utf-8'),
-            headers={'Content-Type': 'application/json'},
+            headers={'Content-Type': 'application/json', **internal_headers()},
             method='POST'
         )
         urllib.request.urlopen(req, timeout=3 if daily else 1.5).close()
@@ -347,6 +348,10 @@ def _handle(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     '''Точка входа: обработка запроса + итог для админки, если вызвал планировщик.'''
+    denied = guard(event)
+    if denied:
+        return denied
+
     resp = _handle(event, context)
     if event.get('httpMethod', 'POST') == 'POST':
         record_cron_run(event, resp, 'automation', 'processed')

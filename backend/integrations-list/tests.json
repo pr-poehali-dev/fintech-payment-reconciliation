@@ -1,20 +1,25 @@
 {
   "tests": [
     {
-      "name": "Get integrations list",
+      "name": "Без входа доступ закрыт",
       "method": "GET",
       "path": "/?company_id=1",
-      "expectedStatus": 200,
-      "expectedBody": {},
+      "expectedStatus": 401,
+      "expectedBody": {
+        "error_code": "session_required"
+      },
       "bodyMatcher": "partial"
     },
     {
-      "name": "Missing company_id",
+      "name": "Чужая/поддельная сессия не принимается",
       "method": "GET",
-      "path": "/",
-      "expectedStatus": 400,
+      "path": "/?company_id=1",
+      "headers": {
+        "X-Session-Id": "fake-session-token"
+      },
+      "expectedStatus": 401,
       "expectedBody": {
-        "error": "string"
+        "error_code": "session_required"
       },
       "bodyMatcher": "partial"
     }

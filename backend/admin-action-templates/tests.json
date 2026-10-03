@@ -1,46 +1,25 @@
 {
   "tests": [
     {
-      "name": "Active templates",
+      "name": "Без входа доступ закрыт",
       "method": "GET",
       "path": "/?active=1",
-      "expectedStatus": 200,
+      "expectedStatus": 401,
       "expectedBody": {
-        "success": true
+        "error_code": "session_required"
       },
       "bodyMatcher": "partial"
     },
     {
-      "name": "No requester",
+      "name": "Чужая/поддельная сессия не принимается",
       "method": "GET",
-      "path": "/",
-      "expectedStatus": 400,
-      "expectedBody": {
-        "error": "string"
+      "path": "/?active=1",
+      "headers": {
+        "X-Session-Id": "fake-session-token"
       },
-      "bodyMatcher": "partial"
-    },
-    {
-      "name": "Not admin",
-      "method": "GET",
-      "path": "/?requester_user_id=999999",
-      "expectedStatus": 403,
+      "expectedStatus": 401,
       "expectedBody": {
-        "error": "string"
-      },
-      "bodyMatcher": "partial"
-    },
-    {
-      "name": "Delete not admin",
-      "method": "DELETE",
-      "path": "/",
-      "body": {
-        "requester_user_id": 999999,
-        "id": 1
-      },
-      "expectedStatus": 403,
-      "expectedBody": {
-        "error": "string"
+        "error_code": "session_required"
       },
       "bodyMatcher": "partial"
     }

@@ -7,6 +7,7 @@ from decimal import Decimal
 from zoneinfo import ZoneInfo
 
 from grouping import group_transactions, node_key, matches_filters, latest_time, local_date
+from auth_guard import guard
 
 SCHEMA = 't_p83864310_fintech_payment_reco'
 DEFAULT_TZ = 'Europe/Moscow'
@@ -201,6 +202,10 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     totals_by_type[].amount - это сумма signed_amount (нетто, с учётом
     возвратов), totals_by_type[].count - число документов без вычетов.
     '''
+    denied = guard(event)
+    if denied:
+        return denied
+
 
     method = event.get('httpMethod', 'GET')
 

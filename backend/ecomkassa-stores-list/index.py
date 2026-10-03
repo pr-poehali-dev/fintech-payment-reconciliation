@@ -5,6 +5,7 @@ import psycopg2
 from typing import Dict, Any
 
 from ecomkassa_api import get_token, fetch_firm_profile, extract_stores, extract_firm_inn
+from auth_guard import guard
 
 CORS_HEADERS = {
     'Access-Control-Allow-Origin': '*',
@@ -29,6 +30,10 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     Args: login, password, protocol_version ('v4' или 'v5'), company_id (опционально, для сверки ИНН)
     Returns: token, stores[], ecomkassa_inn, company_inn, inn_match
     '''
+    denied = guard(event)
+    if denied:
+        return denied
+
 
     method = event.get('httpMethod', 'POST')
 

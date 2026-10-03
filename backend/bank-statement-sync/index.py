@@ -15,6 +15,7 @@ from purpose_classifier import matches_keywords, get_purpose_keywords, operation
 from ru_trusted_ca import build_ssl_context
 from acquiring_settlement import process_acquiring_settlements
 from cron_report import record_cron_run
+from auth_guard import guard
 
 # enter.tochka.com отдаёт TLS-сертификат, подписанный НУЦ Минцифры РФ (ГОСТ) -
 # системное доверенное хранилище Python его не знает без этого контекста.
@@ -476,6 +477,10 @@ def _handle(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     '''Точка входа: обработка запроса + итог для админки, если вызвал планировщик.'''
+    denied = guard(event)
+    if denied:
+        return denied
+
     resp = _handle(event, context)
     if event.get('httpMethod', 'POST') == 'POST':
         record_cron_run(event, resp, 'bank', 'inserted')

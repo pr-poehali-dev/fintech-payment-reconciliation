@@ -4,6 +4,7 @@ import uuid
 
 import psycopg2
 from typing import Any, Dict, List
+from auth_guard import guard
 
 SCHEMA = 't_p83864310_fintech_payment_reco'
 
@@ -103,6 +104,10 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     любая транзакция из группы, которую нужно разорвать
     Returns: POST - {success, link_group_id}; DELETE - {success, removed_count}
     '''
+    denied = guard(event)
+    if denied:
+        return denied
+
 
     method = event.get('httpMethod', 'POST')
 

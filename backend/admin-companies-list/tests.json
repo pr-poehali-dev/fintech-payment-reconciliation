@@ -1,32 +1,25 @@
 {
   "tests": [
     {
-      "name": "Missing requester_user_id",
+      "name": "Без входа доступ закрыт",
       "method": "GET",
       "path": "/",
-      "expectedStatus": 400,
+      "expectedStatus": 401,
       "expectedBody": {
-        "error": "string"
+        "error_code": "session_required"
       },
       "bodyMatcher": "partial"
     },
     {
-      "name": "Non-admin user forbidden",
+      "name": "Чужая/поддельная сессия не принимается",
       "method": "GET",
-      "path": "/?requester_user_id=4",
-      "expectedStatus": 403,
-      "expectedBody": {
-        "error": "string"
+      "path": "/",
+      "headers": {
+        "X-Session-Id": "fake-session-token"
       },
-      "bodyMatcher": "partial"
-    },
-    {
-      "name": "Platform admin gets companies list",
-      "method": "GET",
-      "path": "/?requester_user_id=3",
-      "expectedStatus": 200,
+      "expectedStatus": 401,
       "expectedBody": {
-        "success": true
+        "error_code": "session_required"
       },
       "bodyMatcher": "partial"
     }

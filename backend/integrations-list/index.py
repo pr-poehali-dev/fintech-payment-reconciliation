@@ -2,11 +2,16 @@ import json
 import os
 import psycopg2
 from typing import Dict, Any
+from auth_guard import guard
 
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     '''
     Получение списка всех интеграций компании с группировкой по категориям
     '''
+    denied = guard(event)
+    if denied:
+        return denied
+
     
     method = event.get('httpMethod', 'GET')
     

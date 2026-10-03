@@ -1,22 +1,28 @@
 {
   "tests": [
     {
-      "name": "Missing integration_id",
+      "name": "Без входа доступ закрыт",
       "method": "POST",
+      "path": "/",
       "body": {},
-      "expectedStatus": 400,
+      "expectedStatus": 401,
       "expectedBody": {
-        "error": "integration_id required"
+        "error_code": "session_required"
       },
       "bodyMatcher": "partial"
     },
     {
-      "name": "Integration not found",
+      "name": "Чужая/поддельная сессия не принимается",
       "method": "POST",
-      "body": {
-        "integration_id": 999999
+      "path": "/",
+      "headers": {
+        "X-Session-Id": "fake-session-token"
       },
-      "expectedStatus": 404,
+      "body": {},
+      "expectedStatus": 401,
+      "expectedBody": {
+        "error_code": "session_required"
+      },
       "bodyMatcher": "partial"
     }
   ]

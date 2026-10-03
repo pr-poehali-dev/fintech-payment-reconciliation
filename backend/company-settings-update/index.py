@@ -2,6 +2,7 @@ import json
 import os
 import psycopg2
 from typing import Dict, Any
+from auth_guard import guard
 
 CORS_HEADERS = {
     'Access-Control-Allow-Origin': '*',
@@ -37,6 +38,10 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     Args: company_id, timezone (IANA-имя, например "Europe/Moscow")
     Returns: success, timezone
     '''
+    denied = guard(event)
+    if denied:
+        return denied
+
 
     method = event.get('httpMethod', 'PUT')
 

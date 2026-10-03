@@ -1,7 +1,7 @@
 {
   "tests": [
     {
-      "name": "Send message to Max messenger",
+      "name": "Без входа доступ закрыт",
       "method": "POST",
       "path": "/",
       "body": {
@@ -9,24 +9,27 @@
         "recipient": "+79991234567",
         "message": "Тестовое сообщение из FinSync"
       },
-      "expectedStatus": 200,
+      "expectedStatus": 401,
       "expectedBody": {
-        "success": true,
-        "provider": "string",
-        "recipient": "string"
+        "error_code": "session_required"
       },
       "bodyMatcher": "partial"
     },
     {
-      "name": "Missing required fields",
+      "name": "Чужая/поддельная сессия не принимается",
       "method": "POST",
       "path": "/",
-      "body": {
-        "provider": "ek_max"
+      "headers": {
+        "X-Session-Id": "fake-session-token"
       },
-      "expectedStatus": 400,
+      "body": {
+        "provider": "ek_max",
+        "recipient": "+79991234567",
+        "message": "Тестовое сообщение из FinSync"
+      },
+      "expectedStatus": 401,
       "expectedBody": {
-        "error": "string"
+        "error_code": "session_required"
       },
       "bodyMatcher": "partial"
     }

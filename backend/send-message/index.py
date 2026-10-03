@@ -3,6 +3,7 @@ import os
 import urllib.request
 import urllib.error
 from typing import Dict, Any
+from auth_guard import guard
 
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     '''
@@ -10,6 +11,10 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     Принимает: provider (ek_max/ek_wa/ek_tg), recipient (номер телефона), message (текст)
     Возвращает: результат отправки с ID сообщения
     '''
+    denied = guard(event, check_company=False)
+    if denied:
+        return denied
+
     method: str = event.get('httpMethod', 'POST')
     
     if method == 'OPTIONS':

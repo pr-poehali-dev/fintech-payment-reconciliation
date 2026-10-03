@@ -6,6 +6,7 @@ from typing import Any, Dict, List, Optional
 from zoneinfo import ZoneInfo
 
 import psycopg2
+from auth_guard import guard, internal_headers
 
 SCHEMA = 't_p83864310_fintech_payment_reco'
 
@@ -152,7 +153,7 @@ def daily_check(cur, conn, company_id) -> Dict[str, Any]:
     conn.commit()
 
     url = f'{TRANSACTIONS_URL}?company_id={company_id}&paged=1&missing_receipts=1&date={yesterday}'
-    with urllib.request.urlopen(url, timeout=20) as resp:
+    with urllib.request.urlopen(urllib.request.Request(url, headers=internal_headers()), timeout=20) as resp:
         data = json.loads(resp.read().decode('utf-8'))
     count = int(data.get('count') or 0)
     cur.execute(f'''
@@ -200,6 +201,10 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     POST {action: "dispatch", company_id?, daily?} - отправить ожидающие дубли уведомлений;
          daily=true - заодно ежедневная проверка «платежи без чека за вчера» (раз в сутки)
     '''
+    denied = guard(event)
+    if denied:
+        return denied
+
     method = event.get('httpMethod', 'GET')
     if method == 'OPTIONS':
         return {'statusCode': 200, 'headers': CORS_HEADERS, 'body': '', 'isBase64Encoded': False}

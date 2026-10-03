@@ -3,12 +3,17 @@ import os
 import secrets
 import psycopg2
 from typing import Dict, Any
+from auth_guard import guard
 
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     '''
     Создание новой интеграции для компании
     Генерирует уникальный webhook_token и возвращает URL для настройки
     '''
+    denied = guard(event)
+    if denied:
+        return denied
+
     
     method = event.get('httpMethod', 'POST')
     

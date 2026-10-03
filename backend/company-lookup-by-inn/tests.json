@@ -1,42 +1,25 @@
 {
   "tests": [
     {
-      "name": "Missing INN param",
+      "name": "Без входа доступ закрыт",
       "method": "GET",
       "path": "/",
-      "expectedStatus": 400,
+      "expectedStatus": 401,
       "expectedBody": {
-        "error": "string"
+        "error_code": "session_required"
       },
       "bodyMatcher": "partial"
     },
     {
-      "name": "Invalid INN format",
+      "name": "Чужая/поддельная сессия не принимается",
       "method": "GET",
-      "path": "/?inn=123",
-      "expectedStatus": 400,
-      "expectedBody": {
-        "error": "string"
+      "path": "/",
+      "headers": {
+        "X-Session-Id": "fake-session-token"
       },
-      "bodyMatcher": "partial"
-    },
-    {
-      "name": "Lookup real company by INN",
-      "method": "GET",
-      "path": "/?inn=7707083893",
-      "expectedStatus": 200,
+      "expectedStatus": 401,
       "expectedBody": {
-        "success": true
-      },
-      "bodyMatcher": "partial"
-    },
-    {
-      "name": "Lookup non-existent INN",
-      "method": "GET",
-      "path": "/?inn=1234567890",
-      "expectedStatus": 404,
-      "expectedBody": {
-        "error": "string"
+        "error_code": "session_required"
       },
       "bodyMatcher": "partial"
     }

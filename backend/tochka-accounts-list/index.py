@@ -5,6 +5,7 @@ import urllib.error
 from typing import Dict, Any, List, Optional
 
 from ru_trusted_ca import build_ssl_context
+from auth_guard import guard
 
 CORS_HEADERS = {
     'Access-Control-Allow-Origin': '*',
@@ -121,6 +122,10 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     balance; retailers[] с полями merchant_id, terminal_id, name (может быть
     пустым, если у токена нет прав на эквайринг)
     '''
+    denied = guard(event, check_company=False)
+    if denied:
+        return denied
+
 
     method = event.get('httpMethod', 'POST')
 

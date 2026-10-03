@@ -1,8 +1,33 @@
 {
   "tests": [
-    {"name": "Missing user_id", "method": "PUT", "body": {"full_name": "Иван"}, "expectedStatus": 400, "expectedBody": {"error": "user_id required"}},
-    {"name": "Empty name", "method": "PUT", "body": {"user_id": 1, "full_name": " "}, "expectedStatus": 400, "expectedBody": {"error": "string"}, "bodyMatcher": "partial"},
-    {"name": "Bad email", "method": "PUT", "body": {"user_id": 1, "full_name": "Иван", "email": "bad"}, "expectedStatus": 400, "expectedBody": {"error": "string"}, "bodyMatcher": "partial"},
-    {"name": "User not found", "method": "PUT", "body": {"user_id": 999999, "full_name": "Иван"}, "expectedStatus": 404, "expectedBody": {"error": "string"}, "bodyMatcher": "partial"}
+    {
+      "name": "Без входа доступ закрыт",
+      "method": "PUT",
+      "path": "/",
+      "body": {
+        "full_name": "Иван"
+      },
+      "expectedStatus": 401,
+      "expectedBody": {
+        "error_code": "session_required"
+      },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Чужая/поддельная сессия не принимается",
+      "method": "PUT",
+      "path": "/",
+      "headers": {
+        "X-Session-Id": "fake-session-token"
+      },
+      "body": {
+        "full_name": "Иван"
+      },
+      "expectedStatus": 401,
+      "expectedBody": {
+        "error_code": "session_required"
+      },
+      "bodyMatcher": "partial"
+    }
   ]
 }

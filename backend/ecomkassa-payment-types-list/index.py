@@ -6,6 +6,7 @@ import psycopg2
 from typing import Dict, Any
 
 from ecomkassa_token import ensure_valid_token
+from auth_guard import guard
 
 CORS_HEADERS = {
     'Access-Control-Allow-Origin': '*',
@@ -38,6 +39,10 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     Args: company_id (обязателен)
     Returns: payment_types[] {id, code, description}, cash_register_connected
     '''
+    denied = guard(event)
+    if denied:
+        return denied
+
 
     method = event.get('httpMethod', 'GET')
 

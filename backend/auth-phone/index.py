@@ -9,6 +9,8 @@ import urllib.request
 import psycopg2
 from typing import Dict, Any, Optional, Tuple
 
+from auth_guard import create_session, revoke_session
+
 SCHEMA = 't_p83864310_fintech_payment_reco'
 MESSENGER_API_URL = 'https://functions.poehali.dev/ace36e55-b169-41f2-9d2b-546f92221bb7'
 CHANNEL_PROVIDERS = {'telegram': 'ek_tg', 'whatsapp': 'ek_wa', 'max': 'ek_max'}
@@ -141,8 +143,9 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     '''
     Вход по номеру телефона с кодом из мессенджера; код создаётся и проверяется на сервере.
     action=send: {phone, channel (telegram/whatsapp/max), purpose (login/invite)} - отправить код.
-    action=verify: {phone, code, full_name?} - проверить код, найти или создать пользователя
-    и вернуть его данные со списком компаний.
+    action=verify: {phone, code, full_name?} - проверить код, найти или создать пользователя,
+    открыть сессию (session_token) и вернуть данные со списком компаний.
+    action=logout + X-Session-Id - закрыть сессию.
     Returns: user_id, phone, full_name, is_platform_admin, companies[]
     '''
 
@@ -154,7 +157,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             'headers': {
                 'Access-Control-Allow-Origin': '*',
                 'Access-Control-Allow-Methods': 'POST, OPTIONS',
-                'Access-Control-Allow-Headers': 'Content-Type',
+                'Access-Control-Allow-Headers': 'Content-Type, X-Session-Id',
                 'Access-Control-Max-Age': '86400'
             },
             'body': '',
@@ -171,6 +174,18 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
     body = json.loads(event.get('body') or '{}')
     action = body.get('action') or 'verify'
+
+    if action == 'logout':
+        token = {k.lower(): v for k, v in (event.get('headers') or {}).items()}.get('x-session-id')
+        if token:
+            conn = psycopg2.connect(os.environ['DATABASE_URL'])
+            try:
+                cur = conn.cursor()
+                revoke_session(cur, token)
+                conn.commit()
+            finally:
+                conn.close()
+        return reply(200, {'success': True})
     full_name = body.get('full_name')
     phone = normalize_phone(body.get('phone', ''))
 
@@ -206,6 +221,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             row = cur.fetchone()
             user_id = row[0]
 
+        session_token = create_session(cur, user_id, event)
         conn.commit()
 
         cur.execute('''
@@ -244,6 +260,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 'email': row[3],
                 'is_platform_admin': is_platform_admin,
                 'is_new': is_new,
+                'session_token': session_token,
                 'companies': companies
             }),
             'isBase64Encoded': False

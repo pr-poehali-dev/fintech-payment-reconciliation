@@ -1,26 +1,27 @@
 {
   "tests": [
     {
-      "name": "Missing company_id",
+      "name": "Без входа доступ закрыт",
       "method": "POST",
+      "path": "/",
       "body": {},
-      "expectedStatus": 400,
+      "expectedStatus": 401,
       "expectedBody": {
-        "error": "company_id required"
+        "error_code": "session_required"
       },
       "bodyMatcher": "partial"
     },
     {
-      "name": "No cash register integration",
+      "name": "Чужая/поддельная сессия не принимается",
       "method": "POST",
-      "body": {
-        "company_id": 999999
+      "path": "/",
+      "headers": {
+        "X-Session-Id": "fake-session-token"
       },
-      "expectedStatus": 200,
+      "body": {},
+      "expectedStatus": 401,
       "expectedBody": {
-        "success": true,
-        "checked": 0,
-        "resolved": 0
+        "error_code": "session_required"
       },
       "bodyMatcher": "partial"
     }

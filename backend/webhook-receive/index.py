@@ -15,6 +15,7 @@ from ecomkassa_token import ensure_valid_token as ensure_kassa_token
 import amocrm_handler
 import ecomkassa_gateway_handler
 import automation
+from auth_guard import guard
 
 CORS_HEADERS = {
     'Access-Control-Allow-Origin': '*',
@@ -65,6 +66,10 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     с событием другого провайдера), затем передаёт его в изолированный обработчик
     конкретного провайдера.
     '''
+    denied = guard(event, public=True)
+    if denied:
+        return denied
+
 
     method = event.get('httpMethod', 'POST')
 

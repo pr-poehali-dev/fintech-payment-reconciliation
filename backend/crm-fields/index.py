@@ -5,6 +5,7 @@ from typing import Any, Dict
 import psycopg2
 
 import bitrix_crm
+from auth_guard import guard
 
 SCHEMA = 't_p83864310_fintech_payment_reco'
 CORS_HEADERS = {
@@ -31,6 +32,10 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     POST {company_id, integration_id, entity: deal|lead, entity_id, mapping} - проверка сопоставления
          на реальной сделке/лиде: какие значения подставятся и какой получится чек
     '''
+    denied = guard(event)
+    if denied:
+        return denied
+
     method = event.get('httpMethod', 'GET')
     if method == 'OPTIONS':
         return {'statusCode': 200, 'headers': CORS_HEADERS, 'body': '', 'isBase64Encoded': False}

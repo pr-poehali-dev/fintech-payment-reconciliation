@@ -21,17 +21,37 @@
       "bodyMatcher": "partial"
     },
     {
-      "name": "POST missing fields",
+      "name": "Без входа доступ закрыт",
       "method": "POST",
       "path": "/",
-      "body": {
-        "token": "abc"
-      },
-      "expectedStatus": 400,
+      "expectedStatus": 401,
       "expectedBody": {
-        "error": "string"
+        "error_code": "session_required"
       },
-      "bodyMatcher": "partial"
+      "bodyMatcher": "partial",
+      "body": {
+        "token": "x",
+        "user_id": 1,
+        "phone": "79990000001"
+      }
+    },
+    {
+      "name": "Чужая/поддельная сессия не принимается",
+      "method": "POST",
+      "path": "/",
+      "headers": {
+        "X-Session-Id": "fake-session-token"
+      },
+      "expectedStatus": 401,
+      "expectedBody": {
+        "error_code": "session_required"
+      },
+      "bodyMatcher": "partial",
+      "body": {
+        "token": "x",
+        "user_id": 1,
+        "phone": "79990000001"
+      }
     }
   ]
 }

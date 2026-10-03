@@ -4,6 +4,7 @@ import psycopg2
 from datetime import datetime, timezone
 from typing import Dict, Any
 from zoneinfo import ZoneInfo
+from auth_guard import guard
 
 SCHEMA = 't_p83864310_fintech_payment_reco'
 
@@ -95,6 +96,10 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     источнику события, см. TRANSACTION_TYPE_LABELS), payment_provider,
     event_number, summary, raw
     '''
+    denied = guard(event)
+    if denied:
+        return denied
+
 
     method = event.get('httpMethod', 'GET')
 

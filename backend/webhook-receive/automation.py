@@ -2,6 +2,7 @@ import json
 import threading
 import urllib.request
 from typing import Any, Dict, Optional
+from auth_guard import internal_headers
 
 SCHEMA = 't_p83864310_fintech_payment_reco'
 
@@ -102,7 +103,7 @@ def _post(company_id: int):
         req = urllib.request.Request(
             AUTOMATION_JOBS_URL,
             data=json.dumps({'action': 'run', 'company_id': company_id}).encode('utf-8'),
-            headers={'Content-Type': 'application/json'},
+            headers={'Content-Type': 'application/json', **internal_headers()},
             method='POST'
         )
         urllib.request.urlopen(req, timeout=1.5).close()

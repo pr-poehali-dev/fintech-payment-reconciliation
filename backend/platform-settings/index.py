@@ -9,6 +9,7 @@ from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
 
 import psycopg2
+from auth_guard import guard, internal_headers
 
 SCHEMA = 't_p83864310_fintech_payment_reco'
 
@@ -160,7 +161,7 @@ def call(url: str, body: Dict[str, Any], timeout: float) -> Optional[str]:
     '''
     try:
         req = urllib.request.Request(url, data=json.dumps(body).encode('utf-8'),
-                                     headers={'Content-Type': 'application/json'}, method='POST')
+                                     headers={'Content-Type': 'application/json', **internal_headers()}, method='POST')
         urllib.request.urlopen(req, timeout=timeout).close()
         return None
     except (socket.timeout, TimeoutError):
@@ -329,6 +330,10 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     POST {action: "tick"} + заголовок X-Cron-Token - шаг планировщика по всем компаниям
          (работает, только если включён режим cron)
     '''
+    denied = guard(event, public_actions=('tick',), public_query=('public',), override=('requester_user_id',), check_company=False)
+    if denied:
+        return denied
+
     method = event.get('httpMethod', 'GET')
     if method == 'OPTIONS':
         return {'statusCode': 200, 'headers': CORS_HEADERS, 'body': '', 'isBase64Encoded': False}

@@ -1,29 +1,25 @@
 {
   "tests": [
     {
-      "name": "Missing company_id on authorize_url",
+      "name": "Без входа доступ закрыт",
       "method": "GET",
       "path": "/?action=authorize_url",
-      "expectedStatus": 400,
+      "expectedStatus": 401,
       "expectedBody": {
-        "error": "company_id required"
+        "error_code": "session_required"
       },
       "bodyMatcher": "partial"
     },
     {
-      "name": "Unknown action",
+      "name": "Чужая/поддельная сессия не принимается",
       "method": "GET",
-      "path": "/?action=unknown&company_id=1",
-      "expectedStatus": 400,
-      "bodyMatcher": "partial"
-    },
-    {
-      "name": "Missing code on POST",
-      "method": "POST",
-      "body": {},
-      "expectedStatus": 400,
+      "path": "/?action=authorize_url",
+      "headers": {
+        "X-Session-Id": "fake-session-token"
+      },
+      "expectedStatus": 401,
       "expectedBody": {
-        "error": "code and company_id required"
+        "error_code": "session_required"
       },
       "bodyMatcher": "partial"
     }

@@ -1,27 +1,33 @@
 {
   "tests": [
     {
-      "name": "Integration not found",
+      "name": "Без входа доступ закрыт",
       "method": "DELETE",
       "path": "/",
       "body": {
         "integration_id": 99999,
         "company_id": 1
       },
-      "expectedStatus": 404,
+      "expectedStatus": 401,
       "expectedBody": {
-        "error": "string"
+        "error_code": "session_required"
       },
       "bodyMatcher": "partial"
     },
     {
-      "name": "Missing parameters",
+      "name": "Чужая/поддельная сессия не принимается",
       "method": "DELETE",
       "path": "/",
-      "body": {},
-      "expectedStatus": 400,
+      "headers": {
+        "X-Session-Id": "fake-session-token"
+      },
+      "body": {
+        "integration_id": 99999,
+        "company_id": 1
+      },
+      "expectedStatus": 401,
       "expectedBody": {
-        "error": "string"
+        "error_code": "session_required"
       },
       "bodyMatcher": "partial"
     }

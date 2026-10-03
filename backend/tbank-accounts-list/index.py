@@ -4,6 +4,7 @@ import psycopg2
 from typing import Dict, Any
 
 from tbank_oauth import fetch_company_info, fetch_accounts, SANDBOX_TOKEN
+from auth_guard import guard
 
 CORS_HEADERS = {
     'Access-Control-Allow-Origin': '*',
@@ -21,6 +22,10 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     Args: company_id (query)
     Returns: is_connected (bool), company_name, accounts[]
     '''
+    denied = guard(event)
+    if denied:
+        return denied
+
 
     method = event.get('httpMethod', 'GET')
 

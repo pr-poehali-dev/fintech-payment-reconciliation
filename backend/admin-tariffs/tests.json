@@ -1,4 +1,27 @@
-{"tests": [
-  {"name": "No requester", "method": "GET", "path": "/", "expectedStatus": 403, "bodyMatcher": "partial"},
-  {"name": "Admin list", "method": "GET", "path": "/?requester_user_id=3", "expectedStatus": 200, "expectedBody": {"success": true}, "bodyMatcher": "partial"}
-]}
+{
+  "tests": [
+    {
+      "name": "Без входа доступ закрыт",
+      "method": "GET",
+      "path": "/",
+      "expectedStatus": 401,
+      "expectedBody": {
+        "error_code": "session_required"
+      },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Чужая/поддельная сессия не принимается",
+      "method": "GET",
+      "path": "/",
+      "headers": {
+        "X-Session-Id": "fake-session-token"
+      },
+      "expectedStatus": 401,
+      "expectedBody": {
+        "error_code": "session_required"
+      },
+      "bodyMatcher": "partial"
+    }
+  ]
+}

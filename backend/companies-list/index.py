@@ -2,6 +2,7 @@ import json
 import os
 import psycopg2
 from typing import Dict, Any
+from auth_guard import guard
 
 
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
@@ -10,6 +11,10 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     Args: user_id (query параметр)
     Returns: список компаний с ролью пользователя и статусом подписки
     '''
+    denied = guard(event)
+    if denied:
+        return denied
+
 
     method = event.get('httpMethod', 'GET')
 

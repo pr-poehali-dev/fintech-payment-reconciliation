@@ -4,6 +4,7 @@ import urllib.request
 import urllib.parse
 import urllib.error
 from typing import Dict, Any, Optional
+from auth_guard import guard
 
 ECOMKASSA_URL = 'https://app.ecomkassa.ru/api/mobile/v1/firmInfo'
 EGRUL_URL = 'https://egrul.nalog.ru/'
@@ -79,6 +80,10 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     Args: inn (query param, обязателен, 10 или 12 цифр)
     Returns: данные компании (сохраняем всё), пользователю показываем только name (shortName)
     '''
+    denied = guard(event, check_company=False)
+    if denied:
+        return denied
+
 
     method = event.get('httpMethod', 'GET')
 

@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import functionUrls from '../../backend/func2url.json';
+import { getSessionToken, setSessionToken, clearSession } from '@/lib/session';
 import { GOALS, reachGoal } from '@/lib/metrika';
 
 export interface Company {
@@ -75,7 +76,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   useEffect(() => {
     const stored = localStorage.getItem(STORAGE_USER_KEY);
-    if (stored) {
+    if (stored && !getSessionToken()) {
+      clearSession();
+    } else if (stored) {
       try {
         const parsedUser: AuthUser = JSON.parse(stored);
         setUser(parsedUser);
@@ -147,6 +150,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       is_platform_admin: data.is_platform_admin
     };
 
+    if (data.session_token) setSessionToken(data.session_token);
     if (data.is_new) reachGoal(GOALS.registration);
     setUser(authUser);
     localStorage.setItem(STORAGE_USER_KEY, JSON.stringify(authUser));
@@ -187,8 +191,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setUser(null);
     setCompanies([]);
     setCurrentCompanyIdState(null);
-    localStorage.removeItem(STORAGE_USER_KEY);
-    localStorage.removeItem(STORAGE_COMPANY_KEY);
+    const token = getSessionToken();
+    clearSession();
+    if (token) {
+      fetch(functionUrls['auth-phone'], {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Session-Id': token },
+        body: JSON.stringify({ action: 'logout' }),
+        keepalive: true
+      }).catch(() => undefined);
+    }
     window.location.href = '/login';
   };
 

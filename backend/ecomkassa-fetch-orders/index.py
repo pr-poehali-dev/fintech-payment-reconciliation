@@ -10,6 +10,7 @@ from ecomkassa_token import ensure_valid_token
 from ecomkassa_api import search_orders
 from fiscal_merge import merge_after_ecomkassa
 from cron_report import record_cron_run
+from auth_guard import guard
 
 SCHEMA = 't_p83864310_fintech_payment_reco'
 ECOMKASSA_BASE_URL = 'https://app.ecomkassa.ru'
@@ -423,6 +424,10 @@ def _handle(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     '''Точка входа: обработка запроса + итог для админки, если вызвал планировщик.'''
+    denied = guard(event)
+    if denied:
+        return denied
+
     resp = _handle(event, context)
     if event.get('httpMethod', 'POST') == 'POST':
         record_cron_run(event, resp, 'ecomkassa', 'inserted')

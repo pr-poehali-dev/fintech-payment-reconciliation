@@ -2,6 +2,7 @@ import json
 import os
 import psycopg2
 from typing import Dict, Any
+from auth_guard import guard
 
 
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
@@ -9,6 +10,10 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     Публичное получение списка активных тарифов для лендинга (без авторизации)
     Returns: список тарифов с ценами и лимитами
     '''
+    denied = guard(event, public=True)
+    if denied:
+        return denied
+
 
     method = event.get('httpMethod', 'GET')
 

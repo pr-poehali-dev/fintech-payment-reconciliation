@@ -3,6 +3,7 @@ import os
 import secrets
 import psycopg2
 from typing import Dict, Any, Optional
+from auth_guard import guard
 
 SCHEMA = 't_p83864310_fintech_payment_reco'
 
@@ -226,6 +227,10 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     POST {action: copy, company_id, id, target_company_id, user_id, name?} - копия в другую компанию
     DELETE {id, company_id} - удалить
     '''
+    denied = guard(event)
+    if denied:
+        return denied
+
     method = event.get('httpMethod', 'GET')
     if method == 'OPTIONS':
         return {'statusCode': 200, 'headers': CORS_HEADERS, 'body': '', 'isBase64Encoded': False}

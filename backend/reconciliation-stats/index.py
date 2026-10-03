@@ -4,6 +4,7 @@ import os
 import psycopg2
 from typing import Dict, Any, Optional
 from datetime import datetime, date, timedelta
+from auth_guard import guard
 
 SCHEMA = 't_p83864310_fintech_payment_reco'
 
@@ -130,6 +131,10 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     receipts.amount/count - касса, receipts.ofd_amount/ofd_count - ОФД),
     daily[] для графика, details для детализации
     '''
+    denied = guard(event)
+    if denied:
+        return denied
+
 
     method = event.get('httpMethod', 'GET')
 

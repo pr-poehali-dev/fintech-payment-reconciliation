@@ -3,6 +3,7 @@ import os
 
 import psycopg2
 from typing import Any, Dict, List
+from auth_guard import guard
 
 SCHEMA = 't_p83864310_fintech_payment_reco'
 
@@ -83,6 +84,10 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     type - один из payment/receipt_ofd/receipt_kassa/receipt_order/money)
     Returns: {success, removed_count, skipped: [{type, id}]}
     '''
+    denied = guard(event)
+    if denied:
+        return denied
+
 
     method = event.get('httpMethod', 'POST')
 

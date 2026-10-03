@@ -4,6 +4,7 @@ import re
 import secrets
 import psycopg2
 from typing import Dict, Any
+from auth_guard import guard
 
 
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
@@ -15,6 +16,10 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     Args: company_id, phone, full_name, email, role_slug, channel, invited_by (user_id)
     Returns: token, expires_at для формирования ссылки-приглашения
     '''
+    denied = guard(event, roles=('owner', 'admin'))
+    if denied:
+        return denied
+
 
     method = event.get('httpMethod', 'POST')
 

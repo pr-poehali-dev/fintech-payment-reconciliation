@@ -2,6 +2,7 @@ import json
 import os
 import psycopg2
 from typing import Dict, Any
+from auth_guard import guard
 
 
 def company_limit(cur, user_id) -> tuple:
@@ -33,6 +34,10 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     Returns: company_id, name, role
     GET ?user_id= - сколько компаний создано и лимит по тарифу: {owned, max_companies}
     '''
+    denied = guard(event)
+    if denied:
+        return denied
+
 
     method = event.get('httpMethod', 'POST')
 

@@ -7,6 +7,7 @@ from typing import Dict, Any, Optional
 from dictionaries import (PROTOCOLS, RECEIPT_TYPES, OPERATIONS, PAYMENT_METHODS,
                           PAYMENT_OBJECTS_V5, MEASURES, PAYMENT_TYPES, DATE_SOURCES,
                           AGENT_TYPES, PAYING_AGENT_TYPES, MONEY_TRANSFER_TYPES)
+from auth_guard import guard
 
 SCHEMA = 't_p83864310_fintech_payment_reco'
 
@@ -267,6 +268,10 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     GET ?requester_user_id= - все шаблоны + список касс (админ платформы)
     POST / PUT / DELETE {requester_user_id, ...} - создать / изменить / удалить
     '''
+    denied = guard(event, check_company=False)
+    if denied:
+        return denied
+
     method = event.get('httpMethod', 'GET')
     if method == 'OPTIONS':
         return {'statusCode': 200, 'headers': CORS_HEADERS, 'body': '', 'isBase64Encoded': False}

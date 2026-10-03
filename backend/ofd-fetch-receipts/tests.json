@@ -1,38 +1,35 @@
 {
   "tests": [
     {
-      "name": "Missing integration_id and company_id",
+      "name": "Без входа доступ закрыт",
       "method": "POST",
+      "path": "/",
       "body": {
         "date_from": "2025-01-01T00:00:00",
         "date_to": "2025-01-02T00:00:00"
       },
-      "expectedStatus": 400,
+      "expectedStatus": 401,
       "expectedBody": {
-        "error": "integration_id or company_id required"
-      }
-    },
-    {
-      "name": "Auto-sync by company_id with no OFD integrations",
-      "method": "POST",
-      "body": {
-        "company_id": 999999
-      },
-      "expectedStatus": 200,
-      "expectedBody": {
-        "success": true,
-        "integrations_checked": 0
+        "error_code": "session_required"
       },
       "bodyMatcher": "partial"
     },
     {
-      "name": "GET request returns error",
-      "method": "GET",
-      "expectedStatus": 200,
+      "name": "Чужая/поддельная сессия не принимается",
+      "method": "POST",
+      "path": "/",
+      "headers": {
+        "X-Session-Id": "fake-session-token"
+      },
+      "body": {
+        "date_from": "2025-01-01T00:00:00",
+        "date_to": "2025-01-02T00:00:00"
+      },
+      "expectedStatus": 401,
       "expectedBody": {
-        "error": true,
-        "message": "Запрос с заданными параметрами не поддерживается"
-      }
+        "error_code": "session_required"
+      },
+      "bodyMatcher": "partial"
     }
   ]
 }

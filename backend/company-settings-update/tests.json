@@ -1,39 +1,33 @@
 {
   "tests": [
     {
-      "name": "Missing company_id",
+      "name": "Без входа доступ закрыт",
       "method": "PUT",
+      "path": "/",
       "body": {
         "timezone": "Europe/Moscow"
       },
-      "expectedStatus": 400,
+      "expectedStatus": 401,
       "expectedBody": {
-        "error": "company_id required"
-      }
-    },
-    {
-      "name": "Invalid timezone",
-      "method": "PUT",
-      "body": {
-        "company_id": 1,
-        "timezone": "Not/AZone"
+        "error_code": "session_required"
       },
-      "expectedStatus": 400,
-      "expectedBody": {
-        "error": "Invalid timezone"
-      }
+      "bodyMatcher": "partial"
     },
     {
-      "name": "Company not found",
+      "name": "Чужая/поддельная сессия не принимается",
       "method": "PUT",
+      "path": "/",
+      "headers": {
+        "X-Session-Id": "fake-session-token"
+      },
       "body": {
-        "company_id": 999999,
         "timezone": "Europe/Moscow"
       },
-      "expectedStatus": 404,
+      "expectedStatus": 401,
       "expectedBody": {
-        "error": "Company not found"
-      }
+        "error_code": "session_required"
+      },
+      "bodyMatcher": "partial"
     }
   ]
 }

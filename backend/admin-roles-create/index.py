@@ -3,6 +3,7 @@ import os
 import re
 import psycopg2
 from typing import Dict, Any
+from auth_guard import guard
 
 
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
@@ -11,6 +12,10 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     Args: requester_user_id, name, description, color, modules[], permissions[]
     Returns: созданная роль
     '''
+    denied = guard(event, check_company=False)
+    if denied:
+        return denied
+
 
     method = event.get('httpMethod', 'POST')
 

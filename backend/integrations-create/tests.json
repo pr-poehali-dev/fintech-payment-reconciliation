@@ -1,28 +1,35 @@
 {
   "tests": [
     {
-      "name": "Unknown provider",
+      "name": "Без входа доступ закрыт",
       "method": "POST",
+      "path": "/",
       "body": {
         "company_id": 1,
         "provider_slug": "no_such_provider",
         "integration_name": "X"
       },
-      "expectedStatus": 404,
+      "expectedStatus": 401,
       "expectedBody": {
-        "error": "string"
+        "error_code": "session_required"
       },
       "bodyMatcher": "partial"
     },
     {
-      "name": "Missing company_id",
+      "name": "Чужая/поддельная сессия не принимается",
       "method": "POST",
-      "body": {
-        "provider_slug": "tbank"
+      "path": "/",
+      "headers": {
+        "X-Session-Id": "fake-session-token"
       },
-      "expectedStatus": 400,
+      "body": {
+        "company_id": 1,
+        "provider_slug": "no_such_provider",
+        "integration_name": "X"
+      },
+      "expectedStatus": 401,
       "expectedBody": {
-        "error": "string"
+        "error_code": "session_required"
       },
       "bodyMatcher": "partial"
     }

@@ -1,23 +1,27 @@
 {
   "tests": [
     {
-      "name": "Get webhook logs",
+      "name": "Без входа доступ закрыт",
       "method": "GET",
       "path": "/?company_id=1&limit=10",
-      "expectedStatus": 200,
+      "expectedStatus": 401,
       "expectedBody": {
-        "logs": "array"
+        "error_code": "session_required"
       },
       "bodyMatcher": "partial"
     },
     {
-      "name": "Missing company_id",
+      "name": "Чужая/поддельная сессия не принимается",
       "method": "GET",
-      "path": "/",
-      "expectedStatus": 400,
+      "path": "/?company_id=1&limit=10",
+      "headers": {
+        "X-Session-Id": "fake-session-token"
+      },
+      "expectedStatus": 401,
       "expectedBody": {
-        "error": "company_id required"
-      }
+        "error_code": "session_required"
+      },
+      "bodyMatcher": "partial"
     }
   ]
 }

@@ -2,6 +2,7 @@ import json
 import os
 import psycopg2
 from typing import Dict, Any
+from auth_guard import guard
 
 
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
@@ -11,6 +12,10 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     Args (PUT): company_id, user_id, status
     Args (DELETE): company_id, user_id  ИЛИ  invite_id (для отмены приглашения)
     '''
+    denied = guard(event, override=('requester_user_id',), roles=('owner', 'admin'))
+    if denied:
+        return denied
+
 
     method = event.get('httpMethod', 'PUT')
 

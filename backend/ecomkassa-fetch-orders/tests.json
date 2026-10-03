@@ -1,30 +1,34 @@
 {
   "tests": [
     {
-      "name": "Missing company_id returns 400",
+      "name": "Без входа доступ закрыт",
       "method": "POST",
       "path": "/",
-      "body": {"date_from": "2026-01-01T00:00:00Z", "date_to": "2026-01-02T00:00:00Z"},
-      "expectedStatus": 400,
-      "expectedBody": {"error": "string"},
+      "body": {
+        "date_from": "2026-01-01T00:00:00Z",
+        "date_to": "2026-01-02T00:00:00Z"
+      },
+      "expectedStatus": 401,
+      "expectedBody": {
+        "error_code": "session_required"
+      },
       "bodyMatcher": "partial"
     },
     {
-      "name": "Missing dates returns 400",
+      "name": "Чужая/поддельная сессия не принимается",
       "method": "POST",
       "path": "/",
-      "body": {"company_id": 1},
-      "expectedStatus": 400,
-      "expectedBody": {"error": "string"},
-      "bodyMatcher": "partial"
-    },
-    {
-      "name": "No active ecomkassa integration returns 404",
-      "method": "POST",
-      "path": "/",
-      "body": {"company_id": 999999, "date_from": "2026-01-01T00:00:00Z", "date_to": "2026-01-02T00:00:00Z"},
-      "expectedStatus": 404,
-      "expectedBody": {"error": "string"},
+      "headers": {
+        "X-Session-Id": "fake-session-token"
+      },
+      "body": {
+        "date_from": "2026-01-01T00:00:00Z",
+        "date_to": "2026-01-02T00:00:00Z"
+      },
+      "expectedStatus": 401,
+      "expectedBody": {
+        "error_code": "session_required"
+      },
       "bodyMatcher": "partial"
     }
   ]

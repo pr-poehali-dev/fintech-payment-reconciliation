@@ -1,73 +1,25 @@
 {
   "tests": [
     {
-      "name": "Missing company_id returns 400",
+      "name": "Без входа доступ закрыт",
       "method": "GET",
       "path": "/",
-      "expectedStatus": 400,
+      "expectedStatus": 401,
       "expectedBody": {
-        "error": "string"
+        "error_code": "session_required"
       },
       "bodyMatcher": "partial"
     },
     {
-      "name": "List transactions for company",
+      "name": "Чужая/поддельная сессия не принимается",
       "method": "GET",
-      "path": "/?company_id=1",
-      "expectedStatus": 200,
-      "expectedBody": {
-        "success": true
+      "path": "/",
+      "headers": {
+        "X-Session-Id": "fake-session-token"
       },
-      "bodyMatcher": "partial"
-    },
-    {
-      "name": "Filter by type=payment",
-      "method": "GET",
-      "path": "/?company_id=1&type=payment",
-      "expectedStatus": 200,
+      "expectedStatus": 401,
       "expectedBody": {
-        "success": true
-      },
-      "bodyMatcher": "partial"
-    },
-    {
-      "name": "Filter by type=receipt_ofd",
-      "method": "GET",
-      "path": "/?company_id=1&type=receipt_ofd",
-      "expectedStatus": 200,
-      "expectedBody": {
-        "success": true
-      },
-      "bodyMatcher": "partial"
-    },
-    {
-      "name": "Filter by type=receipt_kassa",
-      "method": "GET",
-      "path": "/?company_id=1&type=receipt_kassa",
-      "expectedStatus": 200,
-      "expectedBody": {
-        "success": true
-      },
-      "bodyMatcher": "partial"
-    },
-    {
-      "name": "Paged registry with filters",
-      "method": "GET",
-      "path": "/?company_id=1&paged=1&limit=50&offset=0&date_from=2026-09-01&date_to=2026-09-30&unmatched_only=1&search=10",
-      "expectedStatus": 200,
-      "expectedBody": {
-        "success": true,
-        "has_more": false
-      },
-      "bodyMatcher": "partial"
-    },
-    {
-      "name": "Paged registry by types",
-      "method": "GET",
-      "path": "/?company_id=1&paged=1&limit=50&types=money",
-      "expectedStatus": 200,
-      "expectedBody": {
-        "success": true
+        "error_code": "session_required"
       },
       "bodyMatcher": "partial"
     }

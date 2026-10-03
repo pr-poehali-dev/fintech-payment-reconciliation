@@ -1,27 +1,27 @@
 {
   "tests": [
     {
-      "name": "Missing fields",
+      "name": "Без входа доступ закрыт",
       "method": "POST",
       "path": "/",
       "body": {},
-      "expectedStatus": 400,
+      "expectedStatus": 401,
       "expectedBody": {
-        "error": "string"
+        "error_code": "session_required"
       },
       "bodyMatcher": "partial"
     },
     {
-      "name": "Non-admin forbidden",
+      "name": "Чужая/поддельная сессия не принимается",
       "method": "POST",
       "path": "/",
-      "body": {
-        "requester_user_id": 4,
-        "name": "Test Role"
+      "headers": {
+        "X-Session-Id": "fake-session-token"
       },
-      "expectedStatus": 403,
+      "body": {},
+      "expectedStatus": 401,
       "expectedBody": {
-        "error": "string"
+        "error_code": "session_required"
       },
       "bodyMatcher": "partial"
     }

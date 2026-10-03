@@ -1,41 +1,26 @@
 {
   "tests": [
     {
-      "name": "Missing company_id",
+      "name": "Без входа доступ закрыт",
       "method": "GET",
       "path": "/",
-      "expectedStatus": 400,
+      "expectedStatus": 401,
       "expectedBody": {
-        "error": "company_id required"
+        "error_code": "session_required"
       },
       "bodyMatcher": "partial"
     },
     {
-      "name": "Get events list",
+      "name": "Чужая/поддельная сессия не принимается",
       "method": "GET",
-      "path": "/?company_id=2",
-      "expectedStatus": 200,
-      "bodyMatcher": "partial"
-    },
-    {
-      "name": "Events filtered by period",
-      "method": "GET",
-      "path": "/?company_id=2&date_from=2026-09-29&date_to=2026-09-29",
-      "expectedStatus": 200,
-      "bodyMatcher": "partial"
-    },
-    {
-      "name": "Events filtered by sources",
-      "method": "GET",
-      "path": "/?company_id=2&sources=ofd,bank&limit=5",
-      "expectedStatus": 200,
-      "bodyMatcher": "partial"
-    },
-    {
-      "name": "Events errors only",
-      "method": "GET",
-      "path": "/?company_id=2&errors_only=1",
-      "expectedStatus": 200,
+      "path": "/",
+      "headers": {
+        "X-Session-Id": "fake-session-token"
+      },
+      "expectedStatus": 401,
+      "expectedBody": {
+        "error_code": "session_required"
+      },
       "bodyMatcher": "partial"
     }
   ]

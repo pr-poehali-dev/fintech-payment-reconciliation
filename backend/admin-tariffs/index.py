@@ -3,6 +3,7 @@ import os
 from typing import Any, Dict
 
 import psycopg2
+from auth_guard import guard
 
 SCHEMA = 't_p83864310_fintech_payment_reco'
 
@@ -73,6 +74,10 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     POST {action: "set_company_tariff", requester_user_id, company_id, tariff_id} - сменить тариф компании
     POST {action: "extend_subscription", requester_user_id, company_id, period: tariff|year} - продлить подписку
     '''
+    denied = guard(event, check_company=False)
+    if denied:
+        return denied
+
     method = event.get('httpMethod', 'GET')
     if method == 'OPTIONS':
         return {'statusCode': 200, 'headers': CORS_HEADERS, 'body': '', 'isBase64Encoded': False}
