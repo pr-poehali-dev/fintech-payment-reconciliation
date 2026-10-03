@@ -34,6 +34,7 @@ const IntegrationsPage = ({ onSetupReceipts }: IntegrationsPageProps) => {
     formatDate,
     handleSyncStatement,
     handleToggleActive,
+    handleEnableReceipts,
     togglingId,
     getCategoryIntegrations
   } = useIntegrationsPageData();
@@ -79,6 +80,7 @@ const IntegrationsPage = ({ onSetupReceipts }: IntegrationsPageProps) => {
         onToggleActive={handleToggleActive}
         togglingId={togglingId}
         onSetupReceipts={onSetupReceipts}
+        onEnableReceipts={handleEnableReceipts}
         onAddNew={handleAddNew}
       />
 

@@ -114,7 +114,12 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 EXISTS (SELECT 1 FROM automation_scenarios s
                         WHERE s.source_integration_id = ui.id AND s.trigger_type = 'new_payment'
                           AND s.action_type IN ('create_receipt', 'create_order') AND s.status = 'active'
-                          AND s.removed_at IS NULL) AS receipts_enabled
+                          AND s.removed_at IS NULL) AS receipts_enabled,
+                (SELECT json_build_object('id', s.id, 'name', s.name) FROM automation_scenarios s
+                 WHERE s.source_integration_id = ui.id AND s.trigger_type = 'new_payment'
+                   AND s.action_type IN ('create_receipt', 'create_order') AND s.status = 'stopped'
+                   AND s.removed_at IS NULL
+                 ORDER BY (s.action_type = 'create_receipt') DESC, s.updated_at DESC LIMIT 1) AS stopped_receipt_scenario
             FROM user_integrations ui
             JOIN integration_providers p ON p.id = ui.provider_id
             JOIN integration_categories c ON c.id = p.category_id
@@ -141,7 +146,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 'forward_url': row[13],
                 'sync_interval_hours': row[14],
                 'last_synced_at': row[15].isoformat() if row[15] else None,
-                'receipts_enabled': bool(row[16])
+                'receipts_enabled': bool(row[16]),
+                'stopped_receipt_scenario': row[17]
             })
         
         return {

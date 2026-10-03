@@ -145,6 +145,28 @@ export const useIntegrationsPageData = () => {
     }
   };
 
+  const handleEnableReceipts = async (integration: UserIntegration) => {
+    const scenario = integration.stopped_receipt_scenario;
+    if (!companyId || !scenario) return;
+    setTogglingId(integration.id);
+    try {
+      const res = await fetch(functionUrls['automation-scenarios'], {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: scenario.id, company_id: companyId, status: 'active' })
+      });
+      if (!res.ok) throw new Error();
+      setUserIntegrations((prev) =>
+        prev.map((i) => (i.id === integration.id ? { ...i, receipts_enabled: true, stopped_receipt_scenario: null } : i))
+      );
+      toast({ title: `Автоматизация «${scenario.name}» включена`, description: 'Чеки создаются' });
+    } catch {
+      toast({ title: 'Не удалось включить автоматизацию', description: 'Попробуйте ещё раз', variant: 'destructive' });
+    } finally {
+      setTogglingId(null);
+    }
+  };
+
   const copyWebhookUrl = (token: string) => {
     const url = `${functionUrls['webhook-receive']}?token=${token}`;
     navigator.clipboard.writeText(url);
@@ -285,6 +307,7 @@ export const useIntegrationsPageData = () => {
     handleFetchReceipts,
     handleSyncStatement,
     handleToggleActive,
+    handleEnableReceipts,
     togglingId,
     getCategoryIntegrations
   };

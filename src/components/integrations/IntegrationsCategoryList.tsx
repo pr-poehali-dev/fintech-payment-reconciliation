@@ -19,6 +19,7 @@ interface IntegrationsCategoryListProps {
   onToggleActive: (integration: UserIntegration, active: boolean) => void;
   togglingId: number | null;
   onSetupReceipts?: (integrationId: number) => void;
+  onEnableReceipts?: (integration: UserIntegration) => void;
   onAddNew: () => void;
 }
 
@@ -35,6 +36,7 @@ const IntegrationsCategoryList = ({
   onToggleActive,
   togglingId,
   onSetupReceipts,
+  onEnableReceipts,
   onAddNew
 }: IntegrationsCategoryListProps) => {
   return (
@@ -64,6 +66,7 @@ const IntegrationsCategoryList = ({
                     onToggleActive={onToggleActive}
                     togglingId={togglingId}
                     onSetupReceipts={onSetupReceipts}
+                    onEnableReceipts={onEnableReceipts}
                   />
                 ))}
               </div>

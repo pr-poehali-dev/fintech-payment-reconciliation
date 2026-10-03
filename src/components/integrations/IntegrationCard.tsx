@@ -16,6 +16,7 @@ interface IntegrationCardProps {
   onToggleActive: (integration: UserIntegration, active: boolean) => void;
   togglingId: number | null;
   onSetupReceipts?: (integrationId: number) => void;
+  onEnableReceipts?: (integration: UserIntegration) => void;
 }
 
 const Chip = ({ children, tone = 'muted' }: { children: React.ReactNode; tone?: 'muted' | 'warning' | 'primary' }) => {
@@ -38,12 +39,22 @@ const IntegrationCard = ({
   onSyncStatement,
   onToggleActive,
   togglingId,
-  onSetupReceipts
+  onSetupReceipts,
+  onEnableReceipts
 }: IntegrationCardProps) => {
   // Шлюз Екомкассы пробивает чеки сам - сценарий не нужен, иконка всегда «настроено».
   const isGateway = integration.provider_slug === 'ecomkassa_gateway';
   const showReceipts = isGateway || suggestsReceiptScenario(integration.provider_slug);
   const receiptsOn = isGateway || !!integration.receipts_enabled;
+  const stoppedScenario = integration.stopped_receipt_scenario;
+  // Есть выключенный сценарий - клик включает его; нет - открывает создание нового.
+  const receiptAction = !receiptsOn
+    ? stoppedScenario && onEnableReceipts
+      ? { title: `Чеки не создаются — включить автоматизацию «${stoppedScenario.name}»`, run: () => onEnableReceipts(integration) }
+      : onSetupReceipts
+        ? { title: 'Чеки не создаются — настроить', run: () => onSetupReceipts(integration.id) }
+        : null
+    : null;
   const isOFD = integration.category_slug === 'ofd';
   const isBank = integration.category_slug === 'banks';
   const isCrm = integration.category_slug === 'crm';
@@ -82,18 +93,19 @@ const IntegrationCard = ({
             <div className="truncate text-xs text-muted-foreground">{integration.provider_name}</div>
           </div>
           <div className="flex shrink-0 items-center gap-1">
-            {showReceipts && !receiptsOn && onSetupReceipts && (
+            {showReceipts && receiptAction && (
               <Button
                 variant="ghost"
                 size="icon"
                 className="h-8 w-8 text-muted-foreground/60 hover:text-primary"
-                title="Чеки не создаются — настроить"
-                onClick={(e) => stop(e, () => onSetupReceipts(integration.id))}
+                title={receiptAction.title}
+                disabled={togglingId === integration.id}
+                onClick={(e) => stop(e, receiptAction.run)}
               >
                 <Icon name="Receipt" size={16} />
               </Button>
             )}
-            {showReceipts && (receiptsOn || !onSetupReceipts) && (
+            {showReceipts && !receiptAction && (
               <span
                 className={`flex h-8 w-8 items-center justify-center ${receiptsOn ? 'text-success' : 'text-muted-foreground/60'}`}
                 title={receiptsOn ? 'Чеки создаются' : 'Чеки не создаются'}
