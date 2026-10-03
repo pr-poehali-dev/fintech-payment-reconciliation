@@ -401,6 +401,15 @@ def create_receipt(cur, job: Dict[str, Any], scenario: Dict[str, Any], data: Dic
     payment_type = template.get('payment_type')
     payments = [{'type': int(payment_type if payment_type is not None else 1), 'sum': total}]
     external_id = make_external_id(job, data, source_company.get('inn'), operation)
+    if cur is not None:
+        # Документ с этим номером уже упал в кассе (FAILED) - касса вернула бы его же. Новый номер с попыткой.
+        cur.execute(f'''
+            SELECT COUNT(*) FROM {SCHEMA}.automation_documents
+            WHERE kassa_integration_id = %s AND external_id LIKE %s
+        ''', (kassa['id'], f'{external_id}-old%'))
+        previous = cur.fetchone()[0]
+        if previous:
+            external_id = f'{external_id}-r{previous + 1}'[:128]
     body = {
         'external_id': external_id,
         'timestamp': datetime.now(MSK).strftime('%d.%m.%Y %H:%M:%S'),
