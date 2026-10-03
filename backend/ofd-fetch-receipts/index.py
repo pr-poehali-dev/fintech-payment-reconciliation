@@ -22,8 +22,8 @@ CORS_HEADERS = {
 AUTO_SYNC_LOOKBACK_DAYS = 3
 
 
-def fetch_and_save_receipts(cur, integration_id: int, company_id: int, config: Dict[str, Any],
-                             dt_from: datetime, dt_to: datetime) -> Tuple[bool, int, int, Optional[str]]:
+def fetch_kkt_receipts(cur, integration_id: int, company_id: int, config: Dict[str, Any], kkt: str,
+                       dt_from: datetime, dt_to: datetime) -> Tuple[bool, int, int, Optional[str], list]:
     '''
     Запрашивает чеки OFD.RU за период [dt_from, dt_to] по одной интеграции и
     сохраняет новые в ofd_receipts (повторные приходы игнорируются по
@@ -31,12 +31,11 @@ def fetch_and_save_receipts(cur, integration_id: int, company_id: int, config: D
     Returns: (success, total_receipts, inserted_count, error)
     '''
     inn = config.get('inn')
-    kkt = config.get('kkt')
     auth_token = config.get('auth_token')
     api_url = config.get('api_url', 'https://ofd.ru')
 
     if not all([inn, kkt, auth_token]):
-        return False, 0, 0, 'Missing INN, KKT or auth_token in config'
+        return False, 0, 0, 'Missing INN, KKT or auth_token in config', []
 
     iso_from = dt_from.strftime('%Y-%m-%dT00:00:00')
     iso_to = dt_to.strftime('%Y-%m-%dT23:59:59')
@@ -56,12 +55,12 @@ def fetch_and_save_receipts(cur, integration_id: int, company_id: int, config: D
             receipts_data = json.loads(response_body)
     except urllib.error.HTTPError as e:
         error_body = e.read().decode('utf-8') if e.fp else str(e)
-        return False, 0, 0, f'OFD API error: {error_body}'
+        return False, 0, 0, f'OFD API error (РНМ {kkt}): {error_body}', []
     except (urllib.error.URLError, json.JSONDecodeError, TimeoutError) as e:
-        return False, 0, 0, f'OFD API request failed: {str(e)}'
+        return False, 0, 0, f'OFD API request failed (РНМ {kkt}): {str(e)}', []
 
     if isinstance(receipts_data, dict) and receipts_data.get('Status') == 'Failed':
-        return False, 0, 0, f'OFD API returned error: {receipts_data.get("Errors", [])}'
+        return False, 0, 0, f'OFD API returned error (РНМ {kkt}): {receipts_data.get("Errors", [])}', []
 
     if isinstance(receipts_data, dict) and 'Data' in receipts_data:
         receipts = receipts_data.get('Data', [])
@@ -109,14 +108,44 @@ def fetch_and_save_receipts(cur, integration_id: int, company_id: int, config: D
         except Exception as e:
             skipped.append({**info, 'reason': str(e)[:200]})
 
-    cur.execute('''
-        UPDATE t_p83864310_fintech_payment_reco.user_integrations
-        SET last_synced_at = NOW(), updated_at = NOW()
-        WHERE id = %s
-    ''', (integration_id,))
+    return True, len(receipts), inserted_count, None, skipped
 
+
+def integration_kkts(config: Dict[str, Any]) -> list:
+    '''Кассы интеграции: список kkts (несколько касс), для старых настроек - одно поле kkt.'''
+    kkts = config.get('kkts')
+    if isinstance(kkts, list) and kkts:
+        return [str(k).strip() for k in kkts if str(k).strip()]
+    return [str(config['kkt']).strip()] if config.get('kkt') else []
+
+
+def fetch_and_save_receipts(cur, integration_id: int, company_id: int, config: Dict[str, Any],
+                             dt_from: datetime, dt_to: datetime) -> Tuple[bool, int, int, Optional[str]]:
+    '''
+    Загрузка чеков OFD.RU за период по всем кассам интеграции. Ошибка одной кассы не мешает остальным.
+    Returns: (success - хотя бы одна касса загрузилась, total_receipts, inserted_count, error)
+    '''
+    kkts = integration_kkts(config)
+    if not kkts:
+        fetch_and_save_receipts.last_skipped = []
+        return False, 0, 0, 'Не выбрана ни одна касса'
+    total, inserted, errors, skipped, ok = 0, 0, [], [], False
+    for kkt in kkts:
+        success, t, i, err, sk = fetch_kkt_receipts(cur, integration_id, company_id, config, kkt, dt_from, dt_to)
+        total += t
+        inserted += i
+        skipped += sk
+        ok = ok or success
+        if err:
+            errors.append(err)
+    if ok:
+        cur.execute('''
+            UPDATE t_p83864310_fintech_payment_reco.user_integrations
+            SET last_synced_at = NOW(), updated_at = NOW()
+            WHERE id = %s
+        ''', (integration_id,))
     fetch_and_save_receipts.last_skipped = skipped
-    return True, len(receipts), inserted_count, None
+    return ok, total, inserted, ('; '.join(errors) if errors else None)
 
 
 def parse_iso_date(value: Optional[str], fallback: datetime) -> datetime:

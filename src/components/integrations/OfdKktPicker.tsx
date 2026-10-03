@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
 import Icon from '@/components/ui/icon';
 import { ConfigState } from './providerFieldsConfig';
 import functionUrls from '../../../backend/func2url.json';
@@ -34,7 +34,19 @@ const OfdKktPicker = ({ companyId, config, onConfigChange, visiblePassword, onTo
   const [inn, setInn] = useState('');
 
   const token = String(config.auth_token ?? '');
-  const selected = String(config.kkt ?? '');
+  // Несколько касс - в kkts; старые настройки с одной кассой - в kkt.
+  const selected: string[] = Array.isArray(config.kkts)
+    ? (config.kkts as string[])
+    : config.kkt
+      ? [String(config.kkt)]
+      : [];
+  const setSelected = (list: string[]) => {
+    const next: ConfigState = { ...config, kkts: list };
+    delete next.kkt;
+    onConfigChange(next);
+  };
+  const toggle = (kkt: string, on: boolean) =>
+    setSelected(on ? [...selected.filter((k) => k !== kkt), kkt] : selected.filter((k) => k !== kkt));
 
   const loadKkts = async (authToken: string) => {
     if (!authToken.trim()) {
@@ -57,8 +69,10 @@ const OfdKktPicker = ({ companyId, config, onConfigChange, visiblePassword, onTo
       }
       setInn(data.inn || '');
       setKkts(data.kkts || []);
-      if (data.kkts?.length === 1 && !selected) {
-        onConfigChange({ ...config, auth_token: authToken.trim(), kkt: data.kkts[0].kkt });
+      if (data.kkts?.length === 1 && selected.length === 0) {
+        const next: ConfigState = { ...config, auth_token: authToken.trim(), kkts: [data.kkts[0].kkt] };
+        delete next.kkt;
+        onConfigChange(next);
       }
     } catch {
       setError('Сбой сети, попробуйте ещё раз');
@@ -69,12 +83,12 @@ const OfdKktPicker = ({ companyId, config, onConfigChange, visiblePassword, onTo
 
   useEffect(() => {
     // Правка интеграции: токен уже есть - сразу показываем список, чтобы можно было сменить кассу.
-    if (token && selected && kkts === null) loadKkts(token);
+    if (token && selected.length > 0 && kkts === null) loadKkts(token);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const options = kkts || [];
-  const selectedMissing = selected && kkts !== null && !options.some((k) => k.kkt === selected);
+  const missing = kkts !== null ? selected.filter((s) => !options.some((k) => k.kkt === s)) : [];
 
   return (
     <div className="space-y-4">
@@ -120,37 +134,56 @@ const OfdKktPicker = ({ companyId, config, onConfigChange, visiblePassword, onTo
 
       {kkts !== null && (
         <div>
-          <Label>Касса</Label>
+          <div className="flex items-center justify-between">
+            <Label>Кассы для загрузки чеков</Label>
+            {options.length > 1 && (
+              <button
+                type="button"
+                className="text-xs text-primary hover:underline"
+                onClick={() => setSelected(selected.length === options.length ? [] : options.map((k) => k.kkt))}
+              >
+                {selected.length === options.length ? 'Снять все' : 'Выбрать все'}
+              </button>
+            )}
+          </div>
           {options.length === 0 ? (
             <p className="mt-1 text-sm text-muted-foreground">
               В OFD.RU нет касс для ИНН {inn}. Проверьте, что токен выдан для этой организации.
             </p>
           ) : (
-            <Select value={selected} onValueChange={(v) => onConfigChange({ ...config, kkt: v })}>
-              <SelectTrigger className="mt-1">
-                <SelectValue placeholder={`Выберите кассу (${options.length})`} />
-              </SelectTrigger>
-              <SelectContent>
-                {options.map((k) => (
-                  <SelectItem key={k.kkt} value={k.kkt}>
-                    <div className="flex flex-col">
-                      <span>{kktLabel(k)}</span>
-                      <span className="text-xs text-muted-foreground">РНМ {k.kkt}{k.serial ? ` · ЗН ${k.serial}` : ''}</span>
+            <div className="mt-2 max-h-64 space-y-2 overflow-y-auto">
+              {options.map((k) => {
+                const checked = selected.includes(k.kkt);
+                return (
+                  <label
+                    key={k.kkt}
+                    className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors ${
+                      checked ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50'
+                    }`}
+                  >
+                    <Checkbox checked={checked} onCheckedChange={(v) => toggle(k.kkt, !!v)} className="mt-0.5" />
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-medium">{kktLabel(k)}</div>
+                      <div className="text-xs text-muted-foreground">РНМ {k.kkt}{k.serial ? ` · ЗН ${k.serial}` : ''}</div>
                     </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+                  </label>
+                );
+              })}
+            </div>
           )}
-          {selectedMissing && (
-            <p className="mt-1 text-xs text-amber-500">Сохранённая касса (РНМ {selected}) не найдена в OFD.RU — выберите из списка.</p>
+          {missing.length > 0 && (
+            <p className="mt-1 text-xs text-amber-500">
+              Сохранённые кассы не найдены в OFD.RU: РНМ {missing.join(', ')}. Снимите их или проверьте токен.
+            </p>
           )}
-          {inn && options.length > 0 && <p className="mt-1 text-xs text-muted-foreground">Кассы организации с ИНН {inn}</p>}
+          {options.length > 0 && (
+            <p className="mt-1 text-xs text-muted-foreground">Выбрано: {selected.length} из {options.length}</p>
+          )}
         </div>
       )}
 
-      {kkts === null && selected && !isLoading && (
-        <p className="text-xs text-muted-foreground">Выбрана касса РНМ {selected}</p>
+      {kkts === null && selected.length > 0 && !isLoading && (
+        <p className="text-xs text-muted-foreground">Выбрано касс: {selected.length} (РНМ {selected.join(', ')})</p>
       )}
     </div>
   );

@@ -78,7 +78,8 @@ const IntegrationConfigStep = ({
       return false;
     }
 
-    if (isOfd && (!String(config.auth_token ?? '').trim() || !String(config.kkt ?? '').trim())) {
+    const ofdKkts = Array.isArray(config.kkts) ? config.kkts : config.kkt ? [config.kkt] : [];
+    if (isOfd && (!String(config.auth_token ?? '').trim() || ofdKkts.length === 0)) {
       return false;
     }
 

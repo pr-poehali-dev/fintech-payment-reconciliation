@@ -157,8 +157,9 @@ const IntegrationCard = ({
           )}
           {isOFD && (
             <>
-              <Chip>ИНН: {String(cfg.inn || '—')}</Chip>
-              <Chip>РНМ: {String(cfg.kkt || '—')}</Chip>
+              {(Array.isArray(cfg.kkts) ? cfg.kkts : cfg.kkt ? [cfg.kkt] : []).map((k: string) => (
+                <Chip key={k}>РНМ: {k}</Chip>
+              ))}
             </>
           )}
           {isBank && (
