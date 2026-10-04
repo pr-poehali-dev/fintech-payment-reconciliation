@@ -57,13 +57,9 @@ const getStatusColor = (status: string | null) => {
 // в налоговой), не платёжный статус вроде CONFIRMED/REJECTED - нужен свой
 // лейбл и своя цветовая раскладка (см. lib/ofdFnsStatus.ts), иначе бейдж
 // показывал бы сырое "Success" серым цветом по умолчанию.
-const getStatusDisplay = (event: Pick<AppEvent, 'provider_slug' | 'status' | 'transaction_type'>) => {
+const getStatusDisplay = (event: Pick<AppEvent, 'provider_slug' | 'status'>) => {
   if (event.provider_slug === 'ofdru') {
     return { label: ofdFnsStatusLabel(event.status), color: ofdFnsStatusColorClass(event.status) };
-  }
-  if (event.transaction_type === 'receipt_order') {
-    if (event.status === 'wait') return { label: 'Ожидает доставки', color: 'bg-info' };
-    if (event.status === 'done') return { label: 'Выполнен', color: 'bg-success' };
   }
   return { label: event.status, color: getStatusColor(event.status) };
 };
