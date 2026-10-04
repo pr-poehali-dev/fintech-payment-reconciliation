@@ -24,7 +24,8 @@ EMAIL_RE = re.compile(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
 COLUMNS = ['id', 'code', 'action_type', 'name', 'description', 'operation', 'paid', 'is_active', 'sort_order',
            'provider_id', 'protocol_version', 'receipt_type', 'payment_method', 'payment_object', 'measure',
            'payment_type', 'default_email', 'correction_type', 'correction_date_source', 'correction_base_date',
-           'correction_base_number', 'auto_deliver', 'cashier_name', 'agent_settings']
+           'correction_base_number', 'auto_deliver', 'cashier_name', 'agent_settings', 'correction_base_name',
+           'payment_address']
 EDITABLE = COLUMNS[2:]
 
 
@@ -155,10 +156,10 @@ def normalize_correction(body: Dict[str, Any]):
     Основание коррекции (correction_info) - только самостоятельная коррекция (type = self):
     v4 - base_date (дата документа основания) и base_number (номер документа) обязательны;
     v5 - только base_date (дата корректируемого расчёта), номер не передаётся.
-    Дата берётся из платежа (payment) или задаётся в шаблоне (fixed).
+    Дата берётся из платежа (payment), текущая (today) или задаётся в шаблоне (fixed).
     '''
-    empty = {'correction_type': None, 'correction_date_source': None,
-             'correction_base_date': None, 'correction_base_number': None}
+    empty = {'correction_type': None, 'correction_date_source': None, 'correction_base_date': None,
+             'correction_base_number': None, 'correction_base_name': None, 'payment_address': None}
     if body.get('receipt_type') != 'correction':
         return empty, None
     source = body.get('correction_date_source')
@@ -170,15 +171,20 @@ def normalize_correction(body: Dict[str, Any]):
         if not re.fullmatch(r'\d{4}-\d{2}-\d{2}', raw):
             return None, 'Укажите дату основания коррекции'
         base_date = raw
-    number = None
-    if body.get('protocol_version') == 'v4':
-        number = (body.get('correction_base_number') or '').strip() or None
-        if not number:
-            return None, 'Для v4 укажите номер документа основания коррекции'
-        if len(number) > 32:
-            return None, 'Номер документа основания - не больше 32 символов'
-    return {'correction_type': 'self', 'correction_date_source': source,
-            'correction_base_date': base_date, 'correction_base_number': number}, None
+    # Номер, описание и место расчётов необязательны: пустые клиент заполняет в своём сценарии.
+    number = (body.get('correction_base_number') or '').strip() or None
+    if number and len(number) > 32:
+        return None, 'Номер документа основания - не больше 32 символов'
+    name = (body.get('correction_base_name') or '').strip() or None
+    if body.get('protocol_version') == 'v5':
+        name = None
+    if name and len(name) > 255:
+        return None, 'Описание коррекции - не больше 255 символов'
+    address = (body.get('payment_address') or '').strip() or None
+    if address and len(address) > 256:
+        return None, 'Место расчётов - не больше 256 символов'
+    return {'correction_type': 'self', 'correction_date_source': source, 'correction_base_date': base_date,
+            'correction_base_number': number, 'correction_base_name': name, 'payment_address': address}, None
 
 
 PHONE_RE = re.compile(r'^\+\d{1,19}$')

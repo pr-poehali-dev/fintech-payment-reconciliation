@@ -74,7 +74,9 @@ def correction_info(template: Dict[str, Any], data: Dict[str, Any]) -> Tuple[Opt
     '''
     if template.get('receipt_type') != 'correction':
         return None, ''
-    if template.get('correction_date_source') == 'fixed' and template.get('correction_base_date'):
+    if template.get('correction_date_source') == 'today':
+        base_date = datetime.now(timezone(timedelta(hours=3))).date()
+    elif template.get('correction_date_source') == 'fixed' and template.get('correction_base_date'):
         base = template['correction_base_date']
         base_date = base if isinstance(base, date) else datetime.strptime(str(base)[:10], '%Y-%m-%d').date()
     else:
@@ -90,9 +92,9 @@ def correction_info(template: Dict[str, Any], data: Dict[str, Any]) -> Tuple[Opt
         return info, ''
     name = str(template.get('correction_base_name') or '').strip()
     if not number:
-        return None, 'Не указан номер документа-основания коррекции (обязателен для v4) - заполните в сценарии'
+        return None, 'Не указан номер документа-основания коррекции (обязателен для v4) - заполните в шаблоне или сценарии'
     if not name:
-        return None, 'Не указано описание коррекции (обязательно для v4) - заполните в сценарии'
+        return None, 'Не указано описание коррекции (обязательно для v4) - заполните в шаблоне или сценарии'
     info['base_number'] = number
     info['base_name'] = name
     return info, ''

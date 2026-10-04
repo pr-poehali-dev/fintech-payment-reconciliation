@@ -111,10 +111,20 @@ const ScenarioDialog = ({ open, onOpenChange, scenario, prefill, integrations, t
   const setCs = (patch: CorrectionSettings) => setForm({ ...form, correction_settings: { ...cs, ...patch } });
   const askEmail = form.action_type === 'create_receipt' && !!currentTemplate && !currentTemplate.default_email;
   const emailInvalid = askEmail && !!cs.default_email?.trim() && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(cs.default_email.trim());
+  const askNumber = isCorrection && !currentTemplate?.correction_base_number;
+  const askName = isCorrection && !isV5 && !currentTemplate?.correction_base_name;
+  const askAddress = isCorrection && !currentTemplate?.payment_address;
+  const askCashier = form.action_type === 'create_order' && !!currentTemplate?.auto_deliver && !currentTemplate?.cashier_name;
+  const dateLabel =
+    currentTemplate?.correction_date_source === 'today'
+      ? 'текущая дата'
+      : currentTemplate?.correction_date_source === 'fixed'
+        ? 'задана в шаблоне'
+        : 'дата платежа';
   const correctionMissing = isCorrection
     ? [
-        !isV5 && !(cs.correction_base_number?.trim() || currentTemplate?.correction_base_number) && 'номер основания',
-        !isV5 && !cs.correction_base_name?.trim() && 'описание коррекции'
+        askNumber && !isV5 && !cs.correction_base_number?.trim() && 'номер основания',
+        askName && !cs.correction_base_name?.trim() && 'описание коррекции'
       ].filter(Boolean)
     : [];
   let step = 1;
@@ -304,23 +314,52 @@ const ScenarioDialog = ({ open, onOpenChange, scenario, prefill, integrations, t
                 </p>
               </div>
             )}
+            {askCashier && (
+              <div className="space-y-1 pt-2">
+                <Label>Кассир в чеке (необязательно)</Label>
+                <Input
+                  placeholder="Например, Иванов Иван"
+                  maxLength={100}
+                  value={cs.cashier_name || ''}
+                  onChange={(e) => setCs({ cashier_name: e.target.value })}
+                />
+                <p className="text-xs text-muted-foreground">Если пусто — касса подставит кассира магазина</p>
+              </div>
+            )}
           </Step>
 
           {isCorrection && (
             <Step n={step++} title="Чек коррекции">
               <div className="space-y-3 rounded-lg border border-primary/30 bg-primary/5 p-4">
                 <p className="text-xs text-muted-foreground">
-                  Самостоятельная коррекция · протокол {isV5 ? 'v5 (ФФД 1.2)' : 'v4 (ФФД 1.05)'}. Дата основания — дата платежа.
+                  Самостоятельная коррекция · протокол {isV5 ? 'v5 (ФФД 1.2)' : 'v4 (ФФД 1.05)'}. Дата основания — {dateLabel}.
                 </p>
-                <div className="space-y-1">
-                  <Label>Номер документа-основания{isV5 ? ' (необязательно)' : ''}</Label>
-                  <Input
-                    placeholder={currentTemplate?.correction_base_number || 'Например, 1 или номер акта'}
-                    value={cs.correction_base_number || ''}
-                    onChange={(e) => setCs({ correction_base_number: e.target.value })}
-                  />
-                </div>
-                {!isV5 && (
+                {!askNumber && !askName && !askAddress && (
+                  <p className="text-xs text-muted-foreground">Все поля коррекции заданы в шаблоне — заполнять ничего не нужно</p>
+                )}
+                {askNumber && (
+                  <div className="space-y-1">
+                    <Label>Номер документа-основания{isV5 ? ' (необязательно)' : ''}</Label>
+                    <Input
+                      placeholder="Например, 1 или номер акта"
+                      maxLength={32}
+                      value={cs.correction_base_number || ''}
+                      onChange={(e) => setCs({ correction_base_number: e.target.value })}
+                    />
+                  </div>
+                )}
+                {askAddress && (
+                  <div className="space-y-1">
+                    <Label>Место расчётов (необязательно)</Label>
+                    <Input
+                      placeholder="Адрес сайта или магазина"
+                      maxLength={256}
+                      value={cs.payment_address || ''}
+                      onChange={(e) => setCs({ payment_address: e.target.value })}
+                    />
+                  </div>
+                )}
+                {askName && (
                   <div className="space-y-1">
                     <Label>Описание коррекции</Label>
                     <Input

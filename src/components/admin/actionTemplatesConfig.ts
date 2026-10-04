@@ -21,6 +21,8 @@ export interface ActionTemplateRow {
   correction_date_source: string | null;
   correction_base_date: string | null;
   correction_base_number: string | null;
+  correction_base_name: string | null;
+  payment_address: string | null;
   auto_deliver: boolean;
   cashier_name: string | null;
   agent_settings: Partial<AgentSettingsRow> | null;
@@ -47,6 +49,8 @@ export interface ActionTemplateForm {
   correction_date_source: string;
   correction_base_date: string;
   correction_base_number: string;
+  correction_base_name: string;
+  payment_address: string;
   auto_deliver: boolean;
   cashier_name: string;
   agent_settings: AgentSettings;
@@ -203,6 +207,8 @@ export const EMPTY_TEMPLATE: ActionTemplateForm = {
   correction_date_source: 'payment',
   correction_base_date: '',
   correction_base_number: '',
+  correction_base_name: '',
+  payment_address: '',
   auto_deliver: false,
   cashier_name: '',
   agent_settings: EMPTY_AGENT
@@ -210,16 +216,17 @@ export const EMPTY_TEMPLATE: ActionTemplateForm = {
 
 export const DATE_SOURCE_OPTIONS: Option[] = [
   { value: 'payment', label: 'Дата платежа' },
+  { value: 'today', label: 'Сегодня' },
   { value: 'fixed', label: 'Фиксированная дата' }
 ];
 
-// Только самостоятельная коррекция: номер документа основания нужен лишь в v4.
+// Только самостоятельная коррекция: номер и описание основания обязательны в v4.
+// В шаблоне они необязательны - пустые клиент заполняет в своём сценарии.
 export const needsBaseNumber = (f: Pick<ActionTemplateForm, 'protocol_version'>) => f.protocol_version === 'v4';
 
 export const correctionValid = (f: ActionTemplateForm) =>
   f.receipt_type !== 'correction' ||
-  ((f.correction_date_source !== 'fixed' || !!f.correction_base_date) &&
-    (!needsBaseNumber(f) || (!!f.correction_base_number.trim() && f.correction_base_number.trim().length <= 32)));
+  ((f.correction_date_source !== 'fixed' || !!f.correction_base_date) && f.correction_base_number.trim().length <= 32);
 
 export const labelOf = (options: Option[], value: string | null | undefined) =>
   options.find((o) => o.value === value)?.label || value || '—';
@@ -244,6 +251,8 @@ export const templateToForm = (t: ActionTemplateRow): ActionTemplateForm => ({
   correction_date_source: t.correction_date_source || 'payment',
   correction_base_date: t.correction_base_date ? t.correction_base_date.slice(0, 10) : '',
   correction_base_number: t.correction_base_number || '',
+  correction_base_name: t.correction_base_name || '',
+  payment_address: t.payment_address || '',
   auto_deliver: !!t.auto_deliver,
   cashier_name: t.cashier_name || '',
   agent_settings: agentToForm(t.agent_settings)

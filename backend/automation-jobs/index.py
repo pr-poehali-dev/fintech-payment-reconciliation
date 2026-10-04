@@ -130,12 +130,9 @@ def process_job(cur, job: Dict[str, Any]) -> str:
                              'correction_base_number': r[21], 'auto_deliver': bool(r[22]),
                              'cashier_name': r[23], 'agent_settings': r[24],
                              'correction_base_name': r[25], 'payment_address': r[26]}}
-    # Поля сценария (номер/описание основания, место расчётов) важнее шаблона.
-    # Почта по умолчанию из сценария - только если в шаблоне она не задана.
+    # Заполненное в шаблоне действия важнее; пустые поля шаблона клиент заполняет в сценарии.
     for key, value in (r[27] or {}).items():
-        if value in (None, ''):
-            continue
-        if key == 'default_email' and scenario['template'].get('default_email'):
+        if value in (None, '') or scenario['template'].get(key) not in (None, ''):
             continue
         scenario['template'][key] = value
 

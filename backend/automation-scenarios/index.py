@@ -72,7 +72,7 @@ def validate(cur, company_id: int, body: Dict[str, Any]) -> Optional[str]:
         return 'Для расхождения доступно только действие «Создать чек»'
     cur.execute(f'''
         SELECT action_type, is_active, provider_id, receipt_type, protocol_version, correction_date_source,
-               correction_base_number
+               correction_base_number, correction_base_name
         FROM {SCHEMA}.automation_action_templates WHERE code = %s
     ''', (body.get('action_template'),))
     template = cur.fetchone()
@@ -102,7 +102,7 @@ def validate(cur, company_id: int, body: Dict[str, Any]) -> Optional[str]:
         if template[4] != 'v5':
             if not str(cs.get('correction_base_number') or template[6] or '').strip():
                 return 'Укажите номер документа-основания коррекции (обязателен для протокола v4)'
-            if not str(cs.get('correction_base_name') or '').strip():
+            if not str(template[7] or cs.get('correction_base_name') or '').strip():
                 return 'Укажите описание коррекции (обязательно для протокола v4)'
     mapping = body.get('field_mapping') or {}
     if not isinstance(mapping, dict):
@@ -162,7 +162,7 @@ def _match_integration(cur, company_id: int, src: Dict[str, Any]) -> Optional[in
     return rows[0][0] if rows and not url else None
 
 
-CORRECTION_KEYS = ('correction_base_number', 'correction_base_name', 'payment_address', 'default_email')
+CORRECTION_KEYS = ('correction_base_number', 'correction_base_name', 'payment_address', 'default_email', 'cashier_name')
 
 
 def clean_correction(value: Any) -> Dict[str, str]:

@@ -1,7 +1,7 @@
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import ReceiptFieldSelect from './ReceiptFieldSelect';
-import { ActionTemplateForm, DATE_SOURCE_OPTIONS, needsBaseNumber } from './actionTemplatesConfig';
+import { ActionTemplateForm, DATE_SOURCE_OPTIONS } from './actionTemplatesConfig';
 
 interface CorrectionFieldsBlockProps {
   form: ActionTemplateForm;
@@ -10,12 +10,16 @@ interface CorrectionFieldsBlockProps {
 
 const CorrectionFieldsBlock = ({ form, onChange }: CorrectionFieldsBlockProps) => {
   const v5 = form.protocol_version === 'v5';
+  const set = (field: keyof ActionTemplateForm) => (e: React.ChangeEvent<HTMLInputElement>) =>
+    onChange({ ...form, [field]: e.target.value });
 
   return (
     <div className="space-y-3 rounded-lg border border-primary/30 bg-primary/5 p-3">
       <div>
         <div className="text-sm font-semibold">Основание коррекции</div>
-        <div className="text-xs text-muted-foreground">Самостоятельная коррекция · {form.protocol_version}</div>
+        <div className="text-xs text-muted-foreground">
+          Самостоятельная коррекция · {form.protocol_version}. Пустые поля клиент заполнит в своём сценарии
+        </div>
       </div>
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -28,27 +32,32 @@ const CorrectionFieldsBlock = ({ form, onChange }: CorrectionFieldsBlockProps) =
         {form.correction_date_source === 'fixed' && (
           <div className="space-y-2">
             <Label>Дата</Label>
-            <Input
-              type="date"
-              value={form.correction_base_date}
-              onChange={(e) => onChange({ ...form, correction_base_date: e.target.value })}
-            />
+            <Input type="date" value={form.correction_base_date} onChange={set('correction_base_date')} />
           </div>
         )}
       </div>
 
-      {needsBaseNumber(form) && (
+      <div className="space-y-2">
+        <Label>Номер документа основания{v5 ? ' (необязательно)' : ''}</Label>
+        <Input value={form.correction_base_number} maxLength={32} placeholder="Заполнит клиент" onChange={set('correction_base_number')} />
+        {!v5 && <p className="text-xs text-muted-foreground">Обязателен в v4 — если пусто, клиент укажет в сценарии</p>}
+      </div>
+
+      {!v5 && (
         <div className="space-y-2">
-          <Label>Номер документа основания</Label>
-          <Input
-            value={form.correction_base_number}
-            maxLength={32}
-            placeholder="1175"
-            onChange={(e) => onChange({ ...form, correction_base_number: e.target.value })}
-          />
-          <p className="text-xs text-muted-foreground">Обязателен в протоколе v4</p>
+          <Label>Описание коррекции</Label>
+          <Input value={form.correction_base_name} maxLength={255} placeholder="Заполнит клиент" onChange={set('correction_base_name')} />
+          <p className="text-xs text-muted-foreground">Причина коррекции — попадёт в чек. Если пусто, клиент укажет в сценарии</p>
         </div>
       )}
+
+      <div className="space-y-2">
+        <Label>Место расчётов (необязательно)</Label>
+        <Input value={form.payment_address} maxLength={256} placeholder="Адрес сайта или магазина" onChange={set('payment_address')} />
+        <p className="text-xs text-muted-foreground">
+          {v5 ? 'Если пусто — клиент укажет в сценарии или возьмём адрес магазина Екомкассы' : 'Если пусто — касса возьмёт адрес из регистрации'}
+        </p>
+      </div>
     </div>
   );
 };
