@@ -65,12 +65,13 @@ const ReceiptFieldsBlock = ({ form, providers, onChange }: ReceiptFieldsBlockPro
 
       <ReceiptFieldSelect label="Тип оплаты" value={form.payment_type} options={PAYMENT_TYPE_OPTIONS} onChange={set('payment_type')} />
 
-      {correctionV4 ? (
+      {correctionV4 && (
         <p className="rounded-md bg-muted/50 p-3 text-xs text-muted-foreground">
-          Чек коррекции v4 (ФФД 1.05) передаётся без товаров и покупателя: основание коррекции, оплата на сумму
-          платежа и суммы НДС по ставкам (считаются по корзине). Описание коррекции задаётся в сценарии.
+          Чек коррекции v4 (ФФД 1.05) передаётся без товаров: основание коррекции, оплата на сумму платежа и суммы
+          НДС по ставкам (считаются по корзине). Описание коррекции задаётся в сценарии.
         </p>
-      ) : (
+      )}
+
       <div className="space-y-2">
         <Label>Почта по умолчанию</Label>
         <Input
@@ -80,10 +81,13 @@ const ReceiptFieldsBlock = ({ form, providers, onChange }: ReceiptFieldsBlockPro
           onChange={(e) => onChange({ ...form, default_email: e.target.value })}
         />
         <p className={`text-xs ${emailInvalid ? 'text-destructive' : 'text-muted-foreground'}`}>
-          {emailInvalid ? 'Проверьте адрес почты' : 'Подставляется в чек, если у покупателя нет почты'}
+          {emailInvalid
+            ? 'Проверьте адрес почты'
+            : form.receipt_type === 'correction'
+              ? 'Почта компании в чеке коррекции; также подставляется покупателю, если у него нет почты'
+              : 'Подставляется в чек, если у покупателя нет почты'}
         </p>
       </div>
-      )}
     </div>
   );
 };
