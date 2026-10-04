@@ -512,7 +512,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     'crm_deal' AS type,
                     cd.provider_slug AS source,
                     cd.id AS id,
-                    COALESCE((cd.raw_data->>'DATE_CREATE')::timestamptz AT TIME ZONE 'UTC', cd.created_at) AS occurred_at,
+                    cd.created_at AS occurred_at,
                     NULL::date AS settlement_date,
                     cd.amount AS amount,
                     CASE WHEN ao.id IS NOT NULL AND ao.status <> 'done' THEN 'wait' ELSE 'paid' END AS status,
