@@ -36,9 +36,13 @@ const getStatusColor = (status: string | null) => {
 
 // У чеков ОФД status - это FnsStatus (статус пробития в налоговой), не
 // платёжный статус - см. тот же комментарий в EventsTable.tsx.
-const getStatusDisplay = (event: Pick<AppEvent, 'provider_slug' | 'status'>) => {
+const getStatusDisplay = (event: Pick<AppEvent, 'provider_slug' | 'status' | 'transaction_type'>) => {
   if (event.provider_slug === 'ofdru') {
     return { label: ofdFnsStatusLabel(event.status), color: ofdFnsStatusColorClass(event.status) };
+  }
+  if (event.transaction_type === 'receipt_order') {
+    if (event.status === 'wait') return { label: 'Ожидает доставки', color: 'bg-info' };
+    if (event.status === 'done') return { label: 'Выполнен', color: 'bg-success' };
   }
   return { label: event.status, color: getStatusColor(event.status) };
 };
