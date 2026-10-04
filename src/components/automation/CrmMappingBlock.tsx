@@ -142,9 +142,6 @@ const CrmMappingBlock = ({ companyId, integrationId, mapping, onChange }: CrmMap
   // Сценарий, настроенный до выбора воронки: воронку берём по сохранённой стадии.
   const stagePipeline = meta.stages.deal.find((s) => s.value === stages[0])?.group_id || '';
   const activePipeline = pipeline || stagePipeline;
-  const stageOptions = entity === 'deal'
-    ? meta.stages.deal.filter((s) => (s.group_id || '0') === activePipeline)
-    : meta.stages.lead;
 
   return (
     <div className="space-y-4">
@@ -189,31 +186,11 @@ const CrmMappingBlock = ({ companyId, integrationId, mapping, onChange }: CrmMap
           </div>
         )}
 
-        <div className="space-y-1.5">
-          <span className="text-sm">Стадия для запуска</span>
-          <Select
-            value={stages[0] || '__any__'}
-            onValueChange={(v) => set({ stage: v === '__any__' ? '' : v, ...(entity === 'deal' ? { pipeline: activePipeline } : {}) })}
-            disabled={entity === 'deal' && !activePipeline}
-          >
-            <SelectTrigger className="h-9">
-              <SelectValue placeholder={entity === 'deal' && !activePipeline ? 'Сначала выберите воронку' : undefined} />
-            </SelectTrigger>
-            <SelectContent className="max-h-80">
-              <SelectItem value="__any__">{entity === 'deal' ? 'Любая стадия воронки' : 'Любой статус'}</SelectItem>
-              {stageOptions.map((s) => (
-                <SelectItem key={s.value} value={s.value}>
-                  {s.label} <span className="ml-1 font-mono text-[10px] text-muted-foreground">{s.value}</span>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <p className="text-xs text-muted-foreground">
-            {entity === 'deal'
-              ? 'Документ создаётся, когда сделка из этой воронки приходит в хуке на выбранной стадии'
-              : 'Документ создаётся, когда лид приходит в хуке с выбранным статусом'}
-          </p>
-        </div>
+        <p className="text-xs text-muted-foreground">
+          {entity === 'deal'
+            ? 'Документ создаётся по каждому хуку Битрикс24 по сделке из этой воронки — на любой стадии, один раз на сделку'
+            : 'Документ создаётся по каждому хуку Битрикс24 по лиду — один раз на лид'}
+        </p>
       </div>
 
       <div className="space-y-2 rounded-lg border border-border p-3">
@@ -315,7 +292,7 @@ const CrmMappingBlock = ({ companyId, integrationId, mapping, onChange }: CrmMap
           <div className="space-y-2 text-sm">
             <div className="font-medium">«{test.title}»</div>
             <div className={`text-xs ${test.stage_matches ? 'text-success' : 'text-warning'}`}>
-              Стадия {test.stage} — {test.stage_matches ? 'чек будет создан' : 'не совпадает со стадией запуска'}
+              Стадия {test.stage} — {test.stage_matches ? 'документ будет создан' : 'сделка из другой воронки'}
             </div>
             <div className="space-y-1 rounded-md bg-background/60 p-2 text-xs">
               {MAPPING_FIELDS.map((f) => (

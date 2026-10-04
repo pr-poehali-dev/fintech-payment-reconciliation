@@ -308,13 +308,8 @@ def build_data(record: Dict[str, Any], entity: str, mapping: Dict[str, Any]) -> 
 
 def stage_matches(mapping: Dict[str, Any], entity: str, record_main: Dict[str, Any]) -> bool:
     '''
-    Сделка в воронке сценария (CATEGORY_ID, пусто - любая воронка) и на стадии запуска
-    (пусто - любая стадия этой воронки). У лидов воронок нет.
+    Сделка в воронке сценария (CATEGORY_ID, пусто - любая воронка). Стадия не проверяется:
+    документ создаётся по самому хуку, когда его прислал Битрикс24. У лидов воронок нет.
     '''
     pipeline = str(mapping.get('pipeline') or '').strip()
-    if entity == 'deal' and pipeline and str(record_main.get('CATEGORY_ID') or '0') != pipeline:
-        return False
-    wanted = [s.strip() for s in str(mapping.get('stage') or '').split(',') if s.strip()]
-    if not wanted:
-        return True
-    return str(record_main.get(STAGE_FIELD[entity]) or '') in wanted
+    return not (entity == 'deal' and pipeline and str(record_main.get('CATEGORY_ID') or '0') != pipeline)

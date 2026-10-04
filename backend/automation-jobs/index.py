@@ -353,7 +353,7 @@ def _handle(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     return respond(400, {'error': 'company_id and job_id required'})
                 cur.execute(f'''
                     UPDATE {SCHEMA}.automation_jobs SET next_attempt_at = NOW(), attempts = 0, status = 'new', updated_at = NOW()
-                    WHERE id = %s AND company_id = %s AND status IN ('error', 'failed') RETURNING id
+                    WHERE id = %s AND company_id = %s AND status IN ('error', 'failed', 'skipped') RETURNING id
                 ''', (body['job_id'], body['company_id']))
                 if not cur.fetchone():
                     conn.rollback()
