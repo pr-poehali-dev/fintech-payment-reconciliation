@@ -389,7 +389,9 @@ def create_receipt(cur, job: Dict[str, Any], scenario: Dict[str, Any], data: Dic
                                 'phone': customer.get('phone'),
                                 'name': customer.get('name') if customer_inn else None,
                                 'inn': customer_inn}.items() if v}
-    if not client.get('email') and not client.get('phone'):
+    correction_v4 = template.get('receipt_type') == 'correction' and template.get('protocol_version') != 'v5'
+    # Чек коррекции v4 уходит без покупателя - почта/телефон не нужны.
+    if not correction_v4 and not client.get('email') and not client.get('phone'):
         return 'error', {}, 'Нет почты или телефона покупателя - укажите почту по умолчанию в шаблоне действия'
     company = {k: v for k, v in {'inn': source_company.get('inn'), 'sno': data.get('taxation') or source_company.get('sno'),
                                  'payment_address': source_company.get('payment_address'),
