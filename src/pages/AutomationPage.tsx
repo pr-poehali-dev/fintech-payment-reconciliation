@@ -157,7 +157,8 @@ const AutomationPage = ({ prefillSourceId, onPrefillUsed }: AutomationPageProps 
           action_type: s.action_type,
           action_template: s.action_template,
           target_integration_id: s.target_integration_id,
-          field_mapping: s.field_mapping || {}
+          field_mapping: s.field_mapping || {},
+          correction_settings: s.correction_settings || {}
         });
         toast({ title: 'Сценарий скопирован', description: 'Копия остановлена — проверьте настройки и запустите' });
         setToCopy(null);
