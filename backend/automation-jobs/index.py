@@ -130,10 +130,14 @@ def process_job(cur, job: Dict[str, Any]) -> str:
                              'correction_base_number': r[21], 'auto_deliver': bool(r[22]),
                              'cashier_name': r[23], 'agent_settings': r[24],
                              'correction_base_name': r[25], 'payment_address': r[26]}}
-    # Поля коррекции из сценария (номер/описание основания, место расчётов) важнее шаблона.
+    # Поля сценария (номер/описание основания, место расчётов) важнее шаблона.
+    # Почта по умолчанию из сценария - только если в шаблоне она не задана.
     for key, value in (r[27] or {}).items():
-        if value not in (None, ''):
-            scenario['template'][key] = value
+        if value in (None, ''):
+            continue
+        if key == 'default_email' and scenario['template'].get('default_email'):
+            continue
+        scenario['template'][key] = value
 
     if r[7] is not None:
         status, data, message = 'skipped', {}, 'Сценарий удалён'

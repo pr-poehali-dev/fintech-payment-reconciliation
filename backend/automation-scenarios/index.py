@@ -1,4 +1,5 @@
 import json
+import re
 import os
 import secrets
 import psycopg2
@@ -88,6 +89,10 @@ def validate(cur, company_id: int, body: Dict[str, Any]) -> Optional[str]:
         target = cur.fetchone()
         if not target or target[0] != template[2]:
             return 'Шаблон рассчитан на другую кассу'
+    email = str((body.get('correction_settings') or {}).get('default_email') or '').strip() \
+        if isinstance(body.get('correction_settings'), dict) else ''
+    if email and not re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', email):
+        return 'Проверьте почту по умолчанию'
     if template[3] == 'correction':
         cs = body.get('correction_settings') or {}
         if not isinstance(cs, dict):
@@ -157,7 +162,7 @@ def _match_integration(cur, company_id: int, src: Dict[str, Any]) -> Optional[in
     return rows[0][0] if rows and not url else None
 
 
-CORRECTION_KEYS = ('correction_base_number', 'correction_base_name', 'payment_address')
+CORRECTION_KEYS = ('correction_base_number', 'correction_base_name', 'payment_address', 'default_email')
 
 
 def clean_correction(value: Any) -> Dict[str, str]:

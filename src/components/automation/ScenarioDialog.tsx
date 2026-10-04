@@ -109,6 +109,8 @@ const ScenarioDialog = ({ open, onOpenChange, scenario, prefill, integrations, t
   const isV5 = currentTemplate?.protocol_version === 'v5';
   const cs = form.correction_settings || {};
   const setCs = (patch: CorrectionSettings) => setForm({ ...form, correction_settings: { ...cs, ...patch } });
+  const askEmail = form.action_type === 'create_receipt' && !!currentTemplate && !currentTemplate.default_email;
+  const emailInvalid = askEmail && !!cs.default_email?.trim() && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(cs.default_email.trim());
   const correctionMissing = isCorrection
     ? [
         !isV5 && !(cs.correction_base_number?.trim() || currentTemplate?.correction_base_number) && 'номер основания',
@@ -134,6 +136,7 @@ const ScenarioDialog = ({ open, onOpenChange, scenario, prefill, integrations, t
     !!currentTemplate &&
     missingMapping.length === 0 &&
     correctionMissing.length === 0 &&
+    !emailInvalid &&
     !itemsInvalid &&
     !isSaving;
 
@@ -283,6 +286,24 @@ const ScenarioDialog = ({ open, onOpenChange, scenario, prefill, integrations, t
               </SelectContent>
             </Select>
             {currentTemplate?.description && <p className="text-xs text-muted-foreground">{currentTemplate.description}</p>}
+            {askEmail && (
+              <div className="space-y-1 pt-2">
+                <Label>Почта по умолчанию</Label>
+                <Input
+                  type="email"
+                  placeholder="receipts@company.ru"
+                  value={cs.default_email || ''}
+                  onChange={(e) => setCs({ default_email: e.target.value })}
+                />
+                <p className={`text-xs ${emailInvalid ? 'text-destructive' : 'text-muted-foreground'}`}>
+                  {emailInvalid
+                    ? 'Проверьте адрес почты'
+                    : isCorrection
+                      ? 'Подставится в чек как почта компании и покупателя, если их нет'
+                      : 'Подставится в чек, если у покупателя нет почты или телефона'}
+                </p>
+              </div>
+            )}
           </Step>
 
           {isCorrection && (

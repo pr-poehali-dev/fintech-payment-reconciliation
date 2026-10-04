@@ -66,6 +66,7 @@ export interface ActionTemplateOption {
   receipt_type?: string;
   protocol_version?: string;
   correction_base_number?: string | null;
+  default_email?: string | null;
 }
 
 // Поля чека коррекции, которые задаются в сценарии (АТОЛ Онлайн):
@@ -75,6 +76,7 @@ export interface CorrectionSettings {
   correction_base_number?: string;
   correction_base_name?: string;
   payment_address?: string;
+  default_email?: string;
 }
 
 export const TARGET_CATEGORIES = ['cash_registers'];
