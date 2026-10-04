@@ -424,13 +424,11 @@ def create_receipt(cur, job: Dict[str, Any], scenario: Dict[str, Any], data: Dic
     apply_agent(body['receipt'], template)
     if correction:
         r = body.pop('receipt')
-        payment_address = str(template.get('payment_address') or r['company'].get('payment_address') or '').strip()
         is_v5 = kassa['protocol_version'] == 'v5'
+        # Место расчётов - всегда адрес выбранного магазина Екомкассы.
+        payment_address = store_address(kassa).strip()
         if is_v5 and not payment_address:
-            # v5 требует место расчётов - берём адрес выбранного магазина Екомкассы.
-            payment_address = store_address(kassa).strip()
-        if is_v5 and not payment_address:
-            return 'error', {}, 'Нет места расчётов: у магазина Екомкассы не указан адрес - заполните его в сценарии'
+            return 'error', {}, 'Нет места расчётов: у магазина Екомкассы не указан адрес - заполните его в Екомкассе'
         # v4: место расчётов касса берёт из регистрации, если его не передать.
         company = {**r['company'], **({'payment_address': payment_address} if payment_address else {})}
         default_email = str(template.get('default_email') or '').strip()

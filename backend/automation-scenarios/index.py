@@ -97,8 +97,6 @@ def validate(cur, company_id: int, body: Dict[str, Any]) -> Optional[str]:
         cs = body.get('correction_settings') or {}
         if not isinstance(cs, dict):
             return 'Некорректные настройки чека коррекции'
-        if len(str(cs.get('payment_address') or '')) > 256:
-            return 'Место расчётов - не длиннее 256 символов'
         if template[4] != 'v5':
             if not str(cs.get('correction_base_number') or template[6] or '').strip():
                 return 'Укажите номер документа-основания коррекции (обязателен для протокола v4)'
@@ -162,7 +160,7 @@ def _match_integration(cur, company_id: int, src: Dict[str, Any]) -> Optional[in
     return rows[0][0] if rows and not url else None
 
 
-CORRECTION_KEYS = ('correction_base_number', 'correction_base_name', 'payment_address', 'default_email', 'cashier_name')
+CORRECTION_KEYS = ('correction_base_number', 'correction_base_name', 'default_email', 'cashier_name')
 
 
 def clean_correction(value: Any) -> Dict[str, str]:

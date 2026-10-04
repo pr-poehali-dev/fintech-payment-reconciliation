@@ -180,11 +180,8 @@ def normalize_correction(body: Dict[str, Any]):
         name = None
     if name and len(name) > 255:
         return None, 'Описание коррекции - не больше 255 символов'
-    address = (body.get('payment_address') or '').strip() or None
-    if address and len(address) > 256:
-        return None, 'Место расчётов - не больше 256 символов'
     return {'correction_type': 'self', 'correction_date_source': source, 'correction_base_date': base_date,
-            'correction_base_number': number, 'correction_base_name': name, 'payment_address': address}, None
+            'correction_base_number': number, 'correction_base_name': name, 'payment_address': None}, None
 
 
 PHONE_RE = re.compile(r'^\+\d{1,19}$')

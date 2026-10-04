@@ -113,7 +113,6 @@ const ScenarioDialog = ({ open, onOpenChange, scenario, prefill, integrations, t
   const emailInvalid = askEmail && !!cs.default_email?.trim() && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(cs.default_email.trim());
   const askNumber = isCorrection && !currentTemplate?.correction_base_number;
   const askName = isCorrection && !isV5 && !currentTemplate?.correction_base_name;
-  const askAddress = isCorrection && !currentTemplate?.payment_address;
   const askCashier = form.action_type === 'create_order' && !!currentTemplate?.auto_deliver && !currentTemplate?.cashier_name;
   const dateLabel =
     currentTemplate?.correction_date_source === 'today'
@@ -332,9 +331,9 @@ const ScenarioDialog = ({ open, onOpenChange, scenario, prefill, integrations, t
             <Step n={step++} title="Чек коррекции">
               <div className="space-y-3 rounded-lg border border-primary/30 bg-primary/5 p-4">
                 <p className="text-xs text-muted-foreground">
-                  Самостоятельная коррекция · протокол {isV5 ? 'v5 (ФФД 1.2)' : 'v4 (ФФД 1.05)'}. Дата основания — {dateLabel}.
+                  Самостоятельная коррекция · протокол {isV5 ? 'v5 (ФФД 1.2)' : 'v4 (ФФД 1.05)'}. Дата основания — {dateLabel}. Место расчётов — адрес магазина в Екомкассе.
                 </p>
-                {!askNumber && !askName && !askAddress && (
+                {!askNumber && !askName && (
                   <p className="text-xs text-muted-foreground">Все поля коррекции заданы в шаблоне — заполнять ничего не нужно</p>
                 )}
                 {askNumber && (
@@ -345,17 +344,6 @@ const ScenarioDialog = ({ open, onOpenChange, scenario, prefill, integrations, t
                       maxLength={32}
                       value={cs.correction_base_number || ''}
                       onChange={(e) => setCs({ correction_base_number: e.target.value })}
-                    />
-                  </div>
-                )}
-                {askAddress && (
-                  <div className="space-y-1">
-                    <Label>Место расчётов (необязательно)</Label>
-                    <Input
-                      placeholder="Адрес сайта или магазина"
-                      maxLength={256}
-                      value={cs.payment_address || ''}
-                      onChange={(e) => setCs({ payment_address: e.target.value })}
                     />
                   </div>
                 )}

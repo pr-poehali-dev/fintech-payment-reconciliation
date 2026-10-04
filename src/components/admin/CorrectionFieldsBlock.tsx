@@ -51,13 +51,7 @@ const CorrectionFieldsBlock = ({ form, onChange }: CorrectionFieldsBlockProps) =
         </div>
       )}
 
-      <div className="space-y-2">
-        <Label>Место расчётов (необязательно)</Label>
-        <Input value={form.payment_address} maxLength={256} placeholder="Адрес сайта или магазина" onChange={set('payment_address')} />
-        <p className="text-xs text-muted-foreground">
-          {v5 ? 'Если пусто — клиент укажет в сценарии или возьмём адрес магазина Екомкассы' : 'Если пусто — касса возьмёт адрес из регистрации'}
-        </p>
-      </div>
+      <p className="text-xs text-muted-foreground">Место расчётов берётся из адреса магазина в Екомкассе</p>
     </div>
   );
 };
