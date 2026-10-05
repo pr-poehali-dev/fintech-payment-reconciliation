@@ -140,7 +140,6 @@ export const agentValid = (f: ActionTemplateForm) => {
   if (!a.agent_type) return false;
   if (!innOk(a.supplier_inn) || !innOk(a.money_transfer_operator_inn)) return false;
   if (!PHONE_KEYS.every((k) => phonesOk(a[k]))) return false;
-  if (f.protocol_version === 'v5' && (!a.supplier_name.trim() || !a.supplier_inn)) return false;
   return true;
 };
 

@@ -73,18 +73,19 @@ const AgentFieldsBlock = ({ form, onChange }: AgentFieldsBlockProps) => {
         <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Поставщик (принципал)</div>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Field
-            label={v5 ? 'Наименование *' : 'Наименование'}
+            label="Наименование"
             value={a.supplier_name}
             maxLength={239}
             placeholder="ООО «Поставщик»"
-            error={v5 && !a.supplier_name.trim() ? 'Обязательно в v5' : null}
+            hint="Пусто — клиент укажет в сценарии"
             onChange={set('supplier_name')}
           />
           <Field
-            label={v5 ? 'ИНН *' : 'ИНН'}
+            label="ИНН"
             value={a.supplier_inn}
             placeholder="7707083893"
-            error={innError(a.supplier_inn) || (v5 && !a.supplier_inn ? 'Обязательно в v5' : null)}
+            error={innError(a.supplier_inn)}
+            hint="Пусто — клиент укажет в сценарии"
             onChange={set('supplier_inn')}
           />
         </div>

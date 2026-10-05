@@ -25,7 +25,7 @@ const asText = (v: string | string[] | undefined) => (Array.isArray(v) ? v.join(
 const isEmpty = (v: string | string[] | undefined) => !asText(v).trim();
 
 // Группы полей - как в шаблоне действия (АТОЛ Онлайн, агентский чек).
-const groups = (v5: boolean): Group[] => [
+const groups = (): Group[] => [
   {
     title: 'Платёжный агент',
     fields: [
@@ -46,8 +46,8 @@ const groups = (v5: boolean): Group[] => [
   {
     title: 'Поставщик (принципал)',
     fields: [
-      { key: 'supplier_name', label: 'Наименование', placeholder: 'ООО «Авито»', maxLength: 239, required: v5 },
-      { key: 'supplier_inn', label: 'ИНН', placeholder: '7710668349', inn: true, required: v5 },
+      { key: 'supplier_name', label: 'Наименование', placeholder: 'ООО «Авито»', maxLength: 239, required: true },
+      { key: 'supplier_inn', label: 'ИНН', placeholder: '7710668349', inn: true, required: true },
       { key: 'supplier_phones', label: 'Телефоны поставщика', placeholder: '+79991234567', phones: true }
     ]
   }
@@ -62,8 +62,7 @@ export const agentAsk = (template: ActionTemplateOption | undefined) => {
   if (template?.receipt_type !== 'agent') return [];
   const base = template.agent_settings || {};
   const type = String(base.agent_type || '');
-  const v5 = template.protocol_version === 'v5';
-  return groups(v5)
+  return groups()
     .map((g) => ({ ...g, fields: g.fields.filter((f) => (!f.when || f.when(type)) && isEmpty(base[f.key])) }))
     .filter((g) => g.fields.length > 0);
 };

@@ -209,7 +209,7 @@ def normalize_agent(body: Dict[str, Any]):
     Агентский чек (АТОЛ Онлайн): признак агента, данные платёжного агента, оператора по приёму
     платежей, оператора перевода и поставщика. В БД хранится одинаково для v4 и v5 -
     куда класть поля (весь чек или позиции) решается при отправке чека.
-    v5: наименование и ИНН поставщика обязательны (теги 1225, 1226).
+    Поставщик в шаблоне необязателен - наименование и ИНН клиент задаёт в сценарии (или берёт из CRM).
     '''
     if body.get('receipt_type') != 'agent':
         return None, None
@@ -248,8 +248,6 @@ def normalize_agent(body: Dict[str, Any]):
         for key in ('money_transfer_operator_phones', 'money_transfer_operator_name',
                     'money_transfer_operator_address', 'money_transfer_operator_inn'):
             result[key] = [] if key.endswith('phones') else ''
-    if body.get('protocol_version') == 'v5' and not (result['supplier_name'] and result['supplier_inn']):
-        return None, 'Для v5 укажите наименование и ИНН поставщика - они обязательны в агентской позиции'
     return result, None
 
 

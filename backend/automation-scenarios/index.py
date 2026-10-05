@@ -109,10 +109,9 @@ def validate(cur, company_id: int, body: Dict[str, Any]) -> Optional[str]:
             return error
         base = template[8] if isinstance(template[8], dict) else {}
         crm_map = body.get('field_mapping') if trigger == 'crm_order' and isinstance(body.get('field_mapping'), dict) else {}
-        if template[4] == 'v5':
-            if not (base.get('supplier_name') or agent.get('supplier_name') or crm_map.get('agent_supplier_name')):
-                return 'Укажите наименование поставщика (обязательно для протокола v5)'
-            if not (base.get('supplier_inn') or agent.get('supplier_inn') or crm_map.get('agent_supplier_inn')):
+        if not (base.get('supplier_name') or agent.get('supplier_name') or crm_map.get('agent_supplier_name')):
+            return 'Укажите наименование поставщика агентского чека'
+        if not (base.get('supplier_inn') or agent.get('supplier_inn') or crm_map.get('agent_supplier_inn')):
                 return 'Укажите ИНН поставщика (обязателен для протокола v5)'
     mapping = body.get('field_mapping') or {}
     if not isinstance(mapping, dict):
