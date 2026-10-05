@@ -42,6 +42,9 @@ def call(webhook_url: str, method: str, params: Optional[Dict[str, Any]] = None,
     '''Вызов REST Битрикс24 через входящий вебхук. Returns: (result, error).'''
     if not webhook_url:
         return None, 'В интеграции Битрикс24 не указан входящий вебхук'
+    if 'functions.poehali.dev' in webhook_url or '/rest/' not in webhook_url:
+        return None, ('В интеграции Битрикс24 вместо входящего вебхука портала указан неверный адрес. '
+                      'Откройте интеграцию и вставьте адрес вида https://ваш-портал.bitrix24.ru/rest/1/код/')
     req = urllib.request.Request(
         webhook_url.rstrip('/') + f'/{method}.json',
         data=json.dumps(params or {}).encode('utf-8'),

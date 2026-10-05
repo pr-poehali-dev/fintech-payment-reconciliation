@@ -157,10 +157,40 @@ def check_tochka_acquiring(config: Dict[str, Any]) -> Result:
     return True, None
 
 
+def check_bitrix24(config: Dict[str, Any]) -> Result:
+    '''
+    Битрикс24: нужен ВХОДЯЩИЙ вебхук портала (https://портал.bitrix24.ru/rest/1/код/).
+    Частая ошибка - вставить сюда наш адрес приёма хуков (functions.poehali.dev): интеграция
+    тогда не может читать сделки. Проверяем адрес и делаем безвредный запрос crm.deal.fields.
+    '''
+    url = str(config.get('webhook_url') or '').strip()
+    if not url:
+        return True, None
+    if 'functions.poehali.dev' in url or '/rest/' not in url:
+        return False, ('Вставлен не тот адрес. Нужен входящий вебхук из Битрикс24 вида '
+                       'https://ваш-портал.bitrix24.ru/rest/1/код/ (Разработчикам → Другое → Входящий вебхук, права crm). '
+                       'Наш адрес для исходящих хуков указывается в самом Битрикс24, а не здесь.')
+    req = urllib.request.Request(url.rstrip('/') + '/crm.deal.fields.json', data=b'{}',
+                                 headers={'Content-Type': 'application/json'}, method='POST')
+    try:
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            payload = json.loads(resp.read().decode('utf-8'))
+    except urllib.error.HTTPError as e:
+        if e.code in (401, 403, 404):
+            return False, 'Битрикс24 не принял вебхук: проверьте адрес и что у вебхука есть права crm'
+        return _unavailable('Битрикс24', f'ошибка {e.code}')
+    except Exception as e:
+        return _unavailable('Битрикс24', str(e)[:120])
+    if payload.get('error'):
+        return False, f"Битрикс24: {payload.get('error_description') or payload['error']} - нужен вебхук с правами crm"
+    return True, None
+
+
 CHECKERS: Dict[str, Callable[[Dict[str, Any]], Result]] = {
     'tbank': check_tbank,
     'alfabank': check_alfabank,
     'tochka_acquiring': check_tochka_acquiring,
+    'bitrix24': check_bitrix24,
 }
 
 
