@@ -101,6 +101,8 @@ def _handle(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         try:
             deals_linked = crm_link.run(cur, token, protocol_version, company_id)
             conn.commit()
+            # Сделки, по которым хук Битрикса не дошёл, - находим по ссылке на оплату.
+            deals_linked += crm_link.recover_missed_deals(cur, company_id)
         except Exception as e:
             conn.rollback()
             print(f'crm link failed: {e}')

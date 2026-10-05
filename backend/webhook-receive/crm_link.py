@@ -1,5 +1,6 @@
 import json
 import re
+import urllib.parse
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, List, Optional
@@ -94,6 +95,83 @@ def fill_deal_emails(cur, company_id: int, deal_row_id: Optional[int] = None) ->
                 emails.update(_emails((contact.get('result') or {}).get('EMAIL') or []))
         cur.execute(f'UPDATE {SCHEMA}.crm_deals SET customer_emails = %s WHERE id = %s',
                     (','.join(sorted(emails)), deal_id))
+
+
+WEBHOOK_RECEIVE_URL = 'https://functions.poehali.dev/a923b457-57a6-4eb2-b566-9a9d65cb04e8'
+# Поле сделки, куда приложение Екомкассы в Битриксе пишет ссылку на оплату.
+BITRIX_PAY_LINK_FIELD = 'UF_CRM_URLFORPAYECOMKASSA'
+RECOVER_PER_RUN = 4
+RECOVER_LOOKBACK_HOURS = 48
+
+
+def recover_missed_deals(cur, company_id: int) -> int:
+    '''
+    Страховка от потерянных хуков Битрикса: оплаченный счёт Екомкассы есть, а сделки с его
+    ссылкой на оплату у нас нет - ищем сделку в Битриксе по ссылке и прогоняем её через
+    обычный приём хука (событие, сделка, связь с чеком, сценарии автоматизации).
+    Берётся сделка в успешной стадии; интеграция - та, где уже есть сделки этой воронки.
+    '''
+    cur.execute(f'''
+        SELECT DISTINCT r.raw_data->'invoice_payload'->>'link'
+        FROM {SCHEMA}.ecomkassa_receipts r
+        WHERE r.company_id = %s AND r.removed_at IS NULL AND r.status = 'done'
+          AND (r.raw_data->'invoice_payload'->>'link') LIKE 'http%%'
+          AND r.created_at > NOW() - make_interval(hours => %s)
+          AND NOT EXISTS (SELECT 1 FROM {SCHEMA}.crm_deals o WHERE o.linked_receipt_id = r.id)
+          AND NOT EXISTS (SELECT 1 FROM {SCHEMA}.crm_deals o WHERE o.company_id = r.company_id
+                          AND o.raw_data->>%s = r.raw_data->'invoice_payload'->>'link')
+        LIMIT %s
+    ''', (company_id, RECOVER_LOOKBACK_HOURS, BITRIX_PAY_LINK_FIELD, RECOVER_PER_RUN))
+    links = [r[0] for r in cur.fetchall()]
+    if not links:
+        return 0
+    cur.execute(f'''
+        SELECT ui.id, ui.config, ui.webhook_token,
+               ARRAY(SELECT DISTINCT d.raw_data->>'CATEGORY_ID' FROM {SCHEMA}.crm_deals d WHERE d.integration_id = ui.id),
+               ui.last_webhook_at
+        FROM {SCHEMA}.user_integrations ui
+        JOIN {SCHEMA}.integration_providers p ON p.id = ui.provider_id
+        WHERE ui.company_id = %s AND p.slug = 'bitrix24' AND ui.status = 'active' AND ui.webhook_token IS NOT NULL
+        ORDER BY ui.last_webhook_at DESC NULLS LAST, ui.id
+    ''', (company_id,))
+    portals: Dict[str, List[Any]] = {}
+    for ui_id, config, token, categories, _ in cur.fetchall():
+        config = config if isinstance(config, dict) else json.loads(config or '{}')
+        url = (config.get('webhook_url') or '').rstrip('/')
+        if url:
+            portals.setdefault(url, []).append((ui_id, token, set(c for c in categories if c)))
+    def lookup(link: str):
+        for url, integrations in portals.items():
+            query = urllib.parse.urlencode([(f'filter[{BITRIX_PAY_LINK_FIELD}]', link), ('select[]', 'ID'),
+                                            ('select[]', 'CATEGORY_ID'), ('select[]', 'STAGE_SEMANTIC_ID')])
+            found = _get_json(f'{url}/crm.deal.list.json?{query}', {}, timeout=2.5)
+            deals = [d for d in ((found or {}).get('result') or []) if d.get('STAGE_SEMANTIC_ID') == 'S']
+            if deals:
+                category = str(deals[0].get('CATEGORY_ID') or '0')
+                target = next((i for i in integrations if category in i[2]), integrations[0])
+                return target, str(deals[0]['ID'])
+        return None
+
+    with ThreadPoolExecutor(max_workers=len(links)) as pool:
+        hits = [h for h in pool.map(lookup, links) if h]
+    if hits:
+        with ThreadPoolExecutor(max_workers=len(hits)) as pool:
+            list(pool.map(lambda h: _send_hook(h[0][1], h[1]), hits))
+    for target, deal_id in hits:
+        print(f'crm recover: deal {deal_id} by pay link -> integration {target[0]}')
+    sent = len(hits)
+    return sent
+
+
+def _send_hook(webhook_token: str, deal_id: str) -> None:
+    '''Тот же приём, что у хука Битрикса; ответа не ждём - обработка идёт сама.'''
+    body = json.dumps({'deal_id': deal_id, 'source': 'cron_recovery'}).encode('utf-8')
+    url = f'{WEBHOOK_RECEIVE_URL}?' + urllib.parse.urlencode({'token': webhook_token, 'deal_id': deal_id})
+    try:
+        urllib.request.urlopen(urllib.request.Request(url, data=body, method='POST',
+                                                      headers={'Content-Type': 'application/json'}), timeout=1).close()
+    except Exception:
+        pass
 
 
 def link_deals_by_pay_link(cur, company_id: int, deal_row_id: Optional[int] = None) -> int:
