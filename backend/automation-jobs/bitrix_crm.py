@@ -295,6 +295,13 @@ def build_items(record: Dict[str, Any], entity: str, mapping: Dict[str, Any],
         return items, '' if items else 'В сценарии не заполнен фиксированный состав чека'
 
     if mode == 'single':
+        # Сумма позиции: своё поле/шаблон ({OPPORTUNITY}, {UF_CRM_...}), пусто - поле «Сумма» сопоставления.
+        template = str(mapping.get('single_item_amount') or '').strip()
+        if template:
+            text = re.sub(r'\{([\w.]+)\}', lambda m: resolve(record, entity, m.group(1)) or '', template)
+            amount = _number(text)
+            if not amount:
+                return [], f'В {noun} не заполнена сумма позиции («{template}» = «{text.strip() or "пусто"}»)'
         if not amount:
             return [], f'В {noun} не заполнена сумма (поле «{mapping.get("amount")}»)'
         return [_item(single_name(record, entity, mapping), amount, 1, fixed_vat)], ''

@@ -132,7 +132,7 @@ def validate(cur, company_id: int, body: Dict[str, Any]) -> Optional[str]:
             return 'Неизвестный способ формирования состава чека'
         if mapping.get('items_mode') == 'fixed' and not mapping.get('fixed_items'):
             return 'Добавьте позиции фиксированного состава чека'
-        if mapping.get('items_mode') == 'single' and not mapping.get('amount'):
+        if mapping.get('items_mode') == 'single' and not (mapping.get('amount') or str(mapping.get('single_item_amount') or '').strip()):
             return 'Для чека одной позицией укажите поле с суммой'
     return None
 

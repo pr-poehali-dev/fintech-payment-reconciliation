@@ -302,6 +302,21 @@ const CrmMappingBlock = ({ companyId, integrationId, mapping, onChange, agentRec
             </SelectContent>
           </Select>
         </div>
+
+        {itemsMode === 'single' && (
+          <div className="space-y-1.5">
+            <span className="text-sm">Сумма позиции</span>
+            <CrmTemplateInput
+              value={String(mapping.single_item_amount || '')}
+              onChange={(v) => set({ single_item_amount: v })}
+              fields={meta.fields}
+              entities={entities}
+              mainEntity={entity}
+              placeholder="Пусто — из поля «Сумма», например {OPPORTUNITY}"
+            />
+            <p className="text-xs text-muted-foreground">Нажмите на лупу и выберите поле сделки с суммой. Если пусто — берём поле «Сумма» из сопоставления</p>
+          </div>
+        )}
       </div>
 
       <div className="w-full min-w-0 space-y-2 rounded-lg border border-dashed border-primary/40 bg-primary/5 p-3">
