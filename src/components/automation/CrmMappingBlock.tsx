@@ -299,7 +299,7 @@ const CrmMappingBlock = ({ companyId, integrationId, mapping, onChange, agentRec
         </div>
       </div>
 
-      <div className="space-y-2 rounded-lg border border-dashed border-primary/40 bg-primary/5 p-3">
+      <div className="w-full min-w-0 space-y-2 rounded-lg border border-dashed border-primary/40 bg-primary/5 p-3">
         <div className="text-sm font-medium">Проверить на реальной {entity === 'deal' ? 'сделке' : 'заявке'}</div>
         <div className="flex gap-2">
           <Input
@@ -317,34 +317,35 @@ const CrmMappingBlock = ({ companyId, integrationId, mapping, onChange, agentRec
 
         {test && !test.success && <p className="text-sm text-destructive">{test.error}</p>}
         {test?.success && (
-          <div className="space-y-2 text-sm">
-            <div className="font-medium">«{test.title}»</div>
+          <div className="w-full min-w-0 space-y-2 text-sm">
+            <div className="break-words font-medium">«{test.title}»</div>
             <div className={`text-xs ${test.stage_matches ? 'text-success' : 'text-warning'}`}>
               Стадия {test.stage} — {test.stage_matches ? 'документ будет создан' : 'сделка из другой воронки'}
             </div>
             <div className="space-y-1 rounded-md bg-background/60 p-2 text-xs">
               {[...MAPPING_FIELDS, ...(agentReceipt ? AGENT_MAPPING_FIELDS : [])].map((f) => (
-                <div key={f.key} className="flex justify-between gap-3">
+                <div key={f.key} className="grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-3">
                   <span className="text-muted-foreground">{f.label}</span>
-                  <span className={`truncate text-right ${test.values?.[f.key] ? '' : 'text-muted-foreground'}`}>{test.values?.[f.key] || '—'}</span>
+                  <span className={`min-w-0 whitespace-pre-wrap break-words text-right ${test.values?.[f.key] ? '' : 'text-muted-foreground'}`}>{test.values?.[f.key] || '—'}</span>
                 </div>
               ))}
             </div>
             {test.error ? (
               <p className="text-xs text-destructive">{test.error}</p>
             ) : (
-              <div className="space-y-1 rounded-md bg-background/60 p-2 text-xs">
+              <div className="w-full min-w-0 space-y-1.5 rounded-md bg-background/60 p-2 text-xs">
                 {test.items?.map((it, i) => {
                   const limit = test.name_limit || 128;
                   const full = test.full_names?.[i] ?? it.name;
                   const over = full.length > limit;
                   return (
                     <div key={i} className="space-y-1 border-b border-border/60 pb-1.5 last:border-0">
-                      <div className="flex justify-between gap-3">
-                        <span className="break-words">{full}</span>
-                        <span className="shrink-0">{it.quantity} × {it.sum.toLocaleString('ru-RU')} ₽</span>
+                      <div className="w-full min-w-0 whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{full}</div>
+                      <div className="flex justify-between gap-3 text-muted-foreground">
+                        <span>Кол-во: {it.quantity}</span>
+                        <span className="shrink-0 font-medium text-foreground">{it.sum.toLocaleString('ru-RU')} ₽</span>
                       </div>
-                      <div className={`text-[11px] ${over ? 'text-destructive' : 'text-muted-foreground'}`}>
+                      <div className={`break-words text-[11px] ${over ? 'text-destructive' : 'text-muted-foreground'}`}>
                         {full.length} / {limit} символов
                         {over && ` — не влезает по ФФД на ${full.length - limit}, в чек уйдёт обрезанным: «…${full.slice(limit - 20, limit)}». Сократите шаблон названия`}
                       </div>

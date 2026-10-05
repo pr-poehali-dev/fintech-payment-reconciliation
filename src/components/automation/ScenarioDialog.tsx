@@ -185,7 +185,7 @@ const ScenarioDialog = ({ open, onOpenChange, scenario, prefill, integrations, t
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-3xl">
+      <DialogContent className="max-h-[90vh] overflow-y-auto overflow-x-hidden sm:max-w-3xl [&>*]:min-w-0">
         <DialogHeader>
           <DialogTitle>{scenario ? 'Сценарий' : 'Новый сценарий'}</DialogTitle>
           <DialogDescription>Что должно произойти — и какой документ создать в кассе</DialogDescription>
