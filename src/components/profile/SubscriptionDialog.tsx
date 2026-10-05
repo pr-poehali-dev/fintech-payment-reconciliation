@@ -60,11 +60,14 @@ const LIMITS: { key: LimitKey; label: string }[] = [
 
 const money = (n: number) => `${new Intl.NumberFormat('ru-RU').format(n)} ₽`;
 
-// Прирост лимита относительно текущего тарифа: null - без ограничений.
-const limitGain = (next: number | null, cur: number | null | undefined) => {
-  if (cur === undefined || cur === null) return null;
-  if (next === null) return 'без ограничений';
-  return next > cur ? `+${next - cur}` : null;
+// Изменение лимита относительно текущего тарифа: null в лимите - без ограничений.
+const limitDiff = (next: number | null, cur: number | null | undefined): { up: boolean; text: string } | null => {
+  if (cur === undefined) return null;
+  if (cur === null && next === null) return null;
+  if (next === null) return { up: true, text: '' };
+  if (cur === null) return { up: false, text: '' };
+  if (next === cur) return null;
+  return next > cur ? { up: true, text: `+${next - cur}` } : { up: false, text: `−${cur - next}` };
 };
 
 const SubscriptionDialog = ({ open, onOpenChange, highlightModule }: SubscriptionDialogProps) => {
@@ -237,20 +240,24 @@ const SubscriptionDialog = ({ open, onOpenChange, highlightModule }: Subscriptio
                       <div className="mt-3 flex flex-wrap gap-1.5">
                         {APP_MODULES.filter((m) => !m.hidden).map((m) => {
                           const on = t.modules.includes(m.id);
-                          const added = on && !isCurrent && current !== null && !current.modules.includes(m.id);
+                          const had = current !== null && current.modules.includes(m.id);
+                          const added = on && !isCurrent && current !== null && !had;
+                          const lost = !on && !isCurrent && had;
                           return (
                             <span
                               key={m.id}
-                              title={added ? 'Добавится к вашему тарифу' : undefined}
+                              title={added ? 'Добавится к вашему тарифу' : lost ? 'Пропадёт при переходе' : undefined}
                               className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs ${
                                 added
                                   ? 'bg-success/15 text-success font-medium'
-                                  : on
-                                    ? 'bg-primary/10 text-foreground'
-                                    : 'bg-muted text-muted-foreground line-through'
+                                  : lost
+                                    ? 'bg-destructive/15 text-destructive font-medium line-through'
+                                    : on
+                                      ? 'bg-primary/10 text-foreground'
+                                      : 'bg-muted text-muted-foreground line-through'
                               }`}
                             >
-                              <Icon name={added ? 'Plus' : on ? 'Check' : 'X'} size={12} />
+                              <Icon name={added ? 'Plus' : lost ? 'Minus' : on ? 'Check' : 'X'} size={12} />
                               {m.name}
                             </span>
                           );
@@ -258,14 +265,15 @@ const SubscriptionDialog = ({ open, onOpenChange, highlightModule }: Subscriptio
                       </div>
                       <ul className="mt-3 space-y-0.5 text-xs text-muted-foreground">
                         {LIMITS.map(({ key, label }) => {
-                          const gain = isCurrent ? null : limitGain(t[key], current?.[key]);
+                          const diff = isCurrent ? null : limitDiff(t[key], current?.[key]);
+                          const color = diff ? (diff.up ? 'text-success' : 'text-destructive') : '';
                           return (
                             <li key={key}>
                               {label}: {t[key] === null ? 'без ограничений' : t[key]}
-                              {gain && gain !== 'без ограничений' && (
-                                <span className="ml-1.5 font-semibold text-success">{gain}</span>
+                              {diff && diff.text && <span className={`ml-1.5 font-semibold ${color}`}>{diff.text}</span>}
+                              {diff && !diff.text && (
+                                <Icon name={diff.up ? 'ArrowUp' : 'ArrowDown'} size={12} className={`ml-1 inline ${color}`} />
                               )}
-                              {gain === 'без ограничений' && <Icon name="ArrowUp" size={12} className="ml-1 inline text-success" />}
                             </li>
                           );
                         })}
