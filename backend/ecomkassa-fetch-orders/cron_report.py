@@ -42,7 +42,7 @@ def record_cron_run(event: Dict[str, Any], resp: Dict[str, Any], source: str, lo
             VALUES (%s, %s, %s, %s, %s, %s, NOW())
             ON CONFLICT (source, company_id, item_key) DO UPDATE SET
                 tick = EXCLUDED.tick, loaded = EXCLUDED.loaded, error = EXCLUDED.error, finished_at = NOW()
-        ''', (source, int(company_id), str(tick)[:40], str(req.get('integration_id') or ''), loaded, error))
+        ''', (req.get('cron_source') or source, int(company_id), str(tick)[:40], str(req.get('cron_item') or req.get('integration_id') or ''), loaded, error))
         conn.commit()
     finally:
         conn.close()
