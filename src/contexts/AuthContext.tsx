@@ -167,6 +167,22 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return authUser;
   };
 
+  useEffect(() => {
+    if (!user?.user_id) return;
+    const userId = user.user_id;
+    const refresh = () => {
+      if (document.visibilityState === 'visible') fetchCompanies(userId);
+    };
+    const timer = window.setInterval(refresh, 60000);
+    document.addEventListener('visibilitychange', refresh);
+    window.addEventListener('focus', refresh);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', refresh);
+      window.removeEventListener('focus', refresh);
+    };
+  }, [user?.user_id]);
+
   // userId - сразу после входа, когда пользователь в состоянии ещё не обновился.
   const refreshCompanies = async (userId?: number) => {
     const id = userId ?? user?.user_id;
