@@ -260,10 +260,16 @@ def link_deals_by_pay_link(cur, company_id: int, deal_row_id: Optional[int] = No
     пишет ссылку (QR СБП) в поле сделки, та же ссылка есть в счёте (invoice_payload.link).
     Точный ключ - работает и когда по сделке есть заказ от сценария, и когда в чеке нет почты.
     '''
+    # Хуки копий сделки приходят одновременно - без блокировки каждый видит счёт свободным.
+    cur.execute('SELECT pg_advisory_xact_lock(%s)', (7300000 + int(company_id),))
     cur.execute(f'''
         UPDATE {SCHEMA}.crm_deals d SET linked_receipt_id = m.receipt_id, linked_at = NOW()
         FROM (
-            SELECT d2.id AS deal_id, (
+            -- Роботы Битрикса копируют сделку вместе с полем ссылки на оплату: один счёт - одна
+            -- сделка. Берём успешную, затем самую раннюю по дате создания в Битриксе (оригинал).
+            SELECT DISTINCT ON (c.receipt_id) c.deal_id, c.receipt_id
+            FROM (
+            SELECT d2.id AS deal_id, d2.raw_data AS deal_raw, (
                 SELECT r.id FROM {SCHEMA}.ecomkassa_receipts r
                 WHERE r.company_id = d2.company_id AND r.removed_at IS NULL AND r.status = 'done'
                   AND (r.raw_data->'invoice_payload'->>'link') LIKE 'http%%'
@@ -276,8 +282,13 @@ def link_deals_by_pay_link(cur, company_id: int, deal_row_id: Optional[int] = No
             WHERE d2.company_id = %s AND d2.linked_receipt_id IS NULL
               AND d2.updated_at > NOW() - make_interval(days => %s)
               AND (%s::int IS NULL OR d2.id = %s::int)
+            ) c
+            WHERE c.receipt_id IS NOT NULL
+            ORDER BY c.receipt_id, (c.deal_raw->>'STAGE_SEMANTIC_ID' = 'S' OR c.deal_raw->>'STAGE_ID' LIKE '%%WON') DESC,
+                     c.deal_raw->>'DATE_CREATE', c.deal_id
         ) m
-        WHERE d.id = m.deal_id AND m.receipt_id IS NOT NULL
+        WHERE d.id = m.deal_id
+          AND NOT EXISTS (SELECT 1 FROM {SCHEMA}.crm_deals o WHERE o.linked_receipt_id = m.receipt_id)
         RETURNING d.id
     ''', (company_id, LOOKBACK_DAYS, deal_row_id, deal_row_id))
     return len(cur.fetchall())
