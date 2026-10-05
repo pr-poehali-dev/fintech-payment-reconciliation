@@ -30,6 +30,22 @@ export const defaultModuleFor = (roleModules?: string[] | null): string | null =
   return first ? first.id : null;
 };
 
+// Раздел есть в роли сотрудника, но не входит в тариф компании - показываем
+// его в меню с замком и предлагаем сменить тариф.
+export const isLockedByTariff = (
+  company: { role_modules?: string[]; tariff_modules?: string[] | null } | null | undefined,
+  id: string
+) => {
+  const tariff = company?.tariff_modules;
+  if (!tariff || id === 'settings') return false;
+  const role = company?.role_modules;
+  return (!role || role.includes(id)) && !tariff.includes(id);
+};
+
+// Разделы для меню: доступные роли (включая закрытые тарифом).
+export const menuModules = (company?: { role_modules?: string[] } | null) =>
+  allowedModules(company?.role_modules).filter((m) => !m.hidden);
+
 // Разделы, доступные сотруднику: входят и в его роль, и в тариф компании.
 // «Настройки» - исключение: там личные уведомления, они нужны всем.
 export const effectiveModules = (company?: { role_modules?: string[]; tariff_modules?: string[] | null } | null) => {

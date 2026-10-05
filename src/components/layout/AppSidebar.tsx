@@ -11,7 +11,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useAuth, Company } from '@/contexts/AuthContext';
-import { allowedModules, effectiveModules } from '@/config/modules';
+import { isLockedByTariff, menuModules } from '@/config/modules';
 import ProfileDialog from '@/components/profile/ProfileDialog';
 import SubscriptionDialog from '@/components/profile/SubscriptionDialog';
 
@@ -169,20 +169,24 @@ const AppSidebar = ({ activeModule, onModuleChange }: AppSidebarProps) => {
       />
 
       <nav className="space-y-2">
-        {allowedModules(effectiveModules(currentCompany)).filter((module) => !module.hidden).map((module) => (
-          <button
-            key={module.id}
-            onClick={() => onModuleChange(module.id)}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 ${
-              activeModule === module.id
-                ? 'bg-sidebar-accent text-sidebar-accent-foreground shadow-lg scale-105'
-                : 'text-sidebar-foreground hover:bg-sidebar-accent/50'
-            }`}
-          >
-            <Icon name={module.icon as any} size={20} />
-            <span className="font-medium">{module.name}</span>
-          </button>
-        ))}
+        {menuModules(currentCompany).map((module) => {
+          const locked = isLockedByTariff(currentCompany, module.id);
+          return (
+            <button
+              key={module.id}
+              onClick={() => onModuleChange(module.id)}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 ${
+                activeModule === module.id
+                  ? 'bg-sidebar-accent text-sidebar-accent-foreground shadow-lg scale-105'
+                  : 'text-sidebar-foreground hover:bg-sidebar-accent/50'
+              } ${locked ? 'opacity-60' : ''}`}
+            >
+              <Icon name={module.icon as any} size={20} />
+              <span className="font-medium flex-1 text-left">{module.name}</span>
+              {locked && <Icon name="Lock" size={14} className="text-sidebar-foreground/60" />}
+            </button>
+          );
+        })}
       </nav>
 
       <UserProfileMenu onOpenSettings={() => onModuleChange('settings')} />

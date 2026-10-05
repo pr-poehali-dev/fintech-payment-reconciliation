@@ -15,14 +15,16 @@ import { useAutomationHeartbeat } from '@/hooks/useAutomationHeartbeat';
 import { usePageBanners } from '@/hooks/usePageBanners';
 import PageBanner from '@/components/banners/PageBanner';
 import { useNotifications, AppNotification } from '@/hooks/useNotifications';
-import { canOpenModule, defaultModuleFor, effectiveModules } from '@/config/modules';
+import { canOpenModule, defaultModuleFor, effectiveModules, isLockedByTariff } from '@/config/modules';
+import TariffLockedScreen from '@/components/layout/TariffLockedScreen';
 import SubscriptionDialog from '@/components/profile/SubscriptionDialog';
 import { DateFilter } from '@/components/filters/DateRangeFilter';
 import { TYPE_FILTERS, TypeFilter, TypeFilterKey } from '@/lib/transactionTypeFilter';
 
 const Index = () => {
   const { currentCompany, user, cronEnabled } = useAuth();
-  const [activeModule, setActiveModule] = useState('reconciliation');
+  // null - пользователь ещё не выбирал раздел, открываем стартовый доступный.
+  const [activeModule, setActiveModule] = useState<string | null>(null);
   const [showNotifications, setShowNotifications] = useState(false);
   const [subscriptionOpen, setSubscriptionOpen] = useState(false);
   const [transactionsDateFilter, setTransactionsDateFilter] = useState<DateFilter | null>(null);
@@ -66,7 +68,9 @@ const Index = () => {
   const canOpen = (id: string) => id === 'settings' || canOpenModule(roleModules, id);
   // Раздел, недоступный роли (ссылка из уведомления, смена компании), не открываем -
   // показываем стартовый раздел роли.
-  const shownModule = canOpen(activeModule) ? activeModule : defaultModuleFor(roleModules);
+  // Раздел есть в роли, но закрыт тарифом - открываем экран с предложением сменить тариф.
+  const lockedModule = activeModule && isLockedByTariff(currentCompany, activeModule) ? activeModule : null;
+  const shownModule = lockedModule ?? (activeModule && canOpen(activeModule) ? activeModule : defaultModuleFor(roleModules));
   const canOpenTransactions = canOpen('transactions');
 
   const handleModuleChange = (id: string) => {
@@ -112,16 +116,17 @@ const Index = () => {
       <AppSidebar activeModule={shownModule ?? ''} onModuleChange={handleModuleChange} />
 
       <main className="ml-64 mt-16 p-8">
-        {shownModule && banners.forPage(shownModule).map((b) => <PageBanner key={b.page} banner={b} />)}
-        {shownModule === 'reconciliation' && (
+        {lockedModule && <TariffLockedScreen moduleId={lockedModule} />}
+        {shownModule && !lockedModule && banners.forPage(shownModule).map((b) => <PageBanner key={b.page} banner={b} />)}
+        {!lockedModule && shownModule === 'reconciliation' && (
           <ReconciliationPage onOpenTransactions={canOpenTransactions ? openTransactionsForPeriod : undefined} />
         )}
-        {shownModule === 'events' && <EventsPage />}
-        {shownModule === 'transactions' && <TransactionsPage key={transactionsNavKey} initialDateFilter={transactionsDateFilter} initialTypeFilter={transactionsTypeFilter} initialUnmatchedOnly={transactionsUnmatchedOnly} />}
-        {shownModule === 'automation' && (
+        {!lockedModule && shownModule === 'events' && <EventsPage />}
+        {!lockedModule && shownModule === 'transactions' && <TransactionsPage key={transactionsNavKey} initialDateFilter={transactionsDateFilter} initialTypeFilter={transactionsTypeFilter} initialUnmatchedOnly={transactionsUnmatchedOnly} />}
+        {!lockedModule && shownModule === 'automation' && (
           <AutomationPage prefillSourceId={receiptSourceId} onPrefillUsed={() => setReceiptSourceId(null)} />
         )}
-        {shownModule === 'integrations' && (
+        {!lockedModule && shownModule === 'integrations' && (
           <IntegrationsPage
             onSetupReceipts={
               canOpen('automation')
@@ -133,8 +138,8 @@ const Index = () => {
             }
           />
         )}
-        {shownModule === 'access' && <AccessManagement />}
-        {shownModule === 'settings' && <SettingsPlaceholder />}
+        {!lockedModule && shownModule === 'access' && <AccessManagement />}
+        {!lockedModule && shownModule === 'settings' && <SettingsPlaceholder />}
         {!shownModule && (
           <div className="mx-auto mt-24 max-w-md text-center text-muted-foreground">
             <Icon name="Lock" size={40} className="mx-auto mb-4" />
