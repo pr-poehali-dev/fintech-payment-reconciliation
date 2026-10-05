@@ -96,6 +96,35 @@ def fill_deal_emails(cur, company_id: int, deal_row_id: Optional[int] = None) ->
                     (','.join(sorted(emails)), deal_id))
 
 
+def link_deals_by_pay_link(cur, company_id: int, deal_row_id: Optional[int] = None) -> int:
+    '''
+    Сделка -> оплаченный счёт Екомкассы по ссылке на оплату: приложение Екомкассы в Битриксе
+    пишет ссылку (QR СБП) в поле сделки, та же ссылка есть в счёте (invoice_payload.link).
+    Точный ключ - работает и когда по сделке есть заказ от сценария, и когда в чеке нет почты.
+    '''
+    cur.execute(f'''
+        UPDATE {SCHEMA}.crm_deals d SET linked_receipt_id = m.receipt_id, linked_at = NOW()
+        FROM (
+            SELECT d2.id AS deal_id, (
+                SELECT r.id FROM {SCHEMA}.ecomkassa_receipts r
+                WHERE r.company_id = d2.company_id AND r.removed_at IS NULL AND r.status = 'done'
+                  AND (r.raw_data->'invoice_payload'->>'link') LIKE 'http%%'
+                  AND EXISTS (SELECT 1 FROM jsonb_each_text(d2.raw_data) f
+                              WHERE f.value = r.raw_data->'invoice_payload'->>'link')
+                  AND NOT EXISTS (SELECT 1 FROM {SCHEMA}.crm_deals o WHERE o.linked_receipt_id = r.id AND o.id <> d2.id)
+                ORDER BY r.id DESC LIMIT 1
+            ) AS receipt_id
+            FROM {SCHEMA}.crm_deals d2
+            WHERE d2.company_id = %s AND d2.linked_receipt_id IS NULL
+              AND d2.updated_at > NOW() - make_interval(days => %s)
+              AND (%s::int IS NULL OR d2.id = %s::int)
+        ) m
+        WHERE d.id = m.deal_id AND m.receipt_id IS NOT NULL
+        RETURNING d.id
+    ''', (company_id, LOOKBACK_DAYS, deal_row_id, deal_row_id))
+    return len(cur.fetchall())
+
+
 def link_deals(cur, company_id: int, deal_row_id: Optional[int] = None) -> int:
     '''
     Сделка -> чек/счёт Екомкассы, пока приложение ЕкомКассы не пишет ссылку на оплату в сделку:
@@ -154,13 +183,16 @@ def candidate_receipts(cur, deal_row_id: int) -> List[int]:
 
 def run(cur, token: str, protocol_version: str, company_id: int) -> int:
     '''Один проход связывания сделок CRM с чеками кассы (крон). Returns: сколько сделок связано.'''
+    linked = link_deals_by_pay_link(cur, company_id)
     fill_receipt_emails(cur, token, protocol_version, company_id)
     fill_deal_emails(cur, company_id)
-    return link_deals(cur, company_id)
+    return linked + link_deals(cur, company_id)
 
 
 def run_for_deal(cur, token: Optional[str], protocol_version: str, company_id: int, deal_row_id: int) -> int:
     '''Связывание сразу по приходу хука CRM: почта сделки, почта чеков-кандидатов, связь.'''
+    if link_deals_by_pay_link(cur, company_id, deal_row_id):
+        return 1
     fill_deal_emails(cur, company_id, deal_row_id)
     if token:
         fill_receipt_emails(cur, token, protocol_version, company_id, candidate_receipts(cur, deal_row_id))

@@ -462,10 +462,10 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     ui.integration_name AS integration_name,
                     ekr.order_id AS reference,
                     ekr.raw_data AS raw_data,
-                    CASE WHEN aj.payment_row_id IS NOT NULL THEN 'payment' END AS linked_type,
-                    aj.payment_source AS linked_source,
-                    aj.payment_row_id AS linked_id,
-                    CASE WHEN aj.payment_row_id IS NOT NULL THEN 'automation' END AS match_method,
+                    CASE WHEN aj.payment_row_id IS NOT NULL THEN 'payment' WHEN ad.deal_id IS NOT NULL THEN 'crm_deal' END AS linked_type,
+                    CASE WHEN aj.payment_row_id IS NOT NULL THEN aj.payment_source ELSE ad.deal_source END AS linked_source,
+                    COALESCE(aj.payment_row_id, ad.deal_id) AS linked_id,
+                    CASE WHEN aj.payment_row_id IS NOT NULL THEN 'automation' WHEN ad.deal_id IS NOT NULL THEN 'crm_automation' END AS match_method,
                     NULL::text AS group_key,
                     COALESCE(CASE WHEN aj.operation LIKE 'sell_refund%%' THEN 'Refund Income' END,
                              om.operation_type) AS linked_ofd_status
@@ -496,6 +496,18 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                       AND (d.ecom_uuid = ekr.order_id OR d.external_id = (ekr.raw_data->>'external_id'))
                     ORDER BY d.id DESC LIMIT 1
                 ) aj ON true
+                LEFT JOIN LATERAL (
+                    -- Заказ создан сценарием по сделке CRM - в группу сделки.
+                    SELECT cd.id AS deal_id, cd.provider_slug AS deal_source
+                    FROM {SCHEMA}.automation_documents d
+                    JOIN {SCHEMA}.automation_jobs j ON j.id = d.job_id AND j.source_type = 'crm_deal'
+                    JOIN {SCHEMA}.automation_scenarios s ON s.id = j.scenario_id
+                    JOIN {SCHEMA}.crm_deals cd ON cd.integration_id = s.source_integration_id
+                         AND cd.external_deal_id = j.source_id AND cd.company_id = ekr.company_id
+                    WHERE d.company_id = ekr.company_id AND d.kassa_integration_id = ekr.integration_id
+                      AND d.ecom_uuid = ekr.order_id
+                    ORDER BY d.id DESC LIMIT 1
+                ) ad ON true
                 WHERE ekr.company_id = %(company_id)s AND ekr.removed_at IS NULL
                   AND ekr.order_type = 'CORD'
             ''')
@@ -515,7 +527,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     cd.created_at AS occurred_at,
                     NULL::date AS settlement_date,
                     cd.amount AS amount,
-                    CASE WHEN ao.id IS NOT NULL AND ao.status <> 'done' THEN 'wait' ELSE 'paid' END AS status,
+                    CASE WHEN lr.id IS NULL AND ao.id IS NOT NULL AND ao.status <> 'done' THEN 'wait' ELSE 'paid' END AS status,
                     ('Сделка #' || cd.external_deal_id) AS title,
                     cd.title AS subtitle,
                     ui.integration_name AS integration_name,
@@ -523,10 +535,14 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     jsonb_build_object('deal_id', cd.external_deal_id, 'title', cd.title, 'stage', cd.stage,
                                        'customer_emails', cd.customer_emails, 'linked_at', cd.linked_at,
                                        'order_uuid', ao.order_id) AS raw_data,
-                    CASE WHEN ao.id IS NOT NULL THEN 'receipt_order' ELSE 'receipt_kassa' END AS linked_type,
+                    CASE WHEN lr.id IS NULL THEN 'receipt_order' WHEN lr.order_type = 'CORD' THEN 'receipt_order' ELSE 'receipt_kassa' END AS linked_type,
                     'ecomkassa' AS linked_source,
-                    COALESCE(ao.id, lr.id) AS linked_id,
-                    CASE WHEN ao.id IS NOT NULL THEN 'crm_automation' ELSE 'crm_email' END AS match_method,
+                    COALESCE(lr.id, ao.id) AS linked_id,
+                    CASE WHEN lr.id IS NULL THEN 'crm_automation'
+                         WHEN (lr.raw_data->'invoice_payload'->>'link') LIKE 'http%%' AND EXISTS (
+                              SELECT 1 FROM jsonb_each_text(cd.raw_data) f
+                              WHERE f.value = lr.raw_data->'invoice_payload'->>'link') THEN 'crm_pay_link'
+                         ELSE 'crm_email' END AS match_method,
                     NULL::text AS group_key,
                     NULL::text AS linked_ofd_status
                 FROM {SCHEMA}.crm_deals cd

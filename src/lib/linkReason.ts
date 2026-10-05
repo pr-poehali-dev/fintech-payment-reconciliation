@@ -21,6 +21,7 @@ const autoReasons: Record<string, Omit<LinkReason, 'kind'> & { kind: LinkReasonK
   acquiring_commission: { kind: 'bank', label: 'Банковская операция', description: 'Комиссия банка, удержанная из этого зачисления', icon: 'Landmark' },
   crm_automation: { kind: 'crm', label: 'Заказ по сделке', description: 'Заказ создан сценарием автоматизации по этой сделке CRM (связь по UUID заказа)', icon: 'Workflow' },
   crm_email: { kind: 'crm', label: 'По почте, сумме и времени', description: 'У сделки и чека совпали почта покупателя и сумма, чек пробит в период работы со сделкой', icon: 'Briefcase' },
+  crm_pay_link: { kind: 'crm', label: 'По ссылке на оплату', description: 'Ссылка на оплату в сделке CRM совпала со ссылкой оплаченного счёта Екомкассы', icon: 'Link' },
   settlement_date: { kind: 'bank', label: 'Банковская операция', description: 'Зачисление эквайринга, сопоставленное с платежом при загрузке выписки', icon: 'Landmark' },
 };
 
