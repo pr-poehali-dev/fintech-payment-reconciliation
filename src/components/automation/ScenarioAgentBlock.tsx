@@ -1,6 +1,6 @@
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { AGENT_TYPE_OPTIONS, isBankAgent, isPayingAgent } from '@/components/admin/actionTemplatesConfig';
+import { AGENT_TYPE_OPTIONS, isBankAgent, isPayingAgent, maskPhones, PHONE_ERROR, phonesOk } from '@/components/admin/actionTemplatesConfig';
 import { ActionTemplateOption } from './automationConfig';
 
 type AgentValues = Record<string, string | string[]>;
@@ -30,8 +30,8 @@ const groups = (): Group[] => [
     title: 'Платёжный агент',
     fields: [
       { key: 'paying_agent_operation', label: 'Операция платёжного агента', placeholder: 'Оплата услуг', maxLength: 24, when: isPayingAgent },
-      { key: 'paying_agent_phones', label: 'Телефоны платёжного агента', placeholder: '+79991234567', phones: true, when: isPayingAgent },
-      { key: 'receive_payments_operator_phones', label: 'Телефоны оператора по приёму платежей', placeholder: '+79991234567', phones: true, when: isPayingAgent }
+      { key: 'paying_agent_phones', label: 'Телефоны платёжного агента', placeholder: '+79999999999', phones: true, when: isPayingAgent },
+      { key: 'receive_payments_operator_phones', label: 'Телефоны оператора по приёму платежей', placeholder: '+79999999999', phones: true, when: isPayingAgent }
     ]
   },
   {
@@ -40,7 +40,7 @@ const groups = (): Group[] => [
       { key: 'money_transfer_operator_name', label: 'Наименование', maxLength: 64, when: isBankAgent },
       { key: 'money_transfer_operator_inn', label: 'ИНН', inn: true, when: isBankAgent },
       { key: 'money_transfer_operator_address', label: 'Адрес', maxLength: 243, when: isBankAgent },
-      { key: 'money_transfer_operator_phones', label: 'Телефоны', placeholder: '+79991234567', phones: true, when: isBankAgent }
+      { key: 'money_transfer_operator_phones', label: 'Телефоны', placeholder: '+79999999999', phones: true, when: isBankAgent }
     ]
   },
   {
@@ -48,14 +48,13 @@ const groups = (): Group[] => [
     fields: [
       { key: 'supplier_name', label: 'Наименование', placeholder: 'ООО «Авито»', maxLength: 239, required: true },
       { key: 'supplier_inn', label: 'ИНН', placeholder: '7710668349', inn: true, required: true },
-      { key: 'supplier_phones', label: 'Телефоны поставщика', placeholder: '+79991234567', phones: true }
+      { key: 'supplier_phones', label: 'Телефоны поставщика', placeholder: '+79999999999', phones: true }
     ]
   }
 ];
 
 const innError = (v: string) => (v && !/^(\d{10}|\d{12})$/.test(v) ? 'ИНН — 10 или 12 цифр' : null);
-const phonesError = (v: string) =>
-  v.split(',').every((p) => !p.trim() || /^\+?\d{10,19}$/.test(p.replace(/[\s()-]/g, ''))) ? null : 'Формат +79991234567, через запятую';
+const phonesError = (v: string) => (phonesOk(v) ? null : PHONE_ERROR);
 
 // Поля агентского чека, которые не заполнены в шаблоне: что спросить у клиента в сценарии.
 export const agentAsk = (template: ActionTemplateOption | undefined) => {
@@ -90,7 +89,7 @@ const ScenarioAgentBlock = ({ template, values, onChange, fromCrm = [] }: Scenar
   const typeLabel = AGENT_TYPE_OPTIONS.find((o) => o.value === base.agent_type)?.label || String(base.agent_type || '—');
   const ask = agentAsk(template);
   const set = (f: FieldDef, raw: string) =>
-    onChange({ ...values, [f.key]: f.inn ? raw.replace(/\D/g, '').slice(0, 12) : raw });
+    onChange({ ...values, [f.key]: f.inn ? raw.replace(/\D/g, '').slice(0, 12) : f.phones ? maskPhones(raw) : raw });
 
   return (
     <div className="space-y-3 rounded-lg border border-primary/30 bg-primary/5 p-4">
@@ -122,7 +121,7 @@ const ScenarioAgentBlock = ({ template, values, onChange, fromCrm = [] }: Scenar
                     value={v}
                     maxLength={f.maxLength}
                     placeholder={f.placeholder}
-                    inputMode={f.inn ? 'numeric' : undefined}
+                    inputMode={f.inn ? 'numeric' : f.phones ? 'tel' : undefined}
                     onChange={(e) => set(f, e.target.value)}
                   />
                   {error ? (
@@ -130,7 +129,7 @@ const ScenarioAgentBlock = ({ template, values, onChange, fromCrm = [] }: Scenar
                   ) : crm ? (
                     <p className="text-xs text-muted-foreground">Берём из сделки. Здесь — запасное значение, если поле в сделке пустое</p>
                   ) : f.phones ? (
-                    <p className="text-xs text-muted-foreground">Несколько — через запятую</p>
+                    <p className="text-xs text-muted-foreground">Формат +79999999999, несколько — через запятую</p>
                   ) : null}
                 </div>
               );

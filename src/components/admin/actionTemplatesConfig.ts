@@ -131,8 +131,25 @@ export const isPayingAgent = (t: string) => ['paying_agent', 'paying_subagent', 
 export const isBankAgent = (t: string) => ['bank_paying_agent', 'bank_paying_subagent'].includes(t);
 
 const innOk = (v: string) => !v || /^(\d{10}|\d{12})$/.test(v);
-const phonesOk = (v: string) =>
-  v.split(',').every((p) => !p.trim() || /^\+?\d{10,19}$/.test(p.replace(/[\s()-]/g, '')));
+// Маска телефона по ФФД: +7 и 10 цифр (+79999999999), несколько номеров - через запятую.
+const maskPhone = (part: string) => {
+  let d = part.replace(/\D/g, '');
+  if (!d) return '';
+  if (d[0] === '8') d = '7' + d.slice(1);
+  else if (d[0] !== '7') d = '7' + d;
+  return '+' + d.slice(0, 11);
+};
+
+export const maskPhones = (value: string) => {
+  const parts = value.split(',');
+  const masked = parts.slice(0, -1).map(maskPhone).filter(Boolean);
+  const last = maskPhone(parts[parts.length - 1]);
+  if (parts.length === 1) return last;
+  return masked.join(', ') + (masked.length ? ',' : '') + (last ? ' ' + last : '');
+};
+
+export const phonesOk = (v: string) => v.split(',').every((p) => !p.trim() || /^\+7\d{10}$/.test(p.trim()));
+export const PHONE_ERROR = 'Формат +79999999999, несколько — через запятую';
 
 export const agentValid = (f: ActionTemplateForm) => {
   if (f.receipt_type !== 'agent') return true;
