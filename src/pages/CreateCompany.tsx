@@ -22,7 +22,7 @@ interface CompanyLookupData {
 }
 
 const CreateCompany = () => {
-  const { user, refreshCompanies, setCurrentCompanyId, logout } = useAuth();
+  const { user, companies, refreshCompanies, setCurrentCompanyId, logout } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
   const [inn, setInn] = useState('');
@@ -31,6 +31,17 @@ const CreateCompany = () => {
   const [foundCompany, setFoundCompany] = useState<CompanyLookupData | null>(null);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [usage, setUsage] = useState<{ owned: number; max_companies: number | null } | null>(null);
+
+  // Первый вход: список компаний мог устареть (например, сотрудник только что принял
+  // приглашение) - перепроверяем, и если компания уже есть, сразу открываем кабинет.
+  const [openedWithoutCompanies] = useState(companies.length === 0);
+  useEffect(() => {
+    if (user && openedWithoutCompanies) refreshCompanies(user.user_id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.user_id]);
+  useEffect(() => {
+    if (openedWithoutCompanies && companies.length > 0) navigate('/app', { replace: true });
+  }, [openedWithoutCompanies, companies.length, navigate]);
 
   // Сколько компаний уже создано и сколько разрешает тариф.
   useEffect(() => {

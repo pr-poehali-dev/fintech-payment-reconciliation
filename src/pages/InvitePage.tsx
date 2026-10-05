@@ -93,7 +93,7 @@ const InvitePage = () => {
       const data = await res.json();
 
       if (res.ok && data.success) {
-        await refreshCompanies();
+        await refreshCompanies(userId);
         setCurrentCompanyId(data.company_id);
         toast({ title: 'Добро пожаловать!', description: `Вы присоединились к компании «${invite?.company_name}»` });
         navigate('/app', { replace: true });

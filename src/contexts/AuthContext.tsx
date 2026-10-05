@@ -43,7 +43,7 @@ interface AuthContextValue {
   setCurrentCompanyId: (id: number) => void;
   requestCode: (phone: string, channel: string, purpose?: 'login' | 'invite') => Promise<void>;
   loginWithPhone: (phone: string, code: string, fullName?: string) => Promise<AuthUser>;
-  refreshCompanies: () => Promise<void>;
+  refreshCompanies: (userId?: number) => Promise<void>;
   updateUser: (patch: Partial<Pick<AuthUser, 'full_name' | 'email'>>) => void;
   logout: () => void;
 }
@@ -167,9 +167,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return authUser;
   };
 
-  const refreshCompanies = async () => {
-    if (user) {
-      await fetchCompanies(user.user_id);
+  // userId - сразу после входа, когда пользователь в состоянии ещё не обновился.
+  const refreshCompanies = async (userId?: number) => {
+    const id = userId ?? user?.user_id;
+    if (id) {
+      await fetchCompanies(id);
     }
   };
 
