@@ -5,6 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import Icon from '@/components/ui/icon';
 import functionUrls from '../../../backend/func2url.json';
 import CrmFieldPicker from './CrmFieldPicker';
+import CrmTemplateInput from './CrmTemplateInput';
 import {
   CrmEntity,
   CrmMeta,
@@ -251,8 +252,13 @@ const CrmMappingBlock = ({ companyId, integrationId, mapping, onChange }: CrmMap
         {itemsMode === 'single' && (
           <div className="space-y-1.5">
             <span className="text-sm">Название позиции</span>
-            <Input className="h-9" value={String(mapping.single_item_name || '')} onChange={(e) => set({ single_item_name: e.target.value })} />
-            <p className="text-xs text-muted-foreground">Можно подставить поле: {'{ID}'}, {'{TITLE}'}</p>
+            <CrmTemplateInput
+              value={String(mapping.single_item_name || '')}
+              onChange={(v) => set({ single_item_name: v })}
+              fields={meta.fields}
+              entities={entities}
+              mainEntity={entity}
+            />
           </div>
         )}
 

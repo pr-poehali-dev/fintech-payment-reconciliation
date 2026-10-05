@@ -240,8 +240,10 @@ def build_items(record: Dict[str, Any], entity: str, mapping: Dict[str, Any],
     if mode == 'single':
         if not amount:
             return [], f'В {noun} не заполнена сумма (поле «{mapping.get("amount")}»)'
-        main = record.get(entity) or {}
-        name = re.sub(r'\{(\w+)\}', lambda m: str(main.get(m.group(1)) or ''), mapping.get('single_item_name') or 'Оплата')
+        # {КОД} - поле сделки/лида, {contact.КОД} / {company.КОД} - поле привязанного контакта/компании.
+        name = re.sub(r'\{([\w.]+)\}', lambda m: resolve(record, entity, m.group(1)) or '',
+                      mapping.get('single_item_name') or 'Оплата')
+        name = re.sub(r'\s{2,}', ' ', name)
         return [_item(name.strip() or 'Оплата', amount, 1, fixed_vat)], ''
 
     items = []
