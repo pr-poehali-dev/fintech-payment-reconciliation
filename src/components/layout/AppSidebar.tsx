@@ -13,7 +13,6 @@ import {
 import { useAuth, Company } from '@/contexts/AuthContext';
 import { isLockedByTariff, menuModules } from '@/config/modules';
 import ProfileDialog from '@/components/profile/ProfileDialog';
-import SubscriptionDialog from '@/components/profile/SubscriptionDialog';
 
 interface AppSidebarProps {
   activeModule: string;
@@ -75,10 +74,9 @@ const formatPhone = (phone?: string) => {
   return `+${d[0]} ${d.slice(1, 4)} ${d.slice(4, 7)}-${d.slice(7, 9)}-${d.slice(9, 11)}`;
 };
 
-const UserProfileMenu = ({ onOpenSettings }: { onOpenSettings: () => void }) => {
+const UserProfileMenu = ({ onOpenSettings, onOpenSubscription }: { onOpenSettings: () => void; onOpenSubscription: () => void }) => {
   const { user, currentCompany, logout } = useAuth();
   const [profileOpen, setProfileOpen] = useState(false);
-  const [subscriptionOpen, setSubscriptionOpen] = useState(false);
   const displayName = user?.full_name || formatPhone(user?.phone) || 'Пользователь';
 
   const itemClass = 'gap-3 px-3 py-2.5 text-[15px] cursor-pointer';
@@ -124,7 +122,7 @@ const UserProfileMenu = ({ onOpenSettings }: { onOpenSettings: () => void }) => 
               <Icon name="User" size={18} className="text-muted-foreground" />
               Профиль
             </DropdownMenuItem>
-            <DropdownMenuItem className={itemClass} onSelect={() => setSubscriptionOpen(true)}>
+            <DropdownMenuItem className={itemClass} onSelect={onOpenSubscription}>
               <Icon name="CreditCard" size={18} className="text-muted-foreground" />
               Подписка
             </DropdownMenuItem>
@@ -144,7 +142,6 @@ const UserProfileMenu = ({ onOpenSettings }: { onOpenSettings: () => void }) => 
       </DropdownMenu>
 
       <ProfileDialog open={profileOpen} onOpenChange={setProfileOpen} />
-      <SubscriptionDialog open={subscriptionOpen} onOpenChange={setSubscriptionOpen} />
     </div>
   );
 };
@@ -189,7 +186,10 @@ const AppSidebar = ({ activeModule, onModuleChange }: AppSidebarProps) => {
         })}
       </nav>
 
-      <UserProfileMenu onOpenSettings={() => onModuleChange('settings')} />
+      <UserProfileMenu
+        onOpenSettings={() => onModuleChange('settings')}
+        onOpenSubscription={() => onModuleChange('subscription')}
+      />
     </aside>
   );
 };

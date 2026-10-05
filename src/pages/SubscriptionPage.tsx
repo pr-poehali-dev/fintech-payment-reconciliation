@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -8,18 +7,16 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { SUBSCRIPTION_STATUS, subscriptionEndDate, daysLeft, formatLongDate } from '@/lib/subscription';
 import { APP_MODULES } from '@/config/modules';
-import functionUrls from '../../../backend/func2url.json';
+import functionUrls from '../../backend/func2url.json';
 import DowngradeKeepPicker, {
   KeepState,
   Overage,
   initialKeep,
   keepIsValid,
   removalCount
-} from './DowngradeKeepPicker';
+} from '@/components/profile/DowngradeKeepPicker';
 
-interface SubscriptionDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
+interface SubscriptionPageProps {
   highlightModule?: string | null;
 }
 
@@ -78,7 +75,7 @@ const limitDiff = (next: number | null, cur: number | null | undefined): { up: b
   return next > cur ? { up: true, text: `+${next - cur}` } : { up: false, text: `−${cur - next}` };
 };
 
-const SubscriptionDialog = ({ open, onOpenChange, highlightModule }: SubscriptionDialogProps) => {
+const SubscriptionPage = ({ highlightModule }: SubscriptionPageProps) => {
   const { currentCompany, refreshCompanies } = useAuth();
   const { toast } = useToast();
   const [tariffs, setTariffs] = useState<PlanTariff[]>([]);
@@ -117,13 +114,12 @@ const SubscriptionDialog = ({ open, onOpenChange, highlightModule }: Subscriptio
   };
 
   useEffect(() => {
-    if (!open) return;
     setSelected(null);
     setPaid(null);
     setPayError(null);
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, companyId]);
+  }, [companyId]);
 
   const status = SUBSCRIPTION_STATUS[currentCompany?.subscription_status || ''] || {
     label: currentCompany?.subscription_status || 'Нет подписки',
@@ -217,14 +213,13 @@ const SubscriptionDialog = ({ open, onOpenChange, highlightModule }: Subscriptio
   const price = (t: PlanTariff) => (period === 'year' ? t.year_price : t.price);
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Подписка</DialogTitle>
-          <DialogDescription>
-            {currentCompany ? `Тариф компании «${currentCompany.name}»` : 'Компания не выбрана'}
-          </DialogDescription>
-        </DialogHeader>
+    <div className="max-w-5xl space-y-6 animate-fade-in">
+      <div>
+        <h2 className="mb-2 text-3xl font-display font-bold text-foreground">Подписка</h2>
+        <p className="text-muted-foreground">
+          {currentCompany ? `Тариф, оплата и история платежей компании «${currentCompany.name}»` : 'Компания не выбрана'}
+        </p>
+      </div>
 
         {currentCompany && (
           <div className="space-y-6 py-2">
@@ -275,7 +270,7 @@ const SubscriptionDialog = ({ open, onOpenChange, highlightModule }: Subscriptio
                 </div>
               </div>
 
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                 {tariffs.map((t) => {
                   const isCurrent = t.slug === currentSlug && !isTrial;
                   const isChosen = t.slug === selected;
@@ -488,9 +483,8 @@ const SubscriptionDialog = ({ open, onOpenChange, highlightModule }: Subscriptio
             )}
           </div>
         )}
-      </DialogContent>
-    </Dialog>
+    </div>
   );
 };
 
-export default SubscriptionDialog;
+export default SubscriptionPage;

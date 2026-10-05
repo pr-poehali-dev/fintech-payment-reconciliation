@@ -12,7 +12,8 @@ export const APP_MODULES: AppModule[] = [
   { id: 'automation', name: 'Автоматизация', icon: 'Workflow' },
   { id: 'integrations', name: 'Интеграции', icon: 'Plug' },
   { id: 'access', name: 'Доступ', icon: 'Users' },
-  { id: 'settings', name: 'Настройки', icon: 'Settings', hidden: true }
+  { id: 'settings', name: 'Настройки', icon: 'Settings', hidden: true },
+  { id: 'subscription', name: 'Подписка', icon: 'CreditCard', hidden: true }
 ];
 
 // Разделы, доступные роли сотрудника в компании, в порядке меню. Если права
@@ -37,7 +38,7 @@ export const isLockedByTariff = (
   id: string
 ) => {
   const tariff = company?.tariff_modules;
-  if (!tariff || id === 'settings') return false;
+  if (!tariff || id === 'settings' || id === 'subscription') return false;
   const role = company?.role_modules;
   return (!role || role.includes(id)) && !tariff.includes(id);
 };

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import Icon from '@/components/ui/icon';
 import NotificationCenter from '@/components/NotificationCenter';
 import AppHeader from '@/components/layout/AppHeader';
@@ -17,16 +18,18 @@ import PageBanner from '@/components/banners/PageBanner';
 import { useNotifications, AppNotification } from '@/hooks/useNotifications';
 import { canOpenModule, defaultModuleFor, effectiveModules, isLockedByTariff } from '@/config/modules';
 import TariffLockedScreen from '@/components/layout/TariffLockedScreen';
-import SubscriptionDialog from '@/components/profile/SubscriptionDialog';
+import SubscriptionPage from './SubscriptionPage';
 import { DateFilter } from '@/components/filters/DateRangeFilter';
 import { TYPE_FILTERS, TypeFilter, TypeFilterKey } from '@/lib/transactionTypeFilter';
 
 const Index = () => {
   const { currentCompany, user, cronEnabled } = useAuth();
   // null - пользователь ещё не выбирал раздел, открываем стартовый доступный.
-  const [activeModule, setActiveModule] = useState<string | null>(null);
+  const [searchParams] = useSearchParams();
+  const [activeModule, setActiveModule] = useState<string | null>(() => searchParams.get('section'));
   const [showNotifications, setShowNotifications] = useState(false);
-  const [subscriptionOpen, setSubscriptionOpen] = useState(false);
+  // Раздел, из которого пришли в «Подписку» с экрана закрытого раздела - подсветить тарифы.
+  const [upgradeFor, setUpgradeFor] = useState<string | null>(null);
   const [transactionsDateFilter, setTransactionsDateFilter] = useState<DateFilter | null>(null);
   const [transactionsTypeFilter, setTransactionsTypeFilter] = useState<TypeFilter | null>(null);
   const [transactionsUnmatchedOnly, setTransactionsUnmatchedOnly] = useState(false);
@@ -65,7 +68,7 @@ const Index = () => {
   const roleModules = effectiveModules(currentCompany);
   // «Настройки» открыты всем: там личные уведомления, а общие настройки компании
   // страница сама скрывает от ролей без этого раздела.
-  const canOpen = (id: string) => id === 'settings' || canOpenModule(roleModules, id);
+  const canOpen = (id: string) => id === 'settings' || id === 'subscription' || canOpenModule(roleModules, id);
   // Раздел, недоступный роли (ссылка из уведомления, смена компании), не открываем -
   // показываем стартовый раздел роли.
   // Раздел есть в роли, но закрыт тарифом - открываем экран с предложением сменить тариф.
@@ -77,6 +80,7 @@ const Index = () => {
     setTransactionsUnmatchedOnly(false);
     setTransactionsDateFilter(null);
     setTransactionsTypeFilter(null);
+    setUpgradeFor(null);
     setActiveModule(id);
   };
 
@@ -103,7 +107,8 @@ const Index = () => {
       )}
 
       <AppHeader
-        onOpenSubscription={() => setSubscriptionOpen(true)}
+        onOpenSubscription={() => handleModuleChange('subscription')}
+        subscriptionActive={shownModule === 'subscription'}
         unreadCount={notifications.unread}
         onShowNotifications={() => {
           setShowNotifications(true);
@@ -111,12 +116,17 @@ const Index = () => {
         }}
       />
 
-      <SubscriptionDialog open={subscriptionOpen} onOpenChange={setSubscriptionOpen} highlightModule={lockedModule} />
 
       <AppSidebar activeModule={shownModule ?? ''} onModuleChange={handleModuleChange} />
 
       <main className="ml-64 mt-16 p-8">
-        {lockedModule && <TariffLockedScreen moduleId={lockedModule} onUpgrade={() => setSubscriptionOpen(true)} />}
+        {lockedModule && <TariffLockedScreen
+            moduleId={lockedModule}
+            onUpgrade={() => {
+              handleModuleChange('subscription');
+              setUpgradeFor(lockedModule);
+            }}
+          />}
         {shownModule && !lockedModule && banners.forPage(shownModule).map((b) => <PageBanner key={b.page} banner={b} />)}
         {!lockedModule && shownModule === 'reconciliation' && (
           <ReconciliationPage onOpenTransactions={canOpenTransactions ? openTransactionsForPeriod : undefined} />
@@ -140,6 +150,7 @@ const Index = () => {
         )}
         {!lockedModule && shownModule === 'access' && <AccessManagement />}
         {!lockedModule && shownModule === 'settings' && <SettingsPlaceholder />}
+        {!lockedModule && shownModule === 'subscription' && <SubscriptionPage highlightModule={upgradeFor} />}
         {!shownModule && (
           <div className="mx-auto mt-24 max-w-md text-center text-muted-foreground">
             <Icon name="Lock" size={40} className="mx-auto mb-4" />

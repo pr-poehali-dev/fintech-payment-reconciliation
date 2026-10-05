@@ -8,9 +8,10 @@ interface AppHeaderProps {
   unreadCount: number;
   onShowNotifications: () => void;
   onOpenSubscription?: () => void;
+  subscriptionActive?: boolean;
 }
 
-const AppHeader = ({ unreadCount, onShowNotifications, onOpenSubscription }: AppHeaderProps) => {
+const AppHeader = ({ unreadCount, onShowNotifications, onOpenSubscription, subscriptionActive }: AppHeaderProps) => {
   const { logout, isPlatformAdmin, currentCompany } = useAuth();
   const endDate = subscriptionEndDate(currentCompany);
   const left = daysLeft(endDate);
@@ -25,8 +26,10 @@ const AppHeader = ({ unreadCount, onShowNotifications, onOpenSubscription }: App
           <button
             type="button"
             onClick={onOpenSubscription}
-            className="flex items-center gap-3 rounded-lg border border-border px-3 py-1.5 text-left transition-colors hover:border-primary/50 hover:bg-muted/40"
-            title="Подробнее о подписке"
+            className={`flex items-center gap-3 rounded-lg border px-3 py-1.5 text-left transition-colors hover:border-primary/50 hover:bg-muted/40 ${
+              subscriptionActive ? 'border-primary/60 bg-muted/40' : 'border-border'
+            }`}
+            title="Управление подпиской"
           >
             <Icon name="CreditCard" size={18} className="text-primary shrink-0" />
             <span className="text-sm font-semibold text-foreground">{currentCompany.tariff_name}</span>
