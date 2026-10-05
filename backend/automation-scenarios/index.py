@@ -72,7 +72,7 @@ def validate(cur, company_id: int, body: Dict[str, Any]) -> Optional[str]:
         return 'Для расхождения доступно только действие «Создать чек»'
     cur.execute(f'''
         SELECT action_type, is_active, provider_id, receipt_type, protocol_version, correction_date_source,
-               correction_base_number, correction_base_name
+               correction_base_number, correction_base_name, agent_settings
         FROM {SCHEMA}.automation_action_templates WHERE code = %s
     ''', (body.get('action_template'),))
     template = cur.fetchone()
@@ -102,6 +102,17 @@ def validate(cur, company_id: int, body: Dict[str, Any]) -> Optional[str]:
                 return 'Укажите номер документа-основания коррекции (обязателен для протокола v4)'
             if not str(template[7] or cs.get('correction_base_name') or '').strip():
                 return 'Укажите описание коррекции (обязательно для протокола v4)'
+    if template[3] == 'agent':
+        agent, error = clean_agent((body.get('correction_settings') or {}).get('agent')
+                                   if isinstance(body.get('correction_settings'), dict) else None)
+        if error:
+            return error
+        base = template[8] if isinstance(template[8], dict) else {}
+        if template[4] == 'v5':
+            if not (base.get('supplier_name') or agent.get('supplier_name')):
+                return 'Укажите наименование поставщика (обязательно для протокола v5)'
+            if not (base.get('supplier_inn') or agent.get('supplier_inn')):
+                return 'Укажите ИНН поставщика (обязателен для протокола v5)'
     mapping = body.get('field_mapping') or {}
     if not isinstance(mapping, dict):
         return 'Некорректная настройка сопоставления полей'
@@ -163,11 +174,64 @@ def _match_integration(cur, company_id: int, src: Dict[str, Any]) -> Optional[in
 CORRECTION_KEYS = ('correction_base_number', 'correction_base_name', 'default_email', 'cashier_name')
 
 
-def clean_correction(value: Any) -> Dict[str, str]:
-    '''Поля чека коррекции сценария: номер и описание основания, место расчётов.'''
+AGENT_TEXT = {'paying_agent_operation': ('Операция платёжного агента', 24),
+              'money_transfer_operator_name': ('Наименование оператора перевода', 64),
+              'money_transfer_operator_address': ('Адрес оператора перевода', 243),
+              'supplier_name': ('Наименование поставщика', 239)}
+AGENT_INN = {'money_transfer_operator_inn': 'ИНН оператора перевода', 'supplier_inn': 'ИНН поставщика'}
+AGENT_PHONES = {'paying_agent_phones': 'Телефон платёжного агента',
+                'receive_payments_operator_phones': 'Телефон оператора по приёму платежей',
+                'money_transfer_operator_phones': 'Телефон оператора перевода',
+                'supplier_phones': 'Телефон поставщика'}
+
+
+def clean_agent(value: Any):
+    '''
+    Агентские поля сценария - то, что не задано в шаблоне действия.
+    Телефоны - список +79991234567. Returns: (dict, error).
+    '''
+    if not isinstance(value, dict):
+        return {}, None
+    result: Dict[str, Any] = {}
+    for key, (label, limit) in AGENT_TEXT.items():
+        text = str(value.get(key) or '').strip()
+        if len(text) > limit:
+            return {}, f'{label} - не больше {limit} символов'
+        if text:
+            result[key] = text
+    for key, label in AGENT_INN.items():
+        inn = re.sub(r'\D', '', str(value.get(key) or ''))
+        if inn and len(inn) not in (10, 12):
+            return {}, f'{label} - 10 или 12 цифр'
+        if inn:
+            result[key] = inn
+    for key, label in AGENT_PHONES.items():
+        raw = value.get(key)
+        raw = ','.join(str(x) for x in raw) if isinstance(raw, list) else str(raw or '')
+        phones = []
+        for part in raw.split(','):
+            digits = re.sub(r'[^\d+]', '', part)
+            if not digits:
+                continue
+            if not digits.startswith('+'):
+                digits = '+7' + digits[1:] if digits.startswith('8') and len(digits) == 11 else '+' + digits
+            if not re.match(r'^\+\d{1,19}$', digits):
+                return {}, f'{label}: телефон «{part.strip()}» указан неверно'
+            phones.append(digits)
+        if phones:
+            result[key] = phones
+    return result, None
+
+
+def clean_correction(value: Any) -> Dict[str, Any]:
+    '''Поля сценария, не заданные в шаблоне: основание коррекции, почта, кассир, агентские данные.'''
     if not isinstance(value, dict):
         return {}
-    return {k: str(value[k]).strip()[:256] for k in CORRECTION_KEYS if str(value.get(k) or '').strip()}
+    result: Dict[str, Any] = {k: str(value[k]).strip()[:256] for k in CORRECTION_KEYS if str(value.get(k) or '').strip()}
+    agent, _ = clean_agent(value.get('agent'))
+    if agent:
+        result['agent'] = agent
+    return result
 
 
 def copy_to_company(cur, conn, company_id: int, body: Dict[str, Any]) -> Dict[str, Any]:

@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import Icon from '@/components/ui/icon';
 import { useAuth } from '@/contexts/AuthContext';
 import CrmMappingBlock from './CrmMappingBlock';
+import ScenarioAgentBlock, { agentProblems } from './ScenarioAgentBlock';
 import {
   ACTIONS,
   ActionTemplate,
@@ -126,6 +127,8 @@ const ScenarioDialog = ({ open, onOpenChange, scenario, prefill, integrations, t
         askName && !cs.correction_base_name?.trim() && 'описание коррекции'
       ].filter(Boolean)
     : [];
+  const isAgent = form.action_type === 'create_receipt' && currentTemplate?.receipt_type === 'agent';
+  const agentMissing = isAgent ? agentProblems(currentTemplate, cs.agent) : [];
   let step = 1;
 
   const sourceIntegration = integrations.find((i) => i.id === form.source_integration_id);
@@ -145,6 +148,7 @@ const ScenarioDialog = ({ open, onOpenChange, scenario, prefill, integrations, t
     !!currentTemplate &&
     missingMapping.length === 0 &&
     correctionMissing.length === 0 &&
+    agentMissing.length === 0 &&
     !emailInvalid &&
     !itemsInvalid &&
     !isSaving;
@@ -326,6 +330,19 @@ const ScenarioDialog = ({ open, onOpenChange, scenario, prefill, integrations, t
               </div>
             )}
           </Step>
+
+          {isAgent && currentTemplate && (
+            <Step n={step++} title="Агентский чек">
+              <ScenarioAgentBlock
+                template={currentTemplate}
+                values={cs.agent || {}}
+                onChange={(agent) => setCs({ agent })}
+              />
+              {agentMissing.length > 0 && (
+                <p className="text-xs text-destructive">Заполните или исправьте: {agentMissing.join(', ')}</p>
+              )}
+            </Step>
+          )}
 
           {isCorrection && (
             <Step n={step++} title="Чек коррекции">

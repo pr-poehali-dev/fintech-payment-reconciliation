@@ -132,9 +132,19 @@ def process_job(cur, job: Dict[str, Any]) -> str:
                              'correction_base_name': r[25], 'payment_address': r[26]}}
     # Заполненное в шаблоне действия важнее; пустые поля шаблона клиент заполняет в сценарии.
     for key, value in (r[27] or {}).items():
+        if key == 'agent':
+            continue
         if value in (None, '') or scenario['template'].get(key) not in (None, ''):
             continue
         scenario['template'][key] = value
+    # Агентские поля: пустые в шаблоне (наименование/ИНН/телефоны поставщика и т.д.) - из сценария.
+    agent_extra = (r[27] or {}).get('agent')
+    if isinstance(agent_extra, dict) and isinstance(scenario['template'].get('agent_settings'), dict):
+        merged = dict(scenario['template']['agent_settings'])
+        for key, value in agent_extra.items():
+            if value not in (None, '', []) and merged.get(key) in (None, '', []):
+                merged[key] = value
+        scenario['template']['agent_settings'] = merged
 
     if r[7] is not None:
         status, data, message = 'skipped', {}, 'Сценарий удалён'

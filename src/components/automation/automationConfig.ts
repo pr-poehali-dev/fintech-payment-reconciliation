@@ -72,6 +72,7 @@ export interface ActionTemplateOption {
   default_email?: string | null;
   auto_deliver?: boolean;
   cashier_name?: string | null;
+  agent_settings?: Record<string, string | string[]> | null;
 }
 
 // Поля чека коррекции, которые задаются в сценарии (АТОЛ Онлайн):
@@ -83,6 +84,8 @@ export interface CorrectionSettings {
   payment_address?: string;
   default_email?: string;
   cashier_name?: string;
+  // Агентские поля, не заданные в шаблоне. Телефоны - строкой через запятую (сервер хранит списком).
+  agent?: Record<string, string | string[]>;
 }
 
 export const TARGET_CATEGORIES = ['cash_registers'];
