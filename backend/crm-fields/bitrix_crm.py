@@ -233,12 +233,34 @@ def _vat_from_rate(rate: Any) -> str:
     return f'vat{value}' if f'vat{value}' in VAT_CODES else 'none'
 
 
+NAME_LIMIT = 128  # ФФД, тег 1030 - наименование предмета расчёта
+
+
 def _item(name: str, price: float, quantity: float, vat: str) -> Dict[str, Any]:
     return {
-        'name': (name or 'Товар')[:128], 'price': round(price, 2), 'quantity': quantity,
+        'name': (name or 'Товар')[:NAME_LIMIT], 'price': round(price, 2), 'quantity': quantity,
         'sum': round(price * quantity, 2), 'measurement_unit': 'шт',
         'payment_method': 'full_payment', 'payment_object': 'commodity', 'vat': {'type': vat},
     }
+
+
+def single_name(record: Dict[str, Any], entity: str, mapping: Dict[str, Any]) -> str:
+    '''Название позиции «одной суммой»: {КОД} - поле сделки/лида, {contact.КОД} / {company.КОД} - контакта/компании.'''
+    name = re.sub(r'\{([\w.]+)\}', lambda m: resolve(record, entity, m.group(1)) or '',
+                  mapping.get('single_item_name') or 'Оплата')
+    return re.sub(r'\s{2,}', ' ', name).strip() or 'Оплата'
+
+
+def full_item_names(record: Dict[str, Any], entity: str, mapping: Dict[str, Any]) -> List[str]:
+    '''Полные (до обрезки по ФФД) названия позиций - в том же порядке, что позиции чека.'''
+    mode = mapping.get('items_mode') or 'products'
+    if mode == 'single':
+        return [single_name(record, entity, mapping)]
+    if mode == 'fixed':
+        return [r['name'].strip() for r in mapping.get('fixed_items') or []
+                if (r.get('name') or '').strip() and _number(r.get('price')) is not None]
+    return [str(r.get('PRODUCT_NAME') or r.get('ORIGINAL_PRODUCT_NAME') or 'Товар')
+            for r in record.get('products') or [] if _number(r.get('PRICE'))]
 
 
 def build_items(record: Dict[str, Any], entity: str, mapping: Dict[str, Any],
@@ -266,11 +288,7 @@ def build_items(record: Dict[str, Any], entity: str, mapping: Dict[str, Any],
     if mode == 'single':
         if not amount:
             return [], f'В {noun} не заполнена сумма (поле «{mapping.get("amount")}»)'
-        # {КОД} - поле сделки/лида, {contact.КОД} / {company.КОД} - поле привязанного контакта/компании.
-        name = re.sub(r'\{([\w.]+)\}', lambda m: resolve(record, entity, m.group(1)) or '',
-                      mapping.get('single_item_name') or 'Оплата')
-        name = re.sub(r'\s{2,}', ' ', name)
-        return [_item(name.strip() or 'Оплата', amount, 1, fixed_vat)], ''
+        return [_item(single_name(record, entity, mapping), amount, 1, fixed_vat)], ''
 
     items = []
     for row in record.get('products') or []:

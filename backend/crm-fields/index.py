@@ -86,6 +86,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         values['agent_supplier_phones'] = ', '.join(bitrix_crm.resolve_all(record, entity, mapping.get('agent_supplier_phones'))) or None
         main = record[entity]
         data, build_error, note = bitrix_crm.build_data(record, entity, mapping)
+        full_names = bitrix_crm.full_item_names(record, entity, mapping)
         return respond(200, {
             'success': True,
             'title': main.get('TITLE'),
@@ -96,6 +97,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             'products_count': len(record.get('products') or []),
             'values': values,
             'items': (data or {}).get('items') or [],
+            'name_limit': bitrix_crm.NAME_LIMIT,
+            'full_names': full_names,
             'total': round(sum(i['sum'] for i in (data or {}).get('items') or []), 2),
             'error': build_error or None,
             'note': note.lstrip(', ') or None,

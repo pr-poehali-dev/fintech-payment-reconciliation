@@ -37,6 +37,8 @@ interface TestResult {
   items?: { name: string; price: number; quantity: number; sum: number; vat: { type: string } }[];
   total?: number;
   note?: string | null;
+  name_limit?: number;
+  full_names?: string[];
 }
 
 const api = (functionUrls as Record<string, string>)['crm-fields'];
@@ -332,12 +334,23 @@ const CrmMappingBlock = ({ companyId, integrationId, mapping, onChange, agentRec
               <p className="text-xs text-destructive">{test.error}</p>
             ) : (
               <div className="space-y-1 rounded-md bg-background/60 p-2 text-xs">
-                {test.items?.map((it, i) => (
-                  <div key={i} className="flex justify-between gap-3">
-                    <span className="truncate">{it.name} × {it.quantity}</span>
-                    <span className="shrink-0">{it.sum.toLocaleString('ru-RU')} ₽</span>
-                  </div>
-                ))}
+                {test.items?.map((it, i) => {
+                  const limit = test.name_limit || 128;
+                  const full = test.full_names?.[i] ?? it.name;
+                  const over = full.length > limit;
+                  return (
+                    <div key={i} className="space-y-1 border-b border-border/60 pb-1.5 last:border-0">
+                      <div className="flex justify-between gap-3">
+                        <span className="break-words">{full}</span>
+                        <span className="shrink-0">{it.quantity} × {it.sum.toLocaleString('ru-RU')} ₽</span>
+                      </div>
+                      <div className={`text-[11px] ${over ? 'text-destructive' : 'text-muted-foreground'}`}>
+                        {full.length} / {limit} символов
+                        {over && ` — не влезает по ФФД на ${full.length - limit}, в чек уйдёт обрезанным: «…${full.slice(limit - 20, limit)}». Сократите шаблон названия`}
+                      </div>
+                    </div>
+                  );
+                })}
                 <div className="flex justify-between border-t border-border pt-1 font-semibold">
                   <span>Итого в чеке</span>
                   <span>{(test.total || 0).toLocaleString('ru-RU')} ₽</span>
