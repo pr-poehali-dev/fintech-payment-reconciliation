@@ -173,7 +173,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const refresh = () => {
       if (document.visibilityState === 'visible') fetchCompanies(userId);
     };
-    const timer = window.setInterval(refresh, 60000);
+    const timer = window.setInterval(refresh, 24 * 60 * 60 * 1000);
     document.addEventListener('visibilitychange', refresh);
     window.addEventListener('focus', refresh);
     return () => {
