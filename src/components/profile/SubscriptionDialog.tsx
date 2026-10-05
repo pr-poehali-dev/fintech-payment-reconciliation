@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -80,6 +80,13 @@ const SubscriptionDialog = ({ open, onOpenChange, highlightModule }: Subscriptio
   const [period, setPeriod] = useState<Period>('month');
   const [selected, setSelected] = useState<string | null>(null);
   const [paying, setPaying] = useState(false);
+  const [paid, setPaid] = useState<{ title: string; until: string } | null>(null);
+  const [payError, setPayError] = useState<string | null>(null);
+  const resultRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (paid || payError) resultRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [paid, payError]);
 
   const companyId = currentCompany?.id;
 
@@ -100,6 +107,8 @@ const SubscriptionDialog = ({ open, onOpenChange, highlightModule }: Subscriptio
   useEffect(() => {
     if (!open) return;
     setSelected(null);
+    setPaid(null);
+    setPayError(null);
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, companyId]);
@@ -119,25 +128,34 @@ const SubscriptionDialog = ({ open, onOpenChange, highlightModule }: Subscriptio
   const pay = async () => {
     if (!chosen || !companyId) return;
     setPaying(true);
+    setPayError(null);
+    setPaid(null);
     try {
       const res = await fetch(functionUrls['subscription-checkout'], {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'pay', company_id: companyId, tariff_slug: chosen.slug, period })
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.success) {
-        toast({ title: 'Не удалось оплатить', description: data.error, variant: 'destructive' });
+        const message = data.error || `Сервер ответил ошибкой (${res.status})`;
+        setPayError(message);
+        toast({ title: 'Не удалось оплатить', description: message, variant: 'destructive' });
         return;
       }
-      toast({
-        title: isRenewal ? 'Подписка продлена' : `Тариф «${data.tariff_name}» активирован`,
-        description: `Оплачено до ${formatLongDate(data.period_end)}`
-      });
+      const result = {
+        title: isRenewal
+          ? `Оплата принята, тариф «${data.tariff_name}» продлён`
+          : `Оплата принята, тариф «${data.tariff_name}» оплачен`,
+        until: formatLongDate(data.period_end)
+      };
+      setPaid(result);
+      toast({ title: result.title, description: `Срок действия: до ${result.until}` });
       setSelected(null);
       await refreshCompanies();
       load();
     } catch {
+      setPayError('Нет связи с сервером, попробуйте ещё раз');
       toast({ title: 'Ошибка подключения', variant: 'destructive' });
     } finally {
       setPaying(false);
@@ -329,6 +347,30 @@ const SubscriptionDialog = ({ open, onOpenChange, highlightModule }: Subscriptio
               </div>
             )}
 
+            {paid && (
+              <div ref={resultRef} />
+            )}
+            {paid && (
+              <div className="flex items-start gap-3 rounded-xl border border-success/40 bg-success/10 p-4">
+                <Icon name="CircleCheck" size={22} className="mt-0.5 shrink-0 text-success" />
+                <div className="text-sm">
+                  <div className="font-semibold text-foreground">{paid.title}</div>
+                  <div className="text-muted-foreground">
+                    Срок действия: до <span className="font-medium text-foreground">{paid.until}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+            {payError && <div ref={resultRef} />}
+            {payError && (
+              <div className="flex items-start gap-3 rounded-xl border border-destructive/40 bg-destructive/10 p-4 text-sm">
+                <Icon name="CircleAlert" size={22} className="mt-0.5 shrink-0 text-destructive" />
+                <div>
+                  <div className="font-semibold text-foreground">Не удалось оплатить</div>
+                  <div className="text-muted-foreground">{payError}</div>
+                </div>
+              </div>
+            )}
             {payments.length > 0 && (
               <div>
                 <h3 className="mb-2 font-semibold">История оплат</h3>

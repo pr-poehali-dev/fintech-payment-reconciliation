@@ -101,6 +101,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                                  'payments': payments, 'can_pay': can_pay})
 
         if method == 'POST' and body.get('action') == 'pay':
+            print(f"pay request company={company_id} user={user_id} role={role} body={body}")
             if not can_pay:
                 return respond(403, {'error': 'Оплачивать подписку может только владелец или админ компании'})
             period = body.get('period') or 'month'
@@ -148,6 +149,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 VALUES (%s, %s, %s, %s, %s, %s, 'paid', %s)
             ''', (company_id, user_id, tariff['id'], period, days, amount, period_end))
             conn.commit()
+            print(f"pay ok company={company_id} tariff={tariff['slug']} until={period_end}")
             return respond(200, {'success': True, 'tariff_name': tariff['name'],
                                  'period_end': period_end, 'amount': amount})
 
