@@ -43,7 +43,30 @@ export interface FieldConfig {
   default?: ConfigValue;
   required?: boolean;
   options?: FieldOption[];
+  // Маска/проверка текстового поля: normalize - чистит ввод, validate - текст ошибки или null.
+  normalize?: (value: string) => string;
+  validate?: (value: string) => string | null;
 }
+
+// Входящий вебхук Битрикс24: https://портал/rest/<id пользователя>/<код>/.
+// Лишний метод в конце (profile.json, crm.deal.list и т.п.) отрезаем, пробелы убираем.
+export const normalizeBitrixWebhook = (value: string) => {
+  const v = value.replace(/\s+/g, '');
+  // Отрезаем только метод с точкой в конце (…/код/profile.json) - обычный ввод по буквам не трогаем.
+  const m = v.match(/^(https?:\/\/[^/]+\/rest\/\d+\/[A-Za-z0-9]+)\/[\w.]*\.[\w.]*\/?$/);
+  return m ? `${m[1]}/` : v;
+};
+
+export const validateBitrixWebhook = (value: string) => {
+  const v = value.trim();
+  if (!v) return null;
+  if (v.includes('functions.poehali.dev'))
+    return 'Это наш адрес для исходящих хуков — он указывается в Битрикс24. Сюда нужен входящий вебхук портала';
+  if (!/^https:\/\//.test(v)) return 'Адрес должен начинаться с https://';
+  if (!/^https:\/\/[^/]+\/rest\/\d+\/[A-Za-z0-9]+\/?$/.test(v))
+    return 'Нужен адрес вида https://ваш-портал.bitrix24.ru/rest/1/код/';
+  return null;
+};
 
 export const SYNC_INTERVAL_OPTIONS: FieldOption[] = [
   { value: '1', label: 'Раз в час' },
@@ -154,7 +177,15 @@ export const PROVIDER_FIELDS: Record<string, FieldConfig[]> = {
   // Токен и касса вводятся в OfdKktPicker: по токену и ИНН компании загружаем список касс из OFD.RU.
   ofdru: [],
   bitrix24: [
-    { key: 'webhook_url', label: 'Входящий вебхук Битрикс24', type: 'text', placeholder: 'https://yourcompany.bitrix24.ru/rest/1/xxxxxxxxxx/', hint: 'Битрикс24 → Разработчикам → Другое → Входящий вебхук. Права: crm' }
+    {
+      key: 'webhook_url',
+      label: 'Входящий вебхук Битрикс24',
+      type: 'text',
+      placeholder: 'https://ваш-портал.bitrix24.ru/rest/1/код/',
+      hint: 'Формат https://ваш-портал.bitrix24.ru/rest/1/код/ · Битрикс24 → Разработчикам → Другое → Входящий вебхук. Права: crm',
+      normalize: normalizeBitrixWebhook,
+      validate: validateBitrixWebhook
+    }
   ],
   amocrm: [
     { key: 'subdomain', label: 'Поддомен AmoCRM', type: 'text', placeholder: 'yourcompany', hint: 'Из адреса вида yourcompany.amocrm.ru' },

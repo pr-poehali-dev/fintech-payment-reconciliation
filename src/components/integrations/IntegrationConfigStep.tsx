@@ -91,6 +91,7 @@ const IntegrationConfigStep = ({
         if (field.type === 'multiselect') {
           return Array.isArray(value) && value.length > 0;
         }
+        if (field.validate && field.validate(String(value ?? ''))) return false;
         return value !== undefined && value !== null && String(value).trim() !== '';
       });
   };
@@ -177,6 +178,7 @@ const IntegrationConfigStep = ({
 
     const isPassword = field.type === 'password';
     const isVisible = visiblePasswords[field.key];
+    const fieldError = field.validate ? field.validate(String(config[field.key] ?? '')) : null;
 
     return (
       <div key={field.key}>
@@ -189,9 +191,10 @@ const IntegrationConfigStep = ({
             value={(config[field.key] ?? '') as string | number}
             onChange={(e) => onConfigChange({
               ...config,
-              [field.key]: field.type === 'number' ? Number(e.target.value) : e.target.value
+              [field.key]: field.type === 'number' ? Number(e.target.value) : field.normalize ? field.normalize(e.target.value) : e.target.value
             })}
-            className={isPassword ? 'pr-10' : undefined}
+            aria-invalid={!!fieldError}
+            className={`${isPassword ? 'pr-10' : ''} ${fieldError ? 'border-destructive focus-visible:ring-destructive' : ''}`}
           />
           {isPassword && (
             <button
@@ -204,7 +207,11 @@ const IntegrationConfigStep = ({
             </button>
           )}
         </div>
-        {field.hint && <p className="text-xs text-muted-foreground mt-1">{field.hint}</p>}
+        {fieldError ? (
+          <p className="text-xs text-destructive mt-1">{fieldError}</p>
+        ) : (
+          field.hint && <p className="text-xs text-muted-foreground mt-1">{field.hint}</p>
+        )}
       </div>
     );
   };
