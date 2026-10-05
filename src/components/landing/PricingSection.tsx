@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import Icon from '@/components/ui/icon';
 import { pluralDays } from '@/lib/trialDays';
+import { discountedYearPrice, fullYearPrice, periodLabel } from '@/lib/tariffPricing';
 
 export interface Tariff {
   slug: string;
@@ -17,6 +18,7 @@ export interface Tariff {
   features: string[];
   period_days?: number;
   yearly_discount_percent?: number;
+  trial_days?: number;
 }
 
 const FALLBACK_TARIFFS: Tariff[] = [
@@ -60,7 +62,9 @@ const PricingSection = ({ onCtaClick, trialDays, tariffs: loaded }: { onCtaClick
   const trialLabel = pluralDays(trialDays);
   const [yearly, setYearly] = useState(false);
   // Максимальная скидка за год среди тарифов - для подписи на переключателе.
-  const maxDiscount = Math.max(0, ...tariffs.map((t) => t.yearly_discount_percent || 0));
+  const maxDiscount = Math.max(0, ...tariffs.filter((t) => t.price > 0).map((t) => t.yearly_discount_percent || 0));
+  // Пробный период тарифа: своё поле, у тарифа «Пробный» без него - его срок действия.
+  const trialOf = (t: Tariff) => (t.trial_days && t.trial_days > 0 ? t.trial_days : t.slug === 'trial' ? trialDays : 0);
   const fmt = (v: number) => `${Math.round(v).toLocaleString('ru-RU')} ₽`;
 
   // Электронная коммерция: показ тарифов (при загрузке и смене месяц/год).
@@ -116,7 +120,7 @@ const PricingSection = ({ onCtaClick, trialDays, tariffs: loaded }: { onCtaClick
                 <CardHeader>
                   <CardTitle className="text-xl font-display">{tariff.name}</CardTitle>
                   <CardDescription>
-                    {tariff.slug === 'trial' ? `${trialLabel} бесплатно, все функции доступны` : tariff.description}
+                    {tariff.slug === 'trial' || tariff.price === 0 ? `${pluralDays(trialOf(tariff) || trialDays)} бесплатно, все функции доступны` : tariff.description}
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -124,8 +128,8 @@ const PricingSection = ({ onCtaClick, trialDays, tariffs: loaded }: { onCtaClick
                     {tariff.price > 0 && yearly ? (
                       (() => {
                         const discount = tariff.yearly_discount_percent || 0;
-                        const full = tariff.price * 12;
-                        const year = full * (1 - discount / 100);
+                        const full = fullYearPrice(tariff.price, tariff.period_days);
+                        const year = discountedYearPrice(tariff.price, tariff.period_days, discount);
                         return (
                           <>
                             <span className="text-4xl font-display font-bold text-foreground">{fmt(year)}</span>
@@ -143,8 +147,14 @@ const PricingSection = ({ onCtaClick, trialDays, tariffs: loaded }: { onCtaClick
                         <span className="text-4xl font-display font-bold text-foreground">
                           {tariff.price > 0 ? fmt(tariff.price) : 'Бесплатно'}
                         </span>
-                        {tariff.price > 0 && <span className="text-muted-foreground text-sm"> / мес</span>}
+                        {tariff.price > 0 && <span className="text-muted-foreground text-sm"> / {periodLabel(tariff.period_days)}</span>}
                       </>
+                    )}
+                    {tariff.price > 0 && trialOf(tariff) > 0 && (
+                      <div className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-success/15 px-2.5 py-0.5 text-xs font-medium text-success">
+                        <Icon name="Gift" size={12} />
+                        {pluralDays(trialOf(tariff))} бесплатно
+                      </div>
                     )}
                   </div>
 
@@ -177,7 +187,7 @@ const PricingSection = ({ onCtaClick, trialDays, tariffs: loaded }: { onCtaClick
                       onCtaClick();
                     }}
                   >
-                    Попробовать {trialLabel} бесплатно
+                    {trialOf(tariff) > 0 ? `Попробовать ${pluralDays(trialOf(tariff))} бесплатно` : tariff.price > 0 ? 'Подключить' : `Попробовать ${trialLabel} бесплатно`}
                   </Button>
                 </CardContent>
               </Card>

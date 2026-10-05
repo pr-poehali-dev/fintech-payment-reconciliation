@@ -34,7 +34,8 @@ const Landing = () => {
     return () => clearTimeout(timer);
   }, [hash, tariffs]);
 
-  const trialDays = tariffs?.find((t) => t.slug === 'trial')?.period_days || DEFAULT_TRIAL_DAYS;
+  const trialTariff = tariffs?.find((t) => t.slug === 'trial');
+  const trialDays = trialTariff?.trial_days || trialTariff?.period_days || DEFAULT_TRIAL_DAYS;
 
   const handleCtaClick = () => {
     navigate('/login');

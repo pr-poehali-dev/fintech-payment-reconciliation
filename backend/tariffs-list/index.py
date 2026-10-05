@@ -45,7 +45,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     try:
         cur.execute('''
             SELECT slug, name, description, price, billing_period,
-                   max_companies, max_users, max_integrations, features, period_days, yearly_discount_percent
+                   max_companies, max_users, max_integrations, features, period_days, yearly_discount_percent, trial_days
             FROM tariffs
             WHERE is_active = true
             ORDER BY sort_order
@@ -64,7 +64,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 'max_integrations': row[7],
                 'features': row[8],
                 'period_days': row[9],
-                'yearly_discount_percent': float(row[10] or 0)
+                'yearly_discount_percent': float(row[10] or 0),
+                'trial_days': row[11] or 0
             })
 
         return {

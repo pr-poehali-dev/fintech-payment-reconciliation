@@ -42,7 +42,7 @@ def list_tariffs(cur):
         SELECT t.id, t.slug, t.name, t.description, t.price, t.billing_period, t.is_active,
                t.modules, t.max_users, t.max_integrations, t.max_automations,
                t.period_days, t.yearly_discount_percent, t.max_companies,
-               (SELECT COUNT(*) FROM {SCHEMA}.subscriptions s WHERE s.tariff_id = t.id)
+               (SELECT COUNT(*) FROM {SCHEMA}.subscriptions s WHERE s.tariff_id = t.id), t.trial_days
         FROM {SCHEMA}.tariffs t ORDER BY t.sort_order, t.id
     ''')
     return [{
@@ -50,7 +50,7 @@ def list_tariffs(cur):
         'billing_period': r[5], 'is_active': r[6], 'modules': r[7] or [],
         'max_users': r[8], 'max_integrations': r[9], 'max_automations': r[10],
         'period_days': r[11], 'yearly_discount_percent': float(r[12]), 'max_companies': r[13],
-        'companies_count': r[14]
+        'companies_count': r[14], 'trial_days': r[15] or 0
     } for r in cur.fetchall()]
 
 
@@ -69,8 +69,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     Тарифы платформы для админки (только администраторы платформы).
     GET ?requester_user_id= - тарифы с модулями и лимитами
     POST {action: "save", requester_user_id, id, name, price, is_active, modules[],
-          max_companies, max_users, max_integrations, max_automations, period_days, yearly_discount_percent}
-          - пустой лимит = без ограничения; period_days - срок действия (пробный - дни триала)
+          max_companies, max_users, max_integrations, max_automations, period_days, yearly_discount_percent, trial_days}
+          - пустой лимит = без ограничения; period_days - оплачиваемый срок, trial_days - пробный период (0 - нет)
     POST {action: "set_company_tariff", requester_user_id, company_id, tariff_id} - сменить тариф компании
     POST {action: "extend_subscription", requester_user_id, company_id, period: tariff|year} - продлить подписку
     '''
@@ -119,7 +119,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             if period not in ('tariff', 'year'):
                 return respond(400, {'error': 'Срок продления: тариф или год'})
             cur.execute(f'''
-                SELECT s.id, t.slug, t.period_days FROM {SCHEMA}.subscriptions s
+                SELECT s.id, t.slug, CASE WHEN t.slug = 'trial' AND t.trial_days > 0 THEN t.trial_days ELSE t.period_days END
+                FROM {SCHEMA}.subscriptions s
                 JOIN {SCHEMA}.tariffs t ON t.id = s.tariff_id
                 WHERE s.company_id = %s
             ''', (company_id,))
@@ -156,20 +157,23 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 price = float(body.get('price') or 0)
                 period_days = int(body.get('period_days') or 0)
                 discount = float(body.get('yearly_discount_percent') or 0)
+                trial_days = int(body.get('trial_days') or 0)
             except (TypeError, ValueError):
                 return respond(400, {'error': 'Лимиты, цена, срок и скидка - неотрицательные числа'})
             if period_days < 1:
                 return respond(400, {'error': 'Срок действия - не меньше 1 дня'})
+            if not 0 <= trial_days <= 365:
+                return respond(400, {'error': 'Пробный период - от 0 до 365 дней'})
             if not 0 <= discount < 100:
                 return respond(400, {'error': 'Скидка за год - от 0 до 99%'})
             modules = [m for m in body.get('modules') or [] if m in MODULES]
             cur.execute(f'''
                 UPDATE {SCHEMA}.tariffs SET name = %s, price = %s, is_active = %s, modules = %s,
                        max_companies = %s, max_users = %s, max_integrations = %s, max_automations = %s,
-                       period_days = %s, yearly_discount_percent = %s, updated_at = NOW()
+                       period_days = %s, yearly_discount_percent = %s, trial_days = %s, updated_at = NOW()
                 WHERE id = %s RETURNING id
             ''', (name, price, bool(body.get('is_active', True)), json.dumps(modules), *limits,
-                  period_days, discount, body['id']))
+                  period_days, discount, trial_days, body['id']))
             if not cur.fetchone():
                 return respond(404, {'error': 'Тариф не найден'})
             conn.commit()

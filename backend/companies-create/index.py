@@ -154,7 +154,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             (company_id, user_id, role_id, 'active')
         )
 
-        cur.execute("SELECT id, period_days FROM tariffs WHERE slug = 'trial'")
+        cur.execute("SELECT id, CASE WHEN trial_days > 0 THEN trial_days ELSE period_days END FROM tariffs WHERE slug = 'trial'")
         tariff_row = cur.fetchone()
 
         if tariff_row:

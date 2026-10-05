@@ -10,6 +10,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { APP_MODULES } from '@/config/modules';
 import functionUrls from '../../../backend/func2url.json';
+import { discountedYearPrice, fullYearPrice } from '@/lib/tariffPricing';
 
 const api = (functionUrls as Record<string, string>)['admin-tariffs'];
 
@@ -26,6 +27,7 @@ interface Tariff {
   max_automations: number | null;
   period_days: number;
   yearly_discount_percent: number;
+  trial_days: number;
   companies_count: number;
 }
 
@@ -36,8 +38,16 @@ const LIMITS: { key: 'max_companies' | 'max_users' | 'max_integrations' | 'max_a
   { key: 'max_automations', label: 'Автоматизации', icon: 'Workflow' }
 ];
 
-// Цена за год со скидкой - округляем до рубля.
-const yearPrice = (t: Tariff) => Math.round(t.price * 12 * (1 - t.yearly_discount_percent / 100));
+const yearPrice = (t: Tariff) => discountedYearPrice(t.price, t.period_days, t.yearly_discount_percent);
+
+const NumberRow = ({ icon, label, value, unit, onChange }: { icon: string; label: string; value: number; unit: string; onChange: (v: string) => void }) => (
+  <div className="flex items-center gap-3 text-sm">
+    <Icon name={icon} size={16} className="text-muted-foreground" />
+    <span className="flex-1">{label}</span>
+    <Input value={String(value)} onChange={(e) => onChange(e.target.value)} className="h-8 w-20 text-right" />
+    <span className="w-8 text-xs text-muted-foreground">{unit}</span>
+  </div>
+);
 
 const TariffCard = ({ tariff, onSave }: { tariff: Tariff; onSave: (t: Tariff) => Promise<boolean> }) => {
   const [draft, setDraft] = useState<Tariff>(tariff);
@@ -116,34 +126,32 @@ const TariffCard = ({ tariff, onSave }: { tariff: Tariff; onSave: (t: Tariff) =>
 
         <div className="space-y-2">
           <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Срок и оплата</div>
-          <div className="flex items-center gap-3 text-sm">
-            <Icon name="CalendarDays" size={16} className="text-muted-foreground" />
-            <span className="flex-1">{draft.slug === 'trial' ? 'Пробный период' : 'Срок действия'}</span>
-            <Input
-              value={String(draft.period_days)}
-              onChange={(e) => setDraft({ ...draft, period_days: Number(e.target.value.replace(/\D/g, '')) || 0 })}
-              className="h-8 w-20 text-right"
-            />
-            <span className="w-8 text-xs text-muted-foreground">дн.</span>
-          </div>
-          {draft.slug !== 'trial' && (
-            <>
-              <div className="flex items-center gap-3 text-sm">
-                <Icon name="Percent" size={16} className="text-muted-foreground" />
-                <span className="flex-1">Скидка при оплате за год</span>
-                <Input
-                  value={String(draft.yearly_discount_percent)}
-                  onChange={(e) => setDraft({ ...draft, yearly_discount_percent: Math.min(99, Number(e.target.value.replace(/[^\d.]/g, '')) || 0) })}
-                  className="h-8 w-20 text-right"
-                />
-                <span className="w-8 text-xs text-muted-foreground">%</span>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                За год: {yearPrice(draft).toLocaleString('ru-RU')} ₽
-                {draft.yearly_discount_percent > 0 && ` вместо ${(draft.price * 12).toLocaleString('ru-RU')} ₽`}
-              </p>
-            </>
-          )}
+          <NumberRow
+            icon="CalendarDays"
+            label="Срок действия"
+            value={draft.period_days}
+            unit="дн."
+            onChange={(v) => setDraft({ ...draft, period_days: Number(v.replace(/\D/g, '')) || 0 })}
+          />
+          <NumberRow
+            icon="Gift"
+            label="Пробный период"
+            value={draft.trial_days}
+            unit="дн."
+            onChange={(v) => setDraft({ ...draft, trial_days: Math.min(365, Number(v.replace(/\D/g, '')) || 0) })}
+          />
+          <NumberRow
+            icon="Percent"
+            label="Скидка при оплате за год"
+            value={draft.yearly_discount_percent}
+            unit="%"
+            onChange={(v) => setDraft({ ...draft, yearly_discount_percent: Math.min(99, Number(v.replace(/[^\d.]/g, '')) || 0) })}
+          />
+          <p className="text-xs text-muted-foreground">
+            {draft.trial_days > 0 ? `Пробный период: ${draft.trial_days} дн. бесплатно. ` : 'Без пробного периода. '}
+            За год: {yearPrice(draft).toLocaleString('ru-RU')} ₽
+            {draft.yearly_discount_percent > 0 && ` вместо ${Math.round(fullYearPrice(draft.price, draft.period_days)).toLocaleString('ru-RU')} ₽`}
+          </p>
         </div>
 
         <Button className="mt-auto" onClick={save} disabled={!changed || isSaving}>
