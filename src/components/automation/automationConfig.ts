@@ -122,6 +122,13 @@ export const MAPPING_FIELDS: { key: string; label: string; required?: boolean; h
   { key: 'customer_inn', label: 'ИНН покупателя' }
 ];
 
+// Поставщик агентского чека из полей CRM (наименование, ИНН, телефоны).
+export const AGENT_MAPPING_FIELDS: { key: string; label: string; agentKey: string }[] = [
+  { key: 'agent_supplier_name', label: 'Наименование поставщика', agentKey: 'supplier_name' },
+  { key: 'agent_supplier_inn', label: 'ИНН поставщика', agentKey: 'supplier_inn' },
+  { key: 'agent_supplier_phones', label: 'Телефоны поставщика', agentKey: 'supplier_phones' }
+];
+
 export const DEFAULT_CRM_MAPPING: Record<string, unknown> = {
   entity: 'deal',
   pipeline: '',

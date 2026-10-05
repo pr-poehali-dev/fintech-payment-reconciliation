@@ -69,11 +69,11 @@ export const agentAsk = (template: ActionTemplateOption | undefined) => {
 };
 
 // Незаполненные обязательные и ошибочные поля - для блокировки кнопки «Сохранить».
-export const agentProblems = (template: ActionTemplateOption | undefined, values: AgentValues = {}) =>
+export const agentProblems = (template: ActionTemplateOption | undefined, values: AgentValues = {}, fromCrm: string[] = []) =>
   agentAsk(template).flatMap((g) => g.fields.flatMap((f) => {
     const v = asText(values[f.key]).trim();
     const name = `${g.title.toLowerCase()}: ${f.label.toLowerCase()}`;
-    if (f.required && !v) return [name];
+    if (f.required && !v && !fromCrm.includes(f.key)) return [name];
     if ((f.inn && innError(v)) || (f.phones && phonesError(v))) return [name];
     return [];
   }));
@@ -82,9 +82,10 @@ interface ScenarioAgentBlockProps {
   template: ActionTemplateOption;
   values: AgentValues;
   onChange: (values: AgentValues) => void;
+  fromCrm?: string[];
 }
 
-const ScenarioAgentBlock = ({ template, values, onChange }: ScenarioAgentBlockProps) => {
+const ScenarioAgentBlock = ({ template, values, onChange, fromCrm = [] }: ScenarioAgentBlockProps) => {
   const v5 = template.protocol_version === 'v5';
   const base = template.agent_settings || {};
   const typeLabel = AGENT_TYPE_OPTIONS.find((o) => o.value === base.agent_type)?.label || String(base.agent_type || '—');
@@ -105,11 +106,18 @@ const ScenarioAgentBlock = ({ template, values, onChange }: ScenarioAgentBlockPr
             {g.fields.map((f) => {
               const v = asText(values[f.key]);
               const error = (f.inn && innError(v)) || (f.phones && phonesError(v)) || null;
+              const crm = fromCrm.includes(f.key);
               return (
                 <div key={f.key} className={`space-y-1 ${f.phones || f.key.endsWith('address') ? 'sm:col-span-2' : ''}`}>
                   <Label className="text-xs">
                     {f.label}
-                    {f.required ? <span className="text-destructive"> *</span> : <span className="text-muted-foreground"> (необязательно)</span>}
+                    {crm ? (
+                      <span className="text-primary"> · из CRM</span>
+                    ) : f.required ? (
+                      <span className="text-destructive"> *</span>
+                    ) : (
+                      <span className="text-muted-foreground"> (необязательно)</span>
+                    )}
                   </Label>
                   <Input
                     value={v}
@@ -120,6 +128,8 @@ const ScenarioAgentBlock = ({ template, values, onChange }: ScenarioAgentBlockPr
                   />
                   {error ? (
                     <p className="text-xs text-destructive">{error}</p>
+                  ) : crm ? (
+                    <p className="text-xs text-muted-foreground">Берём из сделки. Здесь — запасное значение, если поле в сделке пустое</p>
                   ) : f.phones ? (
                     <p className="text-xs text-muted-foreground">Несколько — через запятую</p>
                   ) : null}

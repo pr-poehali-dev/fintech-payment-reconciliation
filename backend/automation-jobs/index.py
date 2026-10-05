@@ -138,6 +138,8 @@ def process_job(cur, job: Dict[str, Any]) -> str:
             continue
         scenario['template'][key] = value
     # Агентские поля: пустые в шаблоне (наименование/ИНН/телефоны поставщика и т.д.) - из сценария.
+    if isinstance(scenario['template'].get('agent_settings'), dict):
+        scenario['template']['agent_template'] = dict(scenario['template']['agent_settings'])
     agent_extra = (r[27] or {}).get('agent')
     if isinstance(agent_extra, dict) and isinstance(scenario['template'].get('agent_settings'), dict):
         merged = dict(scenario['template']['agent_settings'])

@@ -80,8 +80,10 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         if err:
             return respond(200, {'success': False, 'error': err})
         refs = {k: mapping.get(k) for k in ('order_id', 'amount', 'customer_email', 'customer_phone',
-                                              'customer_name', 'customer_inn')}
+                                              'customer_name', 'customer_inn', 'agent_supplier_name',
+                                              'agent_supplier_inn')}
         values = {k: bitrix_crm.resolve(record, entity, ref) for k, ref in refs.items()}
+        values['agent_supplier_phones'] = ', '.join(bitrix_crm.resolve_all(record, entity, mapping.get('agent_supplier_phones'))) or None
         main = record[entity]
         data, build_error, note = bitrix_crm.build_data(record, entity, mapping)
         return respond(200, {

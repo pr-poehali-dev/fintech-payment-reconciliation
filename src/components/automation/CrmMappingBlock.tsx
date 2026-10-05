@@ -12,6 +12,7 @@ import {
   FixedItem,
   ItemsMode,
   ITEMS_MODES,
+  AGENT_MAPPING_FIELDS,
   MAPPING_FIELDS,
   VAT_OPTIONS
 } from './automationConfig';
@@ -21,6 +22,7 @@ interface CrmMappingBlockProps {
   integrationId: number;
   mapping: Record<string, unknown>;
   onChange: (mapping: Record<string, unknown>) => void;
+  agentReceipt?: boolean;
 }
 
 interface TestResult {
@@ -41,7 +43,7 @@ const api = (functionUrls as Record<string, string>)['crm-fields'];
 // Кеш справочника на время сессии: при повторном открытии диалога Битрикс24 не дёргаем.
 const metaCache: Record<number, CrmMeta> = {};
 
-const CrmMappingBlock = ({ companyId, integrationId, mapping, onChange }: CrmMappingBlockProps) => {
+const CrmMappingBlock = ({ companyId, integrationId, mapping, onChange, agentReceipt }: CrmMappingBlockProps) => {
   const [meta, setMeta] = useState<CrmMeta | null>(metaCache[integrationId] || null);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -84,7 +86,7 @@ const CrmMappingBlock = ({ companyId, integrationId, mapping, onChange }: CrmMap
   const setEntity = (value: CrmEntity) => {
     const swap = (ref: unknown) => (typeof ref === 'string' && ref.startsWith(`${entity}.`) ? ref.replace(`${entity}.`, `${value}.`) : ref);
     const next: Record<string, unknown> = { ...mapping, entity: value, pipeline: '', stage: '' };
-    MAPPING_FIELDS.forEach((f) => { next[f.key] = swap(mapping[f.key]); });
+    [...MAPPING_FIELDS, ...AGENT_MAPPING_FIELDS].forEach((f) => { next[f.key] = swap(mapping[f.key]); });
     if (value === 'lead' && next.order_id === 'lead.ID') next.single_item_name = 'Оплата по заявке №{ID}';
     onChange(next);
     setTest(null);
@@ -212,6 +214,24 @@ const CrmMappingBlock = ({ companyId, integrationId, mapping, onChange }: CrmMap
         ))}
       </div>
 
+      {agentReceipt && (
+        <div className="space-y-2 rounded-lg border border-border p-3">
+          <div className="text-sm font-medium">Агентский чек: поставщик</div>
+          <p className="text-xs text-muted-foreground">Если поле не выбрано или пустое в сделке — возьмём значение из шаблона или блока «Агентский чек»</p>
+          {AGENT_MAPPING_FIELDS.map((f) => (
+            <div key={f.key} className="grid grid-cols-[1fr_1.4fr] items-center gap-3">
+              <span className="text-sm">{f.label}</span>
+              <CrmFieldPicker
+                value={String(mapping[f.key] || '')}
+                onChange={(ref) => set({ [f.key]: ref })}
+                fields={meta.fields}
+                entities={entities}
+              />
+            </div>
+          ))}
+        </div>
+      )}
+
       <div className="space-y-3 rounded-lg border border-border p-3">
         <div className="text-sm font-medium">Состав чека</div>
         <div className="grid grid-cols-3 gap-2">
@@ -301,7 +321,7 @@ const CrmMappingBlock = ({ companyId, integrationId, mapping, onChange }: CrmMap
               Стадия {test.stage} — {test.stage_matches ? 'документ будет создан' : 'сделка из другой воронки'}
             </div>
             <div className="space-y-1 rounded-md bg-background/60 p-2 text-xs">
-              {MAPPING_FIELDS.map((f) => (
+              {[...MAPPING_FIELDS, ...(agentReceipt ? AGENT_MAPPING_FIELDS : [])].map((f) => (
                 <div key={f.key} className="flex justify-between gap-3">
                   <span className="text-muted-foreground">{f.label}</span>
                   <span className={`truncate text-right ${test.values?.[f.key] ? '' : 'text-muted-foreground'}`}>{test.values?.[f.key] || '—'}</span>

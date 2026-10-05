@@ -10,6 +10,7 @@ import CrmMappingBlock from './CrmMappingBlock';
 import ScenarioAgentBlock, { agentProblems } from './ScenarioAgentBlock';
 import {
   ACTIONS,
+  AGENT_MAPPING_FIELDS,
   ActionTemplate,
   ActionTemplateOption,
   ActionType,
@@ -127,12 +128,16 @@ const ScenarioDialog = ({ open, onOpenChange, scenario, prefill, integrations, t
         askName && !cs.correction_base_name?.trim() && 'описание коррекции'
       ].filter(Boolean)
     : [];
-  const isAgent = form.action_type === 'create_receipt' && currentTemplate?.receipt_type === 'agent';
-  const agentMissing = isAgent ? agentProblems(currentTemplate, cs.agent) : [];
-  let step = 1;
-
   const sourceIntegration = integrations.find((i) => i.id === form.source_integration_id);
   const isBitrix = sourceIntegration?.providerSlug === 'bitrix24';
+  const isAgent = form.action_type === 'create_receipt' && currentTemplate?.receipt_type === 'agent';
+  // Поля поставщика, сопоставленные с CRM, в блоке «Агентский чек» не обязательны.
+  const agentFromCrm = isAgent && trigger.needsMapping && isBitrix
+    ? AGENT_MAPPING_FIELDS.filter((f) => String(form.field_mapping[f.key] || '').trim()).map((f) => f.agentKey)
+    : [];
+  const agentMissing = isAgent ? agentProblems(currentTemplate, cs.agent, agentFromCrm) : [];
+  let step = 1;
+
   const missingMapping = trigger.needsMapping
     ? MAPPING_FIELDS.filter((f) => f.required && !String(form.field_mapping[f.key] || '').trim())
     : [];
@@ -337,6 +342,7 @@ const ScenarioDialog = ({ open, onOpenChange, scenario, prefill, integrations, t
                 template={currentTemplate}
                 values={cs.agent || {}}
                 onChange={(agent) => setCs({ agent })}
+                fromCrm={agentFromCrm}
               />
               {agentMissing.length > 0 && (
                 <p className="text-xs text-destructive">Заполните или исправьте: {agentMissing.join(', ')}</p>
@@ -412,6 +418,7 @@ const ScenarioDialog = ({ open, onOpenChange, scenario, prefill, integrations, t
                     integrationId={form.source_integration_id}
                     mapping={form.field_mapping}
                     onChange={(m) => setForm({ ...form, field_mapping: m })}
+                    agentReceipt={isAgent}
                   />
                 </>
               ) : (

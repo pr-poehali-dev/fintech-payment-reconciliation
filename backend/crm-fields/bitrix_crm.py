@@ -187,6 +187,24 @@ def resolve(record: Dict[str, Any], entity: str, ref: Optional[str]) -> Optional
     return str(value).strip()
 
 
+def resolve_all(record: Dict[str, Any], entity: str, ref: Optional[str]) -> List[str]:
+    '''Все значения поля (для телефонов: мультиполе PHONE или строка через запятую) в формате +7...'''
+    if not ref:
+        return []
+    source, _, code = ref.partition('.') if '.' in ref else (entity, '', ref)
+    data = record.get(source)
+    value = data.get(code) if isinstance(data, dict) else None
+    raw = [v.get('VALUE') if isinstance(v, dict) else v for v in value] if isinstance(value, list) else [value]
+    phones = []
+    for part in ','.join(str(v) for v in raw if v not in (None, '', False)).split(','):
+        digits = re.sub(r'\D', '', part)
+        if len(digits) == 11 and digits[0] == '8':
+            digits = '7' + digits[1:]
+        if 10 <= len(digits) <= 19 and f'+{digits}' not in phones:
+            phones.append(f'+{digits}')
+    return phones
+
+
 def _number(value: Any) -> Optional[float]:
     if value in (None, ''):
         return None
@@ -293,12 +311,20 @@ def build_data(record: Dict[str, Any], entity: str, mapping: Dict[str, Any]) -> 
             digits = '7' + digits[1:]
         customer['phone'] = f'+{digits}' if digits else None
 
+    # Поставщик агентского чека из полей CRM (если поля сопоставлены в сценарии).
+    agent = {
+        'supplier_name': resolve(record, entity, mapping.get('agent_supplier_name')),
+        'supplier_inn': re.sub(r'\D', '', resolve(record, entity, mapping.get('agent_supplier_inn')) or '') or None,
+        'supplier_phones': resolve_all(record, entity, mapping.get('agent_supplier_phones')),
+    }
+
     order_id = resolve(record, entity, mapping.get('order_id')) or str(main.get('ID'))
     data = {
         'items': items,
         'items_format': 'atol',
         'items_source': 'Битрикс24',
         'customer': {k: v for k, v in customer.items() if v},
+        'agent': {k: v for k, v in agent.items() if v},
         'payment': {'created_at': paid_at or datetime.now(MSK).isoformat(), 'amount': total},
         'crm': {
             'entity': entity, 'id': str(main.get('ID')), 'title': main.get('TITLE'),

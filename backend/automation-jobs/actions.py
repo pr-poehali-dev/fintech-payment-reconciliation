@@ -100,15 +100,21 @@ def correction_info(template: Dict[str, Any], data: Dict[str, Any]) -> Tuple[Opt
     return info, ''
 
 
-def agent_blocks(template: Dict[str, Any]) -> Tuple[Optional[Dict[str, Any]], Optional[Dict[str, Any]]]:
+def agent_blocks(template: Dict[str, Any], crm: Optional[Dict[str, Any]] = None) -> Tuple[Optional[Dict[str, Any]], Optional[Dict[str, Any]]]:
     '''
     Агентский чек по АТОЛ Онлайн: agent_info (признак агента + платёжный агент,
     оператор по приёму платежей, оператор перевода) и supplier_info (поставщик).
+    Поставщик: заданное в шаблоне > поле из CRM (сделка) > введённое в сценарии.
     Returns: (agent_info, supplier_info) - пустые блоки и поля не передаём.
     '''
     a = template.get('agent_settings')
     if template.get('receipt_type') != 'agent' or not isinstance(a, dict) or not a.get('agent_type'):
         return None, None
+    a = dict(a)
+    base = template.get('agent_template') or {}
+    for key, value in (crm or {}).items():
+        if value and base.get(key) in (None, '', []):
+            a[key] = value
     clean = lambda d: {k: v for k, v in d.items() if v}
     agent = {'type': a['agent_type']}
     paying = clean({'operation': a.get('paying_agent_operation'), 'phones': a.get('paying_agent_phones')})
@@ -125,14 +131,14 @@ def agent_blocks(template: Dict[str, Any]) -> Tuple[Optional[Dict[str, Any]], Op
     return agent, supplier or None
 
 
-def apply_agent(receipt: Dict[str, Any], template: Dict[str, Any]) -> None:
+def apply_agent(receipt: Dict[str, Any], template: Dict[str, Any], crm: Optional[Dict[str, Any]] = None) -> None:
     '''
     Раскладывает агентские данные по версии протокола:
     v4 (ФФД 1.05) - agent_info и телефоны поставщика общие на весь чек (receipt.agent_info,
         receipt.supplier_info), наименование и ИНН поставщика - в supplier_info каждой позиции;
     v5 (ФФД 1.2) - agent_info и supplier_info (телефоны, наименование, ИНН) в каждой позиции.
     '''
-    agent, supplier = agent_blocks(template)
+    agent, supplier = agent_blocks(template, crm)
     if not agent:
         return
     supplier = supplier or {}
@@ -311,7 +317,7 @@ def create_order(cur, job: Dict[str, Any], scenario: Dict[str, Any], data: Dict[
     }
     if correction:
         body['receipt']['correction_info'] = correction
-    apply_agent(body['receipt'], template)
+    apply_agent(body['receipt'], template, data.get('agent'))
     notify_url = callback_url(cur, job.get('company_id'))
     if notify_url:
         body['service'] = {'callback_url': notify_url}
@@ -421,7 +427,7 @@ def create_receipt(cur, job: Dict[str, Any], scenario: Dict[str, Any], data: Dic
     }
     if template.get('cashier_name'):
         body['receipt']['cashier'] = template['cashier_name']
-    apply_agent(body['receipt'], template)
+    apply_agent(body['receipt'], template, data.get('agent'))
     if correction:
         r = body.pop('receipt')
         is_v5 = kassa['protocol_version'] == 'v5'
