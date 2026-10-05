@@ -10,6 +10,7 @@ export interface Banner {
   button_text: string;
   button_url: string;
   variant: BannerVariant;
+  is_active?: boolean;
   updated_at?: string | null;
 }
 

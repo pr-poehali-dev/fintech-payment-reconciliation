@@ -468,11 +468,11 @@ BANNER_VARIANTS = ('info', 'warning', 'danger', 'success')
 
 def load_banners(cur, only_active: bool = False) -> List[Dict[str, Any]]:
     cur.execute(f'''
-        SELECT page, text, button_text, button_url, variant, updated_at FROM {SCHEMA}.platform_banners
-        {"WHERE btrim(text) <> ''" if only_active else ''}
+        SELECT page, text, button_text, button_url, variant, updated_at, is_active FROM {SCHEMA}.platform_banners
+        {"WHERE is_active AND btrim(text) <> ''" if only_active else ''}
     ''')
     return [{'page': r[0], 'text': r[1], 'button_text': r[2], 'button_url': r[3], 'variant': r[4],
-             'updated_at': r[5].isoformat() if r[5] else None} for r in cur.fetchall()]
+             'updated_at': r[5].isoformat() if r[5] else None, 'is_active': bool(r[6])} for r in cur.fetchall()]
 
 
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
@@ -483,7 +483,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     GET ?public=1 - номер счётчика Яндекс Метрики (без авторизации)
     GET ?banners=1 - баннеры с текстом для страниц кабинета (без авторизации)
     GET ?requester_user_id=&section=banners - все баннеры для редактирования
-    POST {action: "save_banner", requester_user_id, page, text, button_text, button_url, variant}
+    POST {action: "save_banner", requester_user_id, page, text, button_text, button_url, variant, is_active}
     POST {action: "save", requester_user_id, managing_company_id, cron_enabled, metrika_counter_id}
     GET ?requester_user_id=&section=admins - сотрудники компании платформы и доступ к админке
     POST {action: "set_admin", requester_user_id, user_id, enabled} - дать/забрать доступ (только владелец)
@@ -539,13 +539,13 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             if url and not re.match(r'^(https?://|/)', url):
                 return respond(400, {'error': 'Ссылка должна начинаться с https:// или /'})
             cur.execute(f'''
-                INSERT INTO {SCHEMA}.platform_banners (page, text, button_text, button_url, variant, updated_by, updated_at)
-                VALUES (%s, %s, %s, %s, %s, %s, NOW())
+                INSERT INTO {SCHEMA}.platform_banners (page, text, button_text, button_url, variant, is_active, updated_by, updated_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, NOW())
                 ON CONFLICT (page) DO UPDATE SET text = EXCLUDED.text, button_text = EXCLUDED.button_text,
-                    button_url = EXCLUDED.button_url, variant = EXCLUDED.variant,
+                    button_url = EXCLUDED.button_url, variant = EXCLUDED.variant, is_active = EXCLUDED.is_active,
                     updated_by = EXCLUDED.updated_by, updated_at = NOW()
             ''', (page, str(body.get('text') or '').strip()[:2000], str(body.get('button_text') or '').strip()[:80],
-                  url, variant, requester))
+                  url, variant, body.get('is_active') is not False, requester))
             conn.commit()
             return respond(200, {'success': True, 'banners': load_banners(cur), 'pages': BANNER_PAGES})
 
