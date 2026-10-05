@@ -3,6 +3,8 @@ export interface AppModule {
   name: string;
   icon: string;
   hidden?: boolean;
+  // Служебная страница, открыта всем: не настраивается ни в тарифах, ни в ролях.
+  alwaysOpen?: boolean;
 }
 
 export const APP_MODULES: AppModule[] = [
@@ -13,8 +15,14 @@ export const APP_MODULES: AppModule[] = [
   { id: 'integrations', name: 'Интеграции', icon: 'Plug' },
   { id: 'access', name: 'Доступ', icon: 'Users' },
   { id: 'settings', name: 'Настройки', icon: 'Settings', hidden: true },
-  { id: 'subscription', name: 'Подписка', icon: 'CreditCard', hidden: true }
+  { id: 'subscription', name: 'Подписка', icon: 'CreditCard', hidden: true, alwaysOpen: true }
 ];
+
+// Разделы, которые включаются в тариф: без служебных страниц («Настройки», «Подписка») - они открыты всегда.
+export const TARIFF_MODULES = APP_MODULES.filter((m) => !m.hidden);
+
+// Разделы, которые настраиваются в роли сотрудника.
+export const ROLE_MODULES = APP_MODULES.filter((m) => !m.alwaysOpen);
 
 // Разделы, доступные роли сотрудника в компании, в порядке меню. Если права
 // роли ещё не загрузились (старый кэш входа), ничего не скрываем.
@@ -53,7 +61,7 @@ export const effectiveModules = (company?: { role_modules?: string[]; tariff_mod
   const role = company?.role_modules;
   const tariff = company?.tariff_modules;
   if (!role && !tariff) return undefined;
-  return APP_MODULES.map((m) => m.id).filter(
-    (id) => (!role || role.includes(id)) && (!tariff || tariff.includes(id))
-  );
+  return APP_MODULES.filter(
+    (m) => (m.alwaysOpen || !role || role.includes(m.id)) && (m.hidden || !tariff || tariff.includes(m.id))
+  ).map((m) => m.id);
 };

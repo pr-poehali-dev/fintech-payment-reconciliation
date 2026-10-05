@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import Icon from '@/components/ui/icon';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
-import { APP_MODULES } from '@/config/modules';
+import { TARIFF_MODULES } from '@/config/modules';
 import functionUrls from '../../../backend/func2url.json';
 import { discountedYearPrice, fullYearPrice } from '@/lib/tariffPricing';
 
@@ -98,7 +98,7 @@ const TariffCard = ({ tariff, onSave }: { tariff: Tariff; onSave: (t: Tariff) =>
       <CardContent className="flex flex-1 flex-col gap-5">
         <div className="space-y-2">
           <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Модули</div>
-          {APP_MODULES.map((m) => (
+          {TARIFF_MODULES.map((m) => (
             <label key={m.id} className="flex items-center gap-3 text-sm">
               <Checkbox checked={draft.modules.includes(m.id)} onCheckedChange={(v) => toggleModule(m.id, Boolean(v))} />
               <Icon name={m.icon} size={16} className="text-muted-foreground" />

@@ -11,7 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { APP_MODULES } from '@/config/modules';
+import { ROLE_MODULES } from '@/config/modules';
 
 export interface RoleFormState {
   name: string;
@@ -120,7 +120,7 @@ const RoleEditorDialog = ({ open, onOpenChange, formState, onChange, onSubmit, i
           <div className="space-y-2">
             <Label>Доступные модули</Label>
             <div className="grid grid-cols-2 gap-3">
-              {APP_MODULES.map((module) => (
+              {ROLE_MODULES.map((module) => (
                 <div key={module.id} className="flex items-center gap-2">
                   <Switch
                     checked={formState.modules.includes(module.id)}
