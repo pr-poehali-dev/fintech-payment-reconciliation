@@ -87,7 +87,17 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 'id': r[0], 'tariff_name': r[1], 'period': r[2], 'days': r[3], 'amount': float(r[4]),
                 'status': r[5], 'period_end': r[6], 'created_at': r[7]
             } for r in cur.fetchall()]
-            return respond(200, {'success': True, 'tariffs': load_tariffs(cur),
+            cur.execute(f'''
+                SELECT t.modules, t.max_companies, t.max_users, t.max_integrations, t.max_automations
+                FROM {SCHEMA}.subscriptions s JOIN {SCHEMA}.tariffs t ON t.id = s.tariff_id
+                WHERE s.company_id = %s
+            ''', (company_id,))
+            r = cur.fetchone()
+            current = {
+                'modules': r[0] or [], 'max_companies': r[1], 'max_users': r[2],
+                'max_integrations': r[3], 'max_automations': r[4]
+            } if r else None
+            return respond(200, {'success': True, 'tariffs': load_tariffs(cur), 'current': current,
                                  'payments': payments, 'can_pay': can_pay})
 
         if method == 'POST' and body.get('action') == 'pay':

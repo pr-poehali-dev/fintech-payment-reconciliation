@@ -41,8 +41,31 @@ interface Payment {
 
 type Period = 'month' | 'year';
 
+interface CurrentPlan {
+  modules: string[];
+  max_companies: number | null;
+  max_users: number | null;
+  max_integrations: number | null;
+  max_automations: number | null;
+}
+
+type LimitKey = 'max_companies' | 'max_users' | 'max_integrations' | 'max_automations';
+
+const LIMITS: { key: LimitKey; label: string }[] = [
+  { key: 'max_companies', label: 'Компаний' },
+  { key: 'max_users', label: 'Пользователей' },
+  { key: 'max_integrations', label: 'Интеграций' },
+  { key: 'max_automations', label: 'Автоматизаций' }
+];
+
 const money = (n: number) => `${new Intl.NumberFormat('ru-RU').format(n)} ₽`;
-const limit = (n: number | null, label: string) => `${label}: ${n === null ? 'без ограничений' : n}`;
+
+// Прирост лимита относительно текущего тарифа: null - без ограничений.
+const limitGain = (next: number | null, cur: number | null | undefined) => {
+  if (cur === undefined || cur === null) return null;
+  if (next === null) return 'без ограничений';
+  return next > cur ? `+${next - cur}` : null;
+};
 
 const SubscriptionDialog = ({ open, onOpenChange, highlightModule }: SubscriptionDialogProps) => {
   const { currentCompany, refreshCompanies } = useAuth();
@@ -50,6 +73,7 @@ const SubscriptionDialog = ({ open, onOpenChange, highlightModule }: Subscriptio
   const [tariffs, setTariffs] = useState<PlanTariff[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [canPay, setCanPay] = useState(false);
+  const [current, setCurrent] = useState<CurrentPlan | null>(null);
   const [period, setPeriod] = useState<Period>('month');
   const [selected, setSelected] = useState<string | null>(null);
   const [paying, setPaying] = useState(false);
@@ -65,6 +89,7 @@ const SubscriptionDialog = ({ open, onOpenChange, highlightModule }: Subscriptio
         setTariffs(d.tariffs || []);
         setPayments(d.payments || []);
         setCanPay(Boolean(d.can_pay));
+        setCurrent(d.current || null);
       })
       .catch(() => undefined);
   };
@@ -212,24 +237,38 @@ const SubscriptionDialog = ({ open, onOpenChange, highlightModule }: Subscriptio
                       <div className="mt-3 flex flex-wrap gap-1.5">
                         {APP_MODULES.filter((m) => !m.hidden).map((m) => {
                           const on = t.modules.includes(m.id);
+                          const added = on && !isCurrent && current !== null && !current.modules.includes(m.id);
                           return (
                             <span
                               key={m.id}
+                              title={added ? 'Добавится к вашему тарифу' : undefined}
                               className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs ${
-                                on ? 'bg-primary/10 text-foreground' : 'bg-muted text-muted-foreground line-through'
+                                added
+                                  ? 'bg-success/15 text-success font-medium'
+                                  : on
+                                    ? 'bg-primary/10 text-foreground'
+                                    : 'bg-muted text-muted-foreground line-through'
                               }`}
                             >
-                              <Icon name={on ? 'Check' : 'X'} size={12} />
+                              <Icon name={added ? 'Plus' : on ? 'Check' : 'X'} size={12} />
                               {m.name}
                             </span>
                           );
                         })}
                       </div>
                       <ul className="mt-3 space-y-0.5 text-xs text-muted-foreground">
-                        <li>{limit(t.max_companies, 'Компаний')}</li>
-                        <li>{limit(t.max_users, 'Пользователей')}</li>
-                        <li>{limit(t.max_integrations, 'Интеграций')}</li>
-                        <li>{limit(t.max_automations, 'Автоматизаций')}</li>
+                        {LIMITS.map(({ key, label }) => {
+                          const gain = isCurrent ? null : limitGain(t[key], current?.[key]);
+                          return (
+                            <li key={key}>
+                              {label}: {t[key] === null ? 'без ограничений' : t[key]}
+                              {gain && gain !== 'без ограничений' && (
+                                <span className="ml-1.5 font-semibold text-success">{gain}</span>
+                              )}
+                              {gain === 'без ограничений' && <Icon name="ArrowUp" size={12} className="ml-1 inline text-success" />}
+                            </li>
+                          );
+                        })}
                       </ul>
                       {canPay && (
                         <Button
