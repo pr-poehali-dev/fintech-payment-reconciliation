@@ -132,7 +132,8 @@ def _handle(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             if not report_data or report_data.get('status') != RECEIPT_DONE_STATUS:
                 continue
 
-            receipt_id, total_sum, payment_provider = save_receipt_from_report(cur, cash_integration_id, company_id, uid, report_data)
+            receipt_id, total_sum, payment_provider = save_receipt_from_report(cur, cash_integration_id, company_id, uid, report_data,
+                                                                                 'cron' if body.get('cron_tick') else 'sync')
             if not receipt_id:
                 continue
 

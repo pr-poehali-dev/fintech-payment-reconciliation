@@ -173,7 +173,9 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         # Шаг 1: событие сразу попадает в inbox как есть, до какой-либо обработки -
         # это гарантирует, что даже при сбое обработчика сырые данные не потеряются.
         event_type = EVENT_TYPE_BY_PROVIDER.get(provider_slug, 'unknown')
-        event_id = save_event(cur, integration_id, company_id, provider_slug, event_type, webhook_data)
+        # Источник для ленты «События»: хук или подтянуто кроном вместо потерянного хука.
+        origin = 'recovery' if isinstance(webhook_data, dict) and webhook_data.get('source') == 'cron_recovery' else 'webhook'
+        event_id = save_event(cur, integration_id, company_id, provider_slug, event_type, webhook_data, origin)
         conn.commit()
 
         # Шаг 2: событие передаётся в обработчик именно своего провайдера.

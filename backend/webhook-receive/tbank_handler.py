@@ -114,8 +114,8 @@ def save_fiscal_receipt(cur, integration_id: int, company_id: int, webhook_data:
     cur.execute(f'''
         INSERT INTO {SCHEMA}.ecomkassa_receipts (
             integration_id, company_id, order_id, legacy_no, status, total_sum,
-            doc_number, doc_datetime, raw_data, order_type, source
-        ) VALUES (%s, %s, %s, %s, 'done', %s, %s, %s, %s, 'VCHR', 'tbank')
+            doc_number, doc_datetime, raw_data, order_type, source, origin
+        ) VALUES (%s, %s, %s, %s, 'done', %s, %s, %s, %s, 'VCHR', 'tbank', 'webhook')
         ON CONFLICT (integration_id, order_id) DO UPDATE SET
             total_sum = EXCLUDED.total_sum, doc_number = EXCLUDED.doc_number,
             doc_datetime = COALESCE(EXCLUDED.doc_datetime, {SCHEMA}.ecomkassa_receipts.doc_datetime),
@@ -242,8 +242,8 @@ def process(cur, integration_id: int, company_id: int, config: Dict[str, Any],
             integration_id, company_id, payment_id, terminal_key,
             amount, order_id, status, payment_status, error_code,
             customer_email, customer_phone, pan, card_type, exp_date,
-            raw_data
-        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            raw_data, origin
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'webhook')
         ON CONFLICT (integration_id, payment_id, status) DO NOTHING
         RETURNING id
     ''', (

@@ -189,8 +189,8 @@ def save_pending_order(cur, integration_id: int, company_id: Optional[int], orde
     raw['status'] = 'wait'
     cur.execute(f'''
         INSERT INTO {SCHEMA}.ecomkassa_receipts (
-            integration_id, company_id, order_id, legacy_no, status, total_sum, raw_data, order_type
-        ) VALUES (%s, %s, %s, %s, 'wait', %s, %s, 'CORD')
+            integration_id, company_id, order_id, legacy_no, status, total_sum, raw_data, order_type, origin
+        ) VALUES (%s, %s, %s, %s, 'wait', %s, %s, 'CORD', 'automation')
         ON CONFLICT (integration_id, order_id) DO UPDATE SET
             total_sum = COALESCE(EXCLUDED.total_sum, {SCHEMA}.ecomkassa_receipts.total_sum),
             raw_data = {SCHEMA}.ecomkassa_receipts.raw_data || EXCLUDED.raw_data

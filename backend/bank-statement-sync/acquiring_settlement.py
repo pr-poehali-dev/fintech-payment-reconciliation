@@ -97,8 +97,8 @@ def process_acquiring_settlements(cur, integration_id: int, company_id: int, pro
             INSERT INTO {SCHEMA}.bank_statement_transactions (
                 integration_id, company_id, provider_slug, external_transaction_id,
                 operation_date, amount, direction, counterparty_name, purpose,
-                parent_transaction_id, settlement_date, commission_amount, commission_source
-            ) VALUES (%s, %s, %s, %s, %s, %s, 'out', %s, %s, %s, %s, %s, 'purpose')
+                parent_transaction_id, settlement_date, commission_amount, commission_source, origin
+            ) VALUES (%s, %s, %s, %s, %s, %s, 'out', %s, %s, %s, %s, %s, 'purpose', 'sync')
             ON CONFLICT (integration_id, external_transaction_id) DO NOTHING
             RETURNING id
         ''', (

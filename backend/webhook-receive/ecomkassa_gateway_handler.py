@@ -157,8 +157,8 @@ def save_receipt_from_report(cur, integration_id: int, company_id: int, uid: str
     cur.execute('''
         INSERT INTO t_p83864310_fintech_payment_reco.ecomkassa_receipts (
             integration_id, company_id, order_id, legacy_no, status,
-            total_sum, doc_number, doc_datetime, raw_data, payment_provider, order_type
-        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            total_sum, doc_number, doc_datetime, raw_data, payment_provider, order_type, origin
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'webhook')
         ON CONFLICT (integration_id, order_id) DO UPDATE SET
             status = EXCLUDED.status,
             total_sum = EXCLUDED.total_sum,
@@ -211,8 +211,8 @@ def save_pending_order(cur, integration_id: int, company_id: int, uid: str,
     raw['status'] = 'wait'
     cur.execute('''
         INSERT INTO t_p83864310_fintech_payment_reco.ecomkassa_receipts (
-            integration_id, company_id, order_id, legacy_no, status, total_sum, raw_data, order_type
-        ) VALUES (%s, %s, %s, %s, 'wait', %s, %s, 'CORD')
+            integration_id, company_id, order_id, legacy_no, status, total_sum, raw_data, order_type, origin
+        ) VALUES (%s, %s, %s, %s, 'wait', %s, %s, 'CORD', 'webhook')
         ON CONFLICT (integration_id, order_id) DO UPDATE SET
             total_sum = COALESCE(EXCLUDED.total_sum, t_p83864310_fintech_payment_reco.ecomkassa_receipts.total_sum),
             raw_data = t_p83864310_fintech_payment_reco.ecomkassa_receipts.raw_data || EXCLUDED.raw_data
@@ -357,8 +357,8 @@ def process(cur, integration_id: int, company_id: int, config: Dict[str, Any],
             integration_id, company_id, payment_id, terminal_key,
             amount, order_id, status, payment_status, error_code,
             customer_email, customer_phone, pan, card_type, exp_date,
-            raw_data, receipt_id, payment_provider
-        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            raw_data, receipt_id, payment_provider, origin
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'webhook')
         ON CONFLICT (integration_id, payment_id, status) DO UPDATE SET
             receipt_id = COALESCE(EXCLUDED.receipt_id, t_p83864310_fintech_payment_reco.webhook_payments.receipt_id),
             payment_provider = COALESCE(EXCLUDED.payment_provider, t_p83864310_fintech_payment_reco.webhook_payments.payment_provider),

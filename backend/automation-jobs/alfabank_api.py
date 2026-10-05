@@ -287,8 +287,8 @@ def process(cur, integration_id: int, company_id: int, config: Dict[str, Any],
     cur.execute(f'''
         INSERT INTO {SCHEMA}.webhook_payments (
             integration_id, company_id, payment_id, terminal_key, amount, order_id, status, payment_status,
-            error_code, customer_email, customer_phone, pan, card_type, exp_date, raw_data, payment_provider
-        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            error_code, customer_email, customer_phone, pan, card_type, exp_date, raw_data, payment_provider, origin
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'automation')
         ON CONFLICT (integration_id, payment_id, status) DO NOTHING
         RETURNING id
     ''', (

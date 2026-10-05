@@ -25,6 +25,7 @@ export interface AppEvent {
   summary: string;
   raw: any;
   webhook_history?: EventWebhookHistoryItem[];
+  origin?: EventOrigin | null;
 }
 export type EventSource = 'acquiring' | 'kassa' | 'ofd' | 'bank' | 'crm';
 
@@ -35,3 +36,14 @@ export const EVENT_SOURCE_OPTIONS: { value: EventSource; label: string; icon: st
   { value: 'bank', label: 'Банк', icon: 'Landmark' },
   { value: 'crm', label: 'CRM', icon: 'Users' }
 ];
+
+export type EventOrigin = 'webhook' | 'cron' | 'recovery' | 'manual' | 'sync' | 'automation';
+
+export const EVENT_ORIGIN_LABELS: Record<EventOrigin, { label: string; hint: string; icon: string }> = {
+  webhook: { label: 'Вебхук', hint: 'Уведомление пришло от сервиса', icon: 'Webhook' },
+  cron: { label: 'Крон', hint: 'Загружено планировщиком', icon: 'Clock' },
+  recovery: { label: 'Крон (вместо хука)', hint: 'Хук не пришёл - планировщик нашёл и подтянул сам', icon: 'RefreshCw' },
+  manual: { label: 'Ручная загрузка', hint: 'Загружено вручную из кабинета', icon: 'Hand' },
+  sync: { label: 'Дозагрузка', hint: 'Подтянуто при синхронизации данных', icon: 'RefreshCw' },
+  automation: { label: 'Автоматизация', hint: 'Создано сценарием автоматизации', icon: 'Workflow' },
+};

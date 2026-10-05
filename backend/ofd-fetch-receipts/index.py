@@ -23,6 +23,10 @@ CORS_HEADERS = {
 AUTO_SYNC_LOOKBACK_DAYS = 3
 
 
+# Источник записей для ленты «События»: крон или ручная загрузка (ставится на каждый вызов).
+ORIGIN = 'manual'
+
+
 def fetch_kkt_receipts(cur, integration_id: int, company_id: int, config: Dict[str, Any], kkt: str,
                        dt_from: datetime, dt_to: datetime) -> Tuple[bool, int, int, Optional[str], list]:
     '''
@@ -105,8 +109,8 @@ def fetch_kkt_receipts(cur, integration_id: int, company_id: int, config: Dict[s
                 INSERT INTO t_p83864310_fintech_payment_reco.ofd_receipts (
                     integration_id, company_id, receipt_id, operation_type,
                     total_sum, cash_sum, ecash_sum, doc_number, doc_datetime,
-                    fn_number, raw_data
-                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    fn_number, raw_data, origin
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (integration_id, receipt_id) DO NOTHING
                 RETURNING id
             ''', (
@@ -120,7 +124,8 @@ def fetch_kkt_receipts(cur, integration_id: int, company_id: int, config: Dict[s
                 receipt.get('DocNumber'),
                 to_utc(receipt.get('DocDateTime')),
                 receipt.get('FnNumber'),
-                json.dumps(receipt)
+                json.dumps(receipt),
+                ORIGIN
             ))
             if cur.fetchone():
                 inserted_count += 1
@@ -207,6 +212,8 @@ def _handle(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         }
 
     body_data = json.loads(event.get('body', '{}') or '{}')
+    global ORIGIN
+    ORIGIN = 'cron' if body_data.get('cron_tick') else 'manual'
     integration_id = body_data.get('integration_id')
     company_id_param = body_data.get('company_id')
     date_from_param = body_data.get('date_from')

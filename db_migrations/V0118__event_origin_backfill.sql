@@ -1,0 +1,2 @@
+UPDATE t_p83864310_fintech_payment_reco.webhook_events SET origin = 'recovery' WHERE origin = 'cron';
+UPDATE t_p83864310_fintech_payment_reco.ecomkassa_receipts SET origin = 'webhook' WHERE origin IS NULL AND source = 'tbank';

@@ -2,7 +2,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import Icon from '@/components/ui/icon';
-import { AppEvent } from './eventsTypes';
+import { AppEvent, EVENT_ORIGIN_LABELS } from './eventsTypes';
 import { useAuth } from '@/contexts/AuthContext';
 import { formatDateTime, DEFAULT_TIMEZONE } from '@/lib/formatDate';
 import { transactionTypeConfig } from './EventsTable';
@@ -108,6 +108,16 @@ const EventDetailsDialog = ({ open, onOpenChange, event }: EventDetailsDialogPro
                 <div>
                   <p className="text-sm text-muted-foreground">Тип события</p>
                   <p className="text-sm font-mono">{event.event_type}</p>
+                </div>
+              )}
+              {event.origin && EVENT_ORIGIN_LABELS[event.origin] && (
+                <div>
+                  <p className="text-sm text-muted-foreground">Источник</p>
+                  <p className="text-sm flex items-center gap-1.5" title={EVENT_ORIGIN_LABELS[event.origin].hint}>
+                    <Icon name={EVENT_ORIGIN_LABELS[event.origin].icon} fallback="Info" size={14} className="text-muted-foreground" />
+                    {EVENT_ORIGIN_LABELS[event.origin].label}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{EVENT_ORIGIN_LABELS[event.origin].hint}</p>
                 </div>
               )}
             </div>

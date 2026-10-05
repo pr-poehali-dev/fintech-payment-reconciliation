@@ -34,6 +34,10 @@ DEFAULT_BATCH_SIZE = 8
 MAX_BATCH_SIZE = 30
 
 
+# Источник записей для ленты «События»: крон или ручная загрузка (ставится на каждый вызов).
+ORIGIN = 'manual'
+
+
 def response(status: int, body: Dict[str, Any]) -> Dict[str, Any]:
     return {
         'statusCode': status,
@@ -117,8 +121,8 @@ def save_receipt(cur, integration_id: int, company_id: int, order_id: Any,
         INSERT INTO {SCHEMA}.ecomkassa_receipts (
             integration_id, company_id, order_id, legacy_no, status,
             total_sum, doc_number, doc_datetime, raw_data, payment_provider, order_type,
-            is_sale, is_correction
-        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            is_sale, is_correction, origin
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         ON CONFLICT (integration_id, order_id) DO UPDATE SET
             is_sale = COALESCE(EXCLUDED.is_sale, {SCHEMA}.ecomkassa_receipts.is_sale),
             is_correction = COALESCE(EXCLUDED.is_correction, {SCHEMA}.ecomkassa_receipts.is_correction),
@@ -133,7 +137,7 @@ def save_receipt(cur, integration_id: int, company_id: int, order_id: Any,
     ''', (
         integration_id, company_id, str(order_id), str(legacy_no) if legacy_no else str(order_id),
         status, total_sum, str(doc_number) if doc_number else None, doc_datetime,
-        json.dumps(report_data), payment_provider, order_type, is_sale, is_correction
+        json.dumps(report_data), payment_provider, order_type, is_sale, is_correction, ORIGIN
     ))
     result = cur.fetchone()
     receipt_id = result[0] if result else None
@@ -179,8 +183,8 @@ def save_synthetic_payment(cur, gateway_integration_id: int, company_id: int, or
             integration_id, company_id, payment_id, terminal_key,
             amount, order_id, status, payment_status, error_code,
             customer_email, customer_phone, pan, card_type, exp_date,
-            raw_data, receipt_id, payment_provider
-        ) VALUES (%s, %s, %s, NULL, %s, %s, 'CONFIRMED', NULL, NULL, NULL, NULL, NULL, NULL, NULL, %s, %s, %s)
+            raw_data, receipt_id, payment_provider, origin
+        ) VALUES (%s, %s, %s, NULL, %s, %s, 'CONFIRMED', NULL, NULL, NULL, NULL, NULL, NULL, NULL, %s, %s, %s, %s)
         ON CONFLICT (integration_id, payment_id, status) DO UPDATE SET
             receipt_id = COALESCE(EXCLUDED.receipt_id, {SCHEMA}.webhook_payments.receipt_id),
             payment_provider = COALESCE(EXCLUDED.payment_provider, {SCHEMA}.webhook_payments.payment_provider),
@@ -190,7 +194,7 @@ def save_synthetic_payment(cur, gateway_integration_id: int, company_id: int, or
     ''', (
         gateway_integration_id, company_id, uid,
         total_sum or 0, uid,
-        json.dumps(report_data), receipt_id, payment_provider
+        json.dumps(report_data), receipt_id, payment_provider, ORIGIN
     ))
 
 
@@ -283,6 +287,8 @@ def _handle(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         return response(405, {'error': 'Method not allowed'})
 
     body = json.loads(event.get('body', '{}') or '{}')
+    global ORIGIN
+    ORIGIN = 'cron' if body.get('cron_tick') else 'manual'
     company_id = body.get('company_id')
     date_from = body.get('date_from')
     date_to = body.get('date_to')

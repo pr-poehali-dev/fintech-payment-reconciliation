@@ -3,7 +3,7 @@ from typing import Any, Dict, Optional
 
 
 def save_event(cur, integration_id: int, company_id: int, provider_slug: str,
-                event_type: Optional[str], raw_payload: Dict[str, Any]) -> int:
+                event_type: Optional[str], raw_payload: Dict[str, Any], origin: str = 'webhook') -> int:
     '''
     Кладёт сырое входящее событие в inbox-таблицу webhook_events до любой обработки.
     Так события разных провайдеров физически не пересекаются - у каждого своя строка
@@ -12,15 +12,16 @@ def save_event(cur, integration_id: int, company_id: int, provider_slug: str,
     '''
     cur.execute('''
         INSERT INTO t_p83864310_fintech_payment_reco.webhook_events
-            (integration_id, company_id, provider_slug, event_type, raw_payload, status)
-        VALUES (%s, %s, %s, %s, %s, 'pending')
+            (integration_id, company_id, provider_slug, event_type, raw_payload, status, origin)
+        VALUES (%s, %s, %s, %s, %s, 'pending', %s)
         RETURNING id
     ''', (
         integration_id,
         company_id,
         provider_slug,
         event_type,
-        json.dumps(raw_payload)
+        json.dumps(raw_payload),
+        origin
     ))
     return cur.fetchone()[0]
 

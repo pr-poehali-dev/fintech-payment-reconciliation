@@ -419,7 +419,7 @@ def _handle(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             integration_id, company_id, provider_slug, tx['external_id'],
             tx['operation_date'], tx['amount'], tx['direction'],
             tx['counterparty_name'], tx['counterparty_inn'], tx['purpose'],
-            json.dumps(tx['raw'])
+            json.dumps(tx['raw']), 'cron' if body_data.get('cron_tick') else 'manual'
         ) for tx in transactions]
 
         inserted_count = 0
@@ -430,7 +430,7 @@ def _handle(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 INSERT INTO t_p83864310_fintech_payment_reco.bank_statement_transactions (
                     integration_id, company_id, provider_slug, external_transaction_id,
                     operation_date, amount, direction, counterparty_name, counterparty_inn,
-                    purpose, raw_data
+                    purpose, raw_data, origin
                 ) VALUES %s
                 ON CONFLICT (integration_id, external_transaction_id) DO NOTHING
                 RETURNING id

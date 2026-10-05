@@ -69,6 +69,13 @@ def event_has_error(e: Dict[str, Any]) -> bool:
     return any(_is_error(h.get('status'), h.get('error_message')) for h in e.get('webhook_history') or [])
 
 
+def _payment_origin(raw: Any) -> str:
+    '''Старые записи без отметки: платёж, восстановленный из документа кассы, - загрузка, остальное - хук.'''
+    if isinstance(raw, dict) and ('invoice_payload' in raw or 'payload' in raw and 'uuid' in raw):
+        return 'sync'
+    return 'webhook'
+
+
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     '''
     Единая лента событий компании: сырые данные по КАЖДОМУ источнику ОТДЕЛЬНО,
@@ -192,7 +199,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 wp.id, COALESCE(er.doc_datetime, wp.created_at) AS event_at,
                 p.slug, wp.payment_id, wp.order_id,
                 wp.amount, wp.status, wp.raw_data, ui.integration_name, p.name,
-                wp.payment_provider
+                wp.payment_provider, wp.origin
             FROM t_p83864310_fintech_payment_reco.webhook_payments wp
             JOIN t_p83864310_fintech_payment_reco.user_integrations ui ON ui.id = wp.integration_id
             JOIN t_p83864310_fintech_payment_reco.integration_providers p ON p.id = ui.provider_id
@@ -204,7 +211,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         pay_groups: Dict[Any, Dict[str, Any]] = {}
         for row in cur.fetchall():
             (pay_id, created_at, p_slug, payment_id, order_id, amount, status,
-             raw_data, integration_name, provider_name, payment_provider_value) = row
+             raw_data, integration_name, provider_name, payment_provider_value, origin) = row
 
             group_key = order_id or payment_id
             if group_key not in pay_groups:
@@ -226,7 +233,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 'error_message': None,
                 'created_at': created_at.isoformat() if created_at else None,
                 'raw': raw_data,
-                'event_type': 'payment_status_changed'
+                'event_type': 'payment_status_changed',
+                'origin': origin or _payment_origin(raw_data)
             })
 
         for group_key, group in pay_groups.items():
@@ -253,6 +261,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 'event_number': str(group['payment_id']),
                 'summary': summary,
                 'raw': latest['raw'],
+                'origin': latest['origin'],
                 'webhook_history': history
             })
 
@@ -278,7 +287,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 ekr.id, ekr.order_id, COALESCE(ekr.doc_datetime, ekr.created_at) AS event_at,
                 ekr.status, ekr.total_sum,
                 ekr.order_type, ekr.payment_provider, ekr.raw_data,
-                ui.integration_name
+                ui.integration_name, ekr.origin
             FROM {SCHEMA}.ecomkassa_receipts ekr
             JOIN {SCHEMA}.user_integrations ui ON ui.id = ekr.integration_id
             {ekr_where}
@@ -287,7 +296,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
         for row in cur.fetchall():
             (ekr_id, order_id, event_at, status, total_sum, order_type, payment_provider_value,
-             raw_data, integration_name) = row
+             raw_data, integration_name, origin) = row
 
             doc_label = ORDER_TYPE_LABELS.get(order_type, 'Документ')
             amount_str = f'{float(total_sum):.2f} ₽' if total_sum is not None else ''
@@ -314,7 +323,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 'error_message': None,
                 'event_number': str(order_id),
                 'summary': summary,
-                'raw': raw_data
+                'raw': raw_data,
+                'origin': origin or 'sync'
             })
 
         # 3. Чеки ОФД - свой источник (ofd_receipts), группировки с чеком
@@ -333,7 +343,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
         cur.execute(f'''
             SELECT o.id, o.receipt_id, o.created_at, o.operation_type, o.total_sum,
-                   o.raw_data, ui.integration_name, o.raw_data->>'FnsStatus' AS fns_status
+                   o.raw_data, ui.integration_name, o.raw_data->>'FnsStatus' AS fns_status, o.origin
             FROM {SCHEMA}.ofd_receipts o
             JOIN {SCHEMA}.user_integrations ui ON ui.id = o.integration_id
             {ofd_where}
@@ -341,7 +351,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         ''', ofd_params)
 
         for row in cur.fetchall():
-            ofd_id, receipt_id, created_at, operation_type, total_sum, raw_data, integration_name, fns_status = row
+            ofd_id, receipt_id, created_at, operation_type, total_sum, raw_data, integration_name, fns_status, origin = row
 
             amount_str = f'{float(total_sum):.2f} ₽' if total_sum is not None else ''
             summary = f'Чек ОФД #{receipt_id} · {operation_type or ""} {amount_str}'.strip()
@@ -365,7 +375,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 'error_message': None,
                 'event_number': str(receipt_id),
                 'summary': summary,
-                'raw': raw_data
+                'raw': raw_data,
+                'origin': origin or 'sync'
             })
 
         # 4. События CRM (Битрикс24, AmoCRM) - группируем по сделке (integration_id +
@@ -387,7 +398,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             SELECT
                 we.id, we.integration_id, we.created_at, we.provider_slug, we.event_type,
                 we.status, we.error_message, we.external_deal_id, we.raw_payload,
-                ui.integration_name, p.name
+                ui.integration_name, p.name, we.origin
             FROM t_p83864310_fintech_payment_reco.webhook_events we
             JOIN t_p83864310_fintech_payment_reco.user_integrations ui ON ui.id = we.integration_id
             JOIN t_p83864310_fintech_payment_reco.integration_providers p ON p.id = ui.provider_id
@@ -411,7 +422,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         crm_groups: Dict[Any, Dict[str, Any]] = {}
         for row in crm_raw_rows:
             (ev_id, ev_integration_id, created_at, p_slug, event_type, status,
-             error_message, external_deal_id, raw_payload, integration_name, provider_name) = row
+             error_message, external_deal_id, raw_payload, integration_name, provider_name, origin) = row
 
             group_key = (ev_integration_id, external_deal_id) if external_deal_id else ('single', ev_id)
             if group_key not in crm_groups:
@@ -429,7 +440,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 'error_message': error_message,
                 'created_at': created_at.isoformat() if created_at else None,
                 'raw': raw_payload,
-                'event_type': event_type
+                'event_type': event_type,
+                'origin': origin or 'webhook'
             })
 
         for group_key, group in crm_groups.items():
@@ -469,6 +481,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 'event_number': str(external_deal_id) if external_deal_id else None,
                 'summary': summary,
                 'raw': latest['raw'],
+                'origin': latest['origin'],
                 'webhook_history': history
             })
 
@@ -487,7 +500,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             SELECT
                 bst.id, bst.created_at, bst.provider_slug, bst.external_transaction_id,
                 bst.amount, bst.direction, bst.counterparty_name, bst.purpose,
-                bst.raw_data, ui.integration_name, p.name
+                bst.raw_data, ui.integration_name, p.name, bst.origin
             FROM t_p83864310_fintech_payment_reco.bank_statement_transactions bst
             JOIN t_p83864310_fintech_payment_reco.user_integrations ui ON ui.id = bst.integration_id
             JOIN t_p83864310_fintech_payment_reco.integration_providers p ON p.id = ui.provider_id
@@ -498,7 +511,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
         for row in cur.fetchall():
             (tx_id, created_at, p_slug, external_tx_id, amount, direction,
-             counterparty_name, purpose, raw_data, integration_name, provider_name) = row
+             counterparty_name, purpose, raw_data, integration_name, provider_name, origin) = row
 
             direction_label = 'Поступление' if direction == 'in' else 'Списание'
             amount_str = f'{float(amount):.2f} ₽' if amount is not None else ''
@@ -517,7 +530,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 'error_message': None,
                 'event_number': external_tx_id,
                 'summary': summary,
-                'raw': raw_data
+                'raw': raw_data,
+                'origin': origin or 'sync'
             })
 
         # Фильтр по периоду - по календарному дню события в часовом поясе

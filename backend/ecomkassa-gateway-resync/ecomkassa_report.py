@@ -40,7 +40,7 @@ def parse_receipt_datetime(value: Any) -> Optional[str]:
 
 
 def save_receipt_from_report(cur, integration_id: int, company_id: int, uid: str,
-                              report_data: Dict[str, Any]) -> Tuple[Optional[int], float, Optional[str]]:
+                              report_data: Dict[str, Any], origin: str = 'sync') -> Tuple[Optional[int], float, Optional[str]]:
     '''
     Сохраняет фискальный чек по ответу report(status="done") в ecomkassa_receipts.
     Для счетов на оплату (kind="INVOICE") report() дополнительно отдаёт invoice_payload
@@ -60,8 +60,8 @@ def save_receipt_from_report(cur, integration_id: int, company_id: int, uid: str
     cur.execute('''
         INSERT INTO t_p83864310_fintech_payment_reco.ecomkassa_receipts (
             integration_id, company_id, order_id, legacy_no, status,
-            total_sum, doc_number, doc_datetime, raw_data, payment_provider
-        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            total_sum, doc_number, doc_datetime, raw_data, payment_provider, origin
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         ON CONFLICT (integration_id, order_id) DO UPDATE SET
             status = EXCLUDED.status,
             total_sum = EXCLUDED.total_sum,
@@ -72,7 +72,7 @@ def save_receipt_from_report(cur, integration_id: int, company_id: int, uid: str
         RETURNING id
     ''', (
         integration_id, company_id, str(uid), str(uid), RECEIPT_DONE_STATUS,
-        total_sum, str(doc_number) if doc_number else None, doc_datetime, json.dumps(report_data), payment_provider
+        total_sum, str(doc_number) if doc_number else None, doc_datetime, json.dumps(report_data), payment_provider, origin
     ))
     result = cur.fetchone()
     receipt_id = result[0] if result else None
