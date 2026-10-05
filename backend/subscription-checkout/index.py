@@ -4,6 +4,7 @@ from typing import Any, Dict
 
 import psycopg2
 from auth_guard import guard
+import downgrade
 
 SCHEMA = 't_p83864310_fintech_payment_reco'
 PAY_ROLES = ('owner', 'admin')
@@ -58,6 +59,9 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     POST {action: "pay", company_id, tariff_slug, period: month|year} - оплатить (пока без
          реального платежа) и активировать тариф. Тот же тариф - продление от даты окончания,
          другой тариф - новый срок с сегодняшнего дня. Платить могут владелец и админ компании.
+         keep: {companies, users, integrations, automations} - что оставить, если новый тариф
+         меньше: остальное сверх лимита удаляется безвозвратно.
+    POST {action: "preview", company_id, tariff_slug} - что не помещается в лимиты тарифа
     '''
     denied = guard(event)
     if denied:
@@ -100,6 +104,12 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             return respond(200, {'success': True, 'tariffs': load_tariffs(cur), 'current': current,
                                  'payments': payments, 'can_pay': can_pay})
 
+        if method == 'POST' and body.get('action') == 'preview':
+            tariff = next((t for t in load_tariffs(cur) if t['slug'] == body.get('tariff_slug')), None)
+            if not tariff:
+                return respond(400, {'error': 'Тариф не найден'})
+            return respond(200, {'success': True, 'overage': downgrade.overage(cur, company_id, tariff, user_id)})
+
         if method == 'POST' and body.get('action') == 'pay':
             print(f"pay request company={company_id} user={user_id} role={role} body={body}")
             if not can_pay:
@@ -110,6 +120,18 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             tariff = next((t for t in load_tariffs(cur) if t['slug'] == body.get('tariff_slug')), None)
             if not tariff:
                 return respond(400, {'error': 'Тариф не найден'})
+
+            over = downgrade.overage(cur, company_id, tariff, user_id)
+            removed = {}
+            if over:
+                if 'companies' in over and role != 'owner':
+                    return respond(403, {'error': 'Удалить лишние компании может только владелец'})
+                keep = body.get('keep') or {}
+                problem = downgrade.check_keep(over, keep)
+                if problem:
+                    return respond(400, {'error': problem, 'overage': over})
+                removed = downgrade.apply(cur, company_id, downgrade.to_delete(over, keep))
+                print(f"downgrade company={company_id} removed={removed}")
 
             days = 365 if period == 'year' else int(tariff['period_days'])
             amount = tariff['year_price'] if period == 'year' else tariff['price']
@@ -151,7 +173,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             conn.commit()
             print(f"pay ok company={company_id} tariff={tariff['slug']} until={period_end}")
             return respond(200, {'success': True, 'tariff_name': tariff['name'],
-                                 'period_end': period_end, 'amount': amount})
+                                 'period_end': period_end, 'amount': amount, 'removed': removed})
 
         return respond(405, {'error': 'Method not allowed'})
     finally:

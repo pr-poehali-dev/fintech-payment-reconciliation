@@ -2,12 +2,20 @@ import { useEffect, useRef, useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import Icon from '@/components/ui/icon';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { SUBSCRIPTION_STATUS, subscriptionEndDate, daysLeft, formatLongDate } from '@/lib/subscription';
 import { APP_MODULES } from '@/config/modules';
 import functionUrls from '../../../backend/func2url.json';
+import DowngradeKeepPicker, {
+  KeepState,
+  Overage,
+  initialKeep,
+  keepIsValid,
+  removalCount
+} from './DowngradeKeepPicker';
 
 interface SubscriptionDialogProps {
   open: boolean;
@@ -83,6 +91,10 @@ const SubscriptionDialog = ({ open, onOpenChange, highlightModule }: Subscriptio
   const [paid, setPaid] = useState<{ title: string; until: string } | null>(null);
   const [payError, setPayError] = useState<string | null>(null);
   const resultRef = useRef<HTMLDivElement>(null);
+  const [overage, setOverage] = useState<Overage | null>(null);
+  const [checking, setChecking] = useState(false);
+  const [keep, setKeep] = useState<KeepState>({});
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   useEffect(() => {
     if (paid || payError) resultRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -125,6 +137,38 @@ const SubscriptionDialog = ({ open, onOpenChange, highlightModule }: Subscriptio
   const chosen = tariffs.find((t) => t.slug === selected) || null;
   const isRenewal = Boolean(chosen && chosen.slug === currentSlug && !isTrial);
 
+  useEffect(() => {
+    setOverage(null);
+    setKeep({});
+    setConfirmDelete(false);
+    if (!selected || !companyId) return;
+    let cancelled = false;
+    setChecking(true);
+    fetch(functionUrls['subscription-checkout'], {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'preview', company_id: companyId, tariff_slug: selected })
+    })
+      .then((r) => r.json())
+      .then((d) => {
+        if (cancelled || !d.success) return;
+        const over: Overage = d.overage || {};
+        if (Object.keys(over).length) {
+          setOverage(over);
+          setKeep(initialKeep(over));
+        }
+      })
+      .catch(() => undefined)
+      .finally(() => !cancelled && setChecking(false));
+    return () => {
+      cancelled = true;
+    };
+  }, [selected, companyId]);
+
+  const removing = overage ? removalCount(overage, keep) : 0;
+  const keepValid = !overage || keepIsValid(overage, keep);
+  const payBlocked = checking || !keepValid || (removing > 0 && !confirmDelete);
+
   const pay = async () => {
     if (!chosen || !companyId) return;
     setPaying(true);
@@ -134,7 +178,13 @@ const SubscriptionDialog = ({ open, onOpenChange, highlightModule }: Subscriptio
       const res = await fetch(functionUrls['subscription-checkout'], {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'pay', company_id: companyId, tariff_slug: chosen.slug, period })
+        body: JSON.stringify({
+          action: 'pay',
+          company_id: companyId,
+          tariff_slug: chosen.slug,
+          period,
+          keep: overage ? keep : undefined
+        })
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok || !data.success) {
@@ -149,6 +199,8 @@ const SubscriptionDialog = ({ open, onOpenChange, highlightModule }: Subscriptio
           : `Оплата принята, тариф «${data.tariff_name}» оплачен`,
         until: formatLongDate(data.period_end)
       };
+      const removedTotal = Object.values((data.removed || {}) as Record<string, number>).reduce((a, b) => a + b, 0);
+      if (removedTotal > 0) result.title += `. Удалено лишнего: ${removedTotal}`;
       setPaid(result);
       toast({ title: result.title, description: `Срок действия: до ${result.until}` });
       setSelected(null);
@@ -334,7 +386,11 @@ const SubscriptionDialog = ({ open, onOpenChange, highlightModule }: Subscriptio
                     <Button variant="ghost" onClick={() => setSelected(null)} disabled={paying}>
                       Отмена
                     </Button>
-                    <Button onClick={pay} disabled={paying}>
+                    <Button
+                      onClick={pay}
+                      disabled={paying || payBlocked}
+                      variant={removing > 0 ? 'destructive' : 'default'}
+                    >
                       <Icon
                         name={paying ? 'Loader2' : 'CreditCard'}
                         size={16}
@@ -344,6 +400,50 @@ const SubscriptionDialog = ({ open, onOpenChange, highlightModule }: Subscriptio
                     </Button>
                   </div>
                 </div>
+
+                {checking && (
+                  <div className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
+                    <Icon name="Loader2" size={14} className="animate-spin" />
+                    Проверяем лимиты тарифа…
+                  </div>
+                )}
+
+                {overage && (
+                  <div className="mt-4 space-y-4">
+                    <div className="flex items-start gap-3 rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm">
+                      <Icon name="TriangleAlert" size={20} className="mt-0.5 shrink-0 text-destructive" />
+                      <div>
+                        <div className="font-semibold text-foreground">
+                          В тариф «{chosen.name}» помещается не всё, что есть сейчас
+                        </div>
+                        <div className="text-muted-foreground">
+                          Отметьте, что оставить. Всё неотмеченное будет удалено безвозвратно при оплате — восстановить
+                          это будет нельзя, даже если потом перейти на тариф выше.
+                        </div>
+                      </div>
+                    </div>
+
+                    <DowngradeKeepPicker overage={overage} keep={keep} onChange={setKeep} />
+
+                    {removing > 0 && (
+                      <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-destructive/40 p-3 text-sm">
+                        <Checkbox
+                          checked={confirmDelete}
+                          onCheckedChange={(v) => setConfirmDelete(Boolean(v))}
+                          className="mt-0.5"
+                        />
+                        <span>
+                          Понимаю, что <span className="font-semibold text-destructive">{removing}</span>{' '}
+                          {removing === 1 ? 'элемент будет удалён' : 'элементов будут удалены'} навсегда вместе со всеми
+                          данными
+                        </span>
+                      </label>
+                    )}
+                    {!keepValid && (
+                      <div className="text-sm text-destructive">Отмечено больше, чем позволяет тариф.</div>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 
