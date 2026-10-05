@@ -419,6 +419,8 @@ const ScenarioDialog = ({ open, onOpenChange, scenario, prefill, integrations, t
                     mapping={form.field_mapping}
                     onChange={(m) => setForm({ ...form, field_mapping: m })}
                     agentReceipt={isAgent}
+                    agentTemplate={currentTemplate?.agent_settings || {}}
+                    agentScenario={cs.agent || {}}
                   />
                 </>
               ) : (

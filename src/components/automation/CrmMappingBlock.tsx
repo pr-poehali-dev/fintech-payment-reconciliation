@@ -23,7 +23,12 @@ interface CrmMappingBlockProps {
   mapping: Record<string, unknown>;
   onChange: (mapping: Record<string, unknown>) => void;
   agentReceipt?: boolean;
+  // Поставщик из шаблона действия и из блока «Агентский чек» сценария - для показа итогового значения.
+  agentTemplate?: Record<string, string | string[]>;
+  agentScenario?: Record<string, string | string[]>;
 }
+
+const agentText = (v: string | string[] | undefined) => (Array.isArray(v) ? v.join(', ') : v || '').trim();
 
 interface TestResult {
   success: boolean;
@@ -45,7 +50,7 @@ const api = (functionUrls as Record<string, string>)['crm-fields'];
 // Кеш справочника на время сессии: при повторном открытии диалога Битрикс24 не дёргаем.
 const metaCache: Record<number, CrmMeta> = {};
 
-const CrmMappingBlock = ({ companyId, integrationId, mapping, onChange, agentReceipt }: CrmMappingBlockProps) => {
+const CrmMappingBlock = ({ companyId, integrationId, mapping, onChange, agentReceipt, agentTemplate = {}, agentScenario = {} }: CrmMappingBlockProps) => {
   const [meta, setMeta] = useState<CrmMeta | null>(metaCache[integrationId] || null);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -323,12 +328,40 @@ const CrmMappingBlock = ({ companyId, integrationId, mapping, onChange, agentRec
               Стадия {test.stage} — {test.stage_matches ? 'документ будет создан' : 'сделка из другой воронки'}
             </div>
             <div className="space-y-1 rounded-md bg-background/60 p-2 text-xs">
-              {[...MAPPING_FIELDS, ...(agentReceipt ? AGENT_MAPPING_FIELDS : [])].map((f) => (
+              {MAPPING_FIELDS.map((f) => (
                 <div key={f.key} className="grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-3">
                   <span className="text-muted-foreground">{f.label}</span>
                   <span className={`min-w-0 whitespace-pre-wrap break-words text-right ${test.values?.[f.key] ? '' : 'text-muted-foreground'}`}>{test.values?.[f.key] || '—'}</span>
                 </div>
               ))}
+              {agentReceipt &&
+                AGENT_MAPPING_FIELDS.map((f) => {
+                  // Порядок как при создании чека: шаблон действия > поле сделки > значение из сценария.
+                  const fromTemplate = agentText(agentTemplate[f.agentKey]);
+                  const fromCrm = (test.values?.[f.key] || '').trim();
+                  const fromScenario = agentText(agentScenario[f.agentKey]);
+                  const [value, source] = fromTemplate
+                    ? [fromTemplate, 'из шаблона']
+                    : fromCrm
+                      ? [fromCrm, 'из сделки']
+                      : fromScenario
+                        ? [fromScenario, mapping[f.key] ? 'из сценария — в сделке пусто' : 'из сценария']
+                        : ['', ''];
+                  return (
+                    <div key={f.key} className="grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-3">
+                      <span className="text-muted-foreground">{f.label}</span>
+                      <span className="min-w-0 whitespace-pre-wrap break-words text-right">
+                        {value ? (
+                          <>
+                            {value} <span className="text-[11px] text-muted-foreground">· {source}</span>
+                          </>
+                        ) : (
+                          <span className="text-destructive">не задано</span>
+                        )}
+                      </span>
+                    </div>
+                  );
+                })}
             </div>
             {test.error ? (
               <p className="text-xs text-destructive">{test.error}</p>
