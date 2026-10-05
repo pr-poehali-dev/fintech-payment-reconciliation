@@ -29,8 +29,8 @@ TICK_BATCH = 15
 FETCH_ORDERS_URL = 'https://functions.poehali.dev/dc01171b-cd60-4a98-b96c-5d167bc1add8'
 # Окно авто-дозагрузки Екомкассы: документы, обновлённые за последние N часов.
 ECOMKASSA_AUTO_HOURS = 24
-# Окно поиска пропущенных платежей/чеков на каждом запуске дозагрузки.
-ECOMKASSA_SEARCH_HOURS = 3
+# Запас окна поиска пропущенных платежей/чеков от прошлого успешного поиска, мин.
+ECOMKASSA_SEARCH_OVERLAP_MIN = 5
 OFD_URL = 'https://functions.poehali.dev/c7fad594-b60b-47fb-8f73-31b629f1e0a2'
 # Ежедневная проверка «платежи без чека за вчера» (backend/notifications, action=dispatch, daily).
 NOTIFICATIONS_URL = 'https://functions.poehali.dev/8f4541fc-6ff8-4816-a954-324e4278743d'
@@ -42,7 +42,7 @@ CRON_SOURCES = [
     {'key': 'ecomkassa', 'unit': 'документов', 'name': 'Екомкасса: новые счета, заказы и чеки',
      'hint': 'Не нужно, когда настроены вебхуки Екомкассы по платежам'},
     {'key': 'ecomkassa_receipts', 'unit': 'чеков', 'name': 'Екомкасса: дозагрузка непробитых чеков',
-     'hint': 'Довязывает чек к платежу шлюза и ищет в кассе оплаченные документы за последние часы - страховка от потерянных вебхуков'},
+     'hint': 'Довязывает чек к платежу шлюза и ищет в кассе оплаченные документы с прошлой загрузки - страховка от потерянных вебхуков'},
     {'key': 'ofd', 'unit': 'чеков', 'name': 'ОФД: чеки', 'hint': 'Всё новое с прошлой загрузки'},
     {'key': 'bank', 'unit': 'операций', 'name': 'Банки: выписки',
      'hint': 'Если клиент задал частоту в настройках интеграции - берётся она'},
@@ -345,6 +345,19 @@ def tick(cur, conn, settings: Dict[str, Any]) -> Dict[str, Any]:
             if yesterday not in (recent_periods or []):
                 daily_check_ids.add(cid)
 
+    # Поиск пропущенных платежей/чеков - с прошлого успешного поиска (с запасом),
+    # после сбоя или незавершённого прохода - за сутки.
+    search_from: Dict[int, datetime] = {}
+    if receipts_due:
+        cur.execute(f'''
+            SELECT company_id, finished_at FROM {SCHEMA}.cron_source_runs
+            WHERE source = 'ecomkassa_receipts' AND item_key = 'search' AND error IS NULL
+              AND company_id = ANY(%s) AND finished_at > NOW() - INTERVAL '1 day'
+        ''', (list(receipts_due),))
+        search_from = {cid: last - timedelta(minutes=ECOMKASSA_SEARCH_OVERLAP_MIN) for cid, last in cur.fetchall()}
+    default_from = datetime.utcnow() - timedelta(hours=ECOMKASSA_AUTO_HOURS)
+    search_to = datetime.utcnow() + timedelta(minutes=5)
+
     tick_id = datetime.utcnow().strftime('%Y%m%d%H%M%S')
     tasks = []
     for company_id in company_ids:
@@ -363,7 +376,8 @@ def tick(cur, conn, settings: Dict[str, Any]) -> Dict[str, Any]:
             if company_id not in ecomkassa_ids:
                 # Страховка от потерянных вебхуков: поиск оплаченных документов за последние часы.
                 tasks.append((company_id, FETCH_ORDERS_URL, {
-                    'company_id': company_id, 'auto_hours': max(ECOMKASSA_SEARCH_HOURS, INTERVAL_PRESETS[source_interval(settings, 'ecomkassa_receipts')] // 60 + 2),
+                    'company_id': company_id, 'only_new': True,
+                    'date_from': search_from.get(company_id, default_from).isoformat(), 'date_to': search_to.isoformat(),
                     'order_types': ['INVC', 'CORD', 'VCHR'], 'statuses': ['PAID', 'COMPLETED'], 'batch_size': 30,
                     'cron_source': 'ecomkassa_receipts', 'cron_item': 'search'
                 }))

@@ -25,6 +25,8 @@ def record_cron_run(event: Dict[str, Any], resp: Dict[str, Any], source: str, lo
     except (TypeError, ValueError):
         out = {}
     failed = resp.get('statusCode', 200) >= 400 or out.get('success') is False
+    if out.get('done') is False:
+        out['pending'] = True
     if out.get('pending'):
         failed = False
     error = (str(out.get('error') or 'Ошибка')[:300]) if failed else None
