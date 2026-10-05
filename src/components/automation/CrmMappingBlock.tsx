@@ -312,9 +312,9 @@ const CrmMappingBlock = ({ companyId, integrationId, mapping, onChange, agentRec
               fields={meta.fields}
               entities={entities}
               mainEntity={entity}
-              placeholder="Пусто — из поля «Сумма», например {OPPORTUNITY}"
+              placeholder="Пусто — из поля «Сумма». Например {OPPORTUNITY} - {UF_CRM_...}"
             />
-            <p className="text-xs text-muted-foreground">Нажмите на лупу и выберите поле сделки с суммой. Если пусто — берём поле «Сумма» из сопоставления</p>
+            <p className="text-xs text-muted-foreground">Лупа — выбрать поле сделки. Можно считать: + - * / и скобки, например <code>{'{OPPORTUNITY} - {UF_CRM_предоплата}'}</code>. Если пусто — берём поле «Сумма» из сопоставления</p>
           </div>
         )}
       </div>

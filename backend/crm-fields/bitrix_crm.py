@@ -4,6 +4,7 @@
 и сбор данных для чека по сопоставлению полей сценария.
 Все запросы идут через входящий вебхук клиента одним вызовом batch.
 '''
+import ast
 import json
 import re
 import urllib.error
@@ -226,6 +227,50 @@ def _number(value: Any) -> Optional[float]:
         return None
 
 
+_CALC_OPS = {
+    ast.Add: lambda a, b: a + b, ast.Sub: lambda a, b: a - b,
+    ast.Mult: lambda a, b: a * b, ast.Div: lambda a, b: a / b,
+}
+
+
+def calc_amount(record: Dict[str, Any], entity: str, template: str) -> Tuple[Optional[float], str, Optional[str]]:
+    '''
+    Сумма по шаблону: «{OPPORTUNITY}» или формула «{OPPORTUNITY} - {UF_CRM_X} * 2» (знак = в начале не обязателен).
+    Разрешены только числа, + - * / и скобки. Возвращает (сумма, текст после подстановки, ошибка).
+    '''
+    missing: List[str] = []
+
+    def sub(m: 're.Match[str]') -> str:
+        num = _number(resolve(record, entity, m.group(1)))
+        if num is None:
+            missing.append(m.group(0))
+            return '0'
+        return repr(num)
+
+    expr = re.sub(r'\{([\w.]+)\}', sub, template.strip().lstrip('=')).replace(',', '.').replace(' ', '')
+    if missing:
+        return None, expr, f'в сделке не заполнено или не число: {", ".join(missing)}'
+
+    def ev(node: ast.AST) -> float:
+        if isinstance(node, ast.Expression):
+            return ev(node.body)
+        if isinstance(node, ast.Constant) and isinstance(node.value, (int, float)):
+            return float(node.value)
+        if isinstance(node, ast.UnaryOp) and isinstance(node.op, (ast.USub, ast.UAdd)):
+            return -ev(node.operand) if isinstance(node.op, ast.USub) else ev(node.operand)
+        if isinstance(node, ast.BinOp) and type(node.op) in _CALC_OPS:
+            return _CALC_OPS[type(node.op)](ev(node.left), ev(node.right))
+        raise ValueError
+
+    try:
+        value = round(ev(ast.parse(expr, mode='eval')), 2)
+    except (ValueError, SyntaxError, ZeroDivisionError, TypeError):
+        return None, expr, 'формулу не удалось посчитать - разрешены числа, поля, + - * / и скобки'
+    if value <= 0:
+        return None, expr, f'получилось {value} - сумма должна быть больше нуля'
+    return value, expr, None
+
+
 def _vat_from_rate(rate: Any) -> str:
     if rate in (None, ''):
         return 'none'
@@ -298,10 +343,9 @@ def build_items(record: Dict[str, Any], entity: str, mapping: Dict[str, Any],
         # Сумма позиции: своё поле/шаблон ({OPPORTUNITY}, {UF_CRM_...}), пусто - поле «Сумма» сопоставления.
         template = str(mapping.get('single_item_amount') or '').strip()
         if template:
-            text = re.sub(r'\{([\w.]+)\}', lambda m: resolve(record, entity, m.group(1)) or '', template)
-            amount = _number(text)
-            if not amount:
-                return [], f'В {noun} не заполнена сумма позиции («{template}» = «{text.strip() or "пусто"}»)'
+            amount, expr, calc_err = calc_amount(record, entity, template)
+            if calc_err:
+                return [], f'Сумма позиции «{template}» ({expr}): {calc_err}'
         if not amount:
             return [], f'В {noun} не заполнена сумма (поле «{mapping.get("amount")}»)'
         return [_item(single_name(record, entity, mapping), amount, 1, fixed_vat)], ''
