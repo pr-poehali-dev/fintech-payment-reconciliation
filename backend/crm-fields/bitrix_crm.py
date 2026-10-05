@@ -236,7 +236,8 @@ _CALC_OPS = {
 def calc_amount(record: Dict[str, Any], entity: str, template: str) -> Tuple[Optional[float], str, Optional[str]]:
     '''
     Сумма по шаблону: «{OPPORTUNITY}» или формула «{OPPORTUNITY} - {UF_CRM_X} * 2» (знак = в начале не обязателен).
-    Разрешены только числа, + - * / и скобки. Возвращает (сумма, текст после подстановки, ошибка).
+    Разрешены только числа, + - * / и скобки. Пустое поле считается нулём (нет предоплаты - вычитаем 0),
+    но если итог вышел не больше нуля - ошибка с перечнем пустых полей. Возвращает (сумма, текст, ошибка).
     '''
     missing: List[str] = []
 
@@ -248,8 +249,6 @@ def calc_amount(record: Dict[str, Any], entity: str, template: str) -> Tuple[Opt
         return repr(num)
 
     expr = re.sub(r'\{([\w.]+)\}', sub, template.strip().lstrip('=')).replace(',', '.').replace(' ', '')
-    if missing:
-        return None, expr, f'в сделке не заполнено или не число: {", ".join(missing)}'
 
     def ev(node: ast.AST) -> float:
         if isinstance(node, ast.Expression):
@@ -267,7 +266,8 @@ def calc_amount(record: Dict[str, Any], entity: str, template: str) -> Tuple[Opt
     except (ValueError, SyntaxError, ZeroDivisionError, TypeError):
         return None, expr, 'формулу не удалось посчитать - разрешены числа, поля, + - * / и скобки'
     if value <= 0:
-        return None, expr, f'получилось {value} - сумма должна быть больше нуля'
+        empty = f'; пустые поля посчитаны как 0: {", ".join(missing)}' if missing else ''
+        return None, expr, f'получилось {value} - сумма должна быть больше нуля{empty}'
     return value, expr, None
 
 
