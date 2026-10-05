@@ -193,7 +193,10 @@ const Login = () => {
                 </Button>
 
                 <p className="text-xs text-center text-muted-foreground px-4">
-                  Нажимая «Войти», вы принимаете пользовательское соглашение и политику конфиденциальности
+                  Нажимая «Войти», вы принимаете{' '}
+                  <a href="/terms" target="_blank" rel="noreferrer" className="underline hover:text-foreground">пользовательское соглашение</a>{' '}
+                  и{' '}
+                  <a href="/legal" target="_blank" rel="noreferrer" className="underline hover:text-foreground">политику обработки персональных данных</a>
                 </p>
               </>
             ) : step === 'code' ? (

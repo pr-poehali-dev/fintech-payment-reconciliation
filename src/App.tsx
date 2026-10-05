@@ -17,6 +17,7 @@ import Admin from "./pages/Admin";
 import NotFound from "./pages/NotFound";
 import WebhookLogsPage from "./pages/WebhookLogsPage";
 import InvitePage from "./pages/InvitePage";
+import LegalDocumentPage from "./pages/LegalDocumentPage";
 
 const queryClient = new QueryClient();
 
@@ -34,6 +35,8 @@ const App = () => (
               <Route path="/login" element={<Login />} />
               <Route path="/create-company" element={<CreateCompany />} />
               <Route path="/invite/:token" element={<InvitePage />} />
+              <Route path="/terms" element={<LegalDocumentPage doc="terms" />} />
+              <Route path="/legal" element={<LegalDocumentPage doc="privacy" />} />
               <Route path="/app" element={<RequireAuth><Index /></RequireAuth>} />
               <Route path="/admin" element={<RequireAdmin><Admin /></RequireAdmin>} />
               <Route path="/webhook-logs/:integrationId" element={<RequireAuth><WebhookLogsPage /></RequireAuth>} />
