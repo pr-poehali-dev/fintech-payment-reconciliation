@@ -93,6 +93,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     ogrn = body.get('ogrn')
     full_name = body.get('full_name')
     legal_address = body.get('legal_address')
+    # tariff_slug - тариф, на кнопку которого нажали на главной (необязательно).
 
     if not user_id or not name:
         return {
@@ -154,8 +155,16 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             (company_id, user_id, role_id, 'active')
         )
 
-        cur.execute("SELECT id, CASE WHEN trial_days > 0 THEN trial_days ELSE period_days END FROM tariffs WHERE slug = 'trial'")
-        tariff_row = cur.fetchone()
+        # Тариф, выбранный на главной: если у него есть пробный период - стартуем на нём,
+        # иначе (тариф без пробного или не выбран) - на тарифе «Пробный».
+        tariff_row = None
+        chosen = str(body.get('tariff_slug') or '').strip()
+        if chosen:
+            cur.execute("SELECT id, trial_days FROM tariffs WHERE slug = %s AND is_active = true AND trial_days > 0", (chosen,))
+            tariff_row = cur.fetchone()
+        if not tariff_row:
+            cur.execute("SELECT id, CASE WHEN trial_days > 0 THEN trial_days ELSE period_days END FROM tariffs WHERE slug = 'trial'")
+            tariff_row = cur.fetchone()
 
         if tariff_row:
             # Срок пробного периода - из настроек тарифа в админке.

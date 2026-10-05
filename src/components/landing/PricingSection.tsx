@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import Icon from '@/components/ui/icon';
 import { pluralDays } from '@/lib/trialDays';
 import { discountedYearPrice, fullYearPrice, periodLabel } from '@/lib/tariffPricing';
+import { rememberTariff } from '@/lib/chosenTariff';
 
 export interface Tariff {
   slug: string;
@@ -184,6 +185,7 @@ const PricingSection = ({ onCtaClick, trialDays, tariffs: loaded }: { onCtaClick
                     variant={isPopular ? 'default' : 'outline'}
                     onClick={() => {
                       ecomAdd(tariff, yearly);
+                      rememberTariff(tariff.slug);
                       onCtaClick();
                     }}
                   >

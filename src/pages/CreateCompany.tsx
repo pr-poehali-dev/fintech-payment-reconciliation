@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { chosenTariff, forgetTariff } from '@/lib/chosenTariff';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -81,7 +82,8 @@ const CreateCompany = () => {
           kpp: foundCompany.kpp,
           ogrn: foundCompany.ogrn,
           full_name: foundCompany.full_name,
-          legal_address: foundCompany.address
+          legal_address: foundCompany.address,
+          tariff_slug: chosenTariff()
         })
       });
 
@@ -89,6 +91,7 @@ const CreateCompany = () => {
 
       if (response.ok && data.success) {
         if (data.trial_started) reachGoal(GOALS.trialStarted);
+        forgetTariff();
         await refreshCompanies();
         setCurrentCompanyId(data.company_id);
         toast({ title: 'Компания создана', description: data.name });
