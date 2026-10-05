@@ -6,6 +6,7 @@ import { forgetTariff } from '@/lib/chosenTariff';
 import type { Tariff } from '@/components/landing/PricingSection';
 import LandingHeader from '@/components/landing/LandingHeader';
 import HeroSection from '@/components/landing/HeroSection';
+import PainsSection from '@/components/landing/PainsSection';
 import FeaturesSection from '@/components/landing/FeaturesSection';
 import HowItWorksSection from '@/components/landing/HowItWorksSection';
 import PricingSection from '@/components/landing/PricingSection';
@@ -53,6 +54,7 @@ const Landing = () => {
     <div className="min-h-screen bg-background">
       <LandingHeader onCtaClick={handleCtaClick} trialDays={trialDays} />
       <HeroSection onCtaClick={handleCtaClick} trialDays={trialDays} />
+      <PainsSection />
       <FeaturesSection />
       <HowItWorksSection />
       <PricingSection onCtaClick={handleTariffClick} trialDays={trialDays} tariffs={tariffs} />
