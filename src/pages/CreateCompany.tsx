@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import SubscriptionDialog from '@/components/profile/SubscriptionDialog';
 import { chosenTariff, forgetTariff } from '@/lib/chosenTariff';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -25,6 +26,7 @@ const CreateCompany = () => {
   const { user, companies, refreshCompanies, setCurrentCompanyId, logout } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
+  const [subscriptionOpen, setSubscriptionOpen] = useState(false);
   const [inn, setInn] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
@@ -140,6 +142,7 @@ const CreateCompany = () => {
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
+      <SubscriptionDialog open={subscriptionOpen} onOpenChange={setSubscriptionOpen} />
       <div className="w-full max-w-md">
         <div className="mb-8 text-center animate-fade-in">
           <a href="/" className="flex items-center justify-center gap-2 mb-2">
@@ -196,7 +199,7 @@ const CreateCompany = () => {
                       variant="outline"
                       size="sm"
                       className="mt-3 w-full"
-                      onClick={() => navigate('/#pricing')}
+                      onClick={() => setSubscriptionOpen(true)}
                     >
                       <Icon name="ArrowUpCircle" size={16} className="mr-2" />
                       Сменить тариф

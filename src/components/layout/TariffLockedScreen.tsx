@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import Icon from '@/components/ui/icon';
 import { useAuth } from '@/contexts/AuthContext';
@@ -15,9 +14,8 @@ interface TariffInfo {
 
 const formatPrice = (n: number) => new Intl.NumberFormat('ru-RU').format(n);
 
-const TariffLockedScreen = ({ moduleId }: { moduleId: string }) => {
+const TariffLockedScreen = ({ moduleId, onUpgrade }: { moduleId: string; onUpgrade: () => void }) => {
   const { currentCompany } = useAuth();
-  const navigate = useNavigate();
   const [tariffs, setTariffs] = useState<TariffInfo[]>([]);
   const module = APP_MODULES.find((m) => m.id === moduleId);
 
@@ -29,7 +27,7 @@ const TariffLockedScreen = ({ moduleId }: { moduleId: string }) => {
   }, []);
 
   const suitable = tariffs.filter(
-    (t) => t.slug !== currentCompany?.tariff_slug && (!t.modules || t.modules.includes(moduleId))
+    (t) => t.slug !== 'trial' && t.slug !== currentCompany?.tariff_slug && (!t.modules || t.modules.includes(moduleId))
   );
 
   return (
@@ -60,7 +58,7 @@ const TariffLockedScreen = ({ moduleId }: { moduleId: string }) => {
         </div>
       )}
 
-      <Button className="mt-6" size="lg" onClick={() => navigate('/#pricing')}>
+      <Button className="mt-6" size="lg" onClick={onUpgrade}>
         <Icon name="ArrowUpCircle" size={18} className="mr-2" />
         Сменить тариф
       </Button>

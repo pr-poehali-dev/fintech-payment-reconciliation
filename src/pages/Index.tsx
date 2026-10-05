@@ -111,12 +111,12 @@ const Index = () => {
         }}
       />
 
-      <SubscriptionDialog open={subscriptionOpen} onOpenChange={setSubscriptionOpen} />
+      <SubscriptionDialog open={subscriptionOpen} onOpenChange={setSubscriptionOpen} highlightModule={lockedModule} />
 
       <AppSidebar activeModule={shownModule ?? ''} onModuleChange={handleModuleChange} />
 
       <main className="ml-64 mt-16 p-8">
-        {lockedModule && <TariffLockedScreen moduleId={lockedModule} />}
+        {lockedModule && <TariffLockedScreen moduleId={lockedModule} onUpgrade={() => setSubscriptionOpen(true)} />}
         {shownModule && !lockedModule && banners.forPage(shownModule).map((b) => <PageBanner key={b.page} banner={b} />)}
         {!lockedModule && shownModule === 'reconciliation' && (
           <ReconciliationPage onOpenTransactions={canOpenTransactions ? openTransactionsForPeriod : undefined} />

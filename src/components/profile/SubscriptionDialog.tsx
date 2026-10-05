@@ -1,26 +1,81 @@
+import { useEffect, useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import Icon from '@/components/ui/icon';
 import { useAuth } from '@/contexts/AuthContext';
+import { useToast } from '@/hooks/use-toast';
 import { SUBSCRIPTION_STATUS, subscriptionEndDate, daysLeft, formatLongDate } from '@/lib/subscription';
+import { APP_MODULES } from '@/config/modules';
+import functionUrls from '../../../backend/func2url.json';
 
 interface SubscriptionDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  highlightModule?: string | null;
 }
 
-const Row = ({ icon, label, value }: { icon: string; label: string; value: React.ReactNode }) => (
-  <div className="flex items-center justify-between gap-4 py-3">
-    <span className="flex items-center gap-2 text-sm text-muted-foreground">
-      <Icon name={icon} size={16} />
-      {label}
-    </span>
-    <span className="text-sm font-medium text-right">{value}</span>
-  </div>
-);
+interface PlanTariff {
+  slug: string;
+  name: string;
+  description?: string;
+  price: number;
+  period_days: number;
+  yearly_discount_percent: number;
+  year_price: number;
+  modules: string[];
+  max_companies: number | null;
+  max_users: number | null;
+  max_integrations: number | null;
+  max_automations: number | null;
+}
 
-const SubscriptionDialog = ({ open, onOpenChange }: SubscriptionDialogProps) => {
-  const { currentCompany } = useAuth();
+interface Payment {
+  id: number;
+  tariff_name: string;
+  period: string;
+  amount: number;
+  period_end: string | null;
+  created_at: string;
+}
+
+type Period = 'month' | 'year';
+
+const money = (n: number) => `${new Intl.NumberFormat('ru-RU').format(n)} ₽`;
+const limit = (n: number | null, label: string) => `${label}: ${n === null ? 'без ограничений' : n}`;
+
+const SubscriptionDialog = ({ open, onOpenChange, highlightModule }: SubscriptionDialogProps) => {
+  const { currentCompany, refreshCompanies } = useAuth();
+  const { toast } = useToast();
+  const [tariffs, setTariffs] = useState<PlanTariff[]>([]);
+  const [payments, setPayments] = useState<Payment[]>([]);
+  const [canPay, setCanPay] = useState(false);
+  const [period, setPeriod] = useState<Period>('month');
+  const [selected, setSelected] = useState<string | null>(null);
+  const [paying, setPaying] = useState(false);
+
+  const companyId = currentCompany?.id;
+
+  const load = () => {
+    if (!companyId) return;
+    fetch(`${functionUrls['subscription-checkout']}?company_id=${companyId}`)
+      .then((r) => r.json())
+      .then((d) => {
+        if (!d.success) return;
+        setTariffs(d.tariffs || []);
+        setPayments(d.payments || []);
+        setCanPay(Boolean(d.can_pay));
+      })
+      .catch(() => undefined);
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    setSelected(null);
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, companyId]);
+
   const status = SUBSCRIPTION_STATUS[currentCompany?.subscription_status || ''] || {
     label: currentCompany?.subscription_status || 'Нет подписки',
     className: 'bg-muted text-muted-foreground border-border'
@@ -28,10 +83,44 @@ const SubscriptionDialog = ({ open, onOpenChange }: SubscriptionDialogProps) => 
   const isTrial = currentCompany?.subscription_status === 'trial';
   const endDate = subscriptionEndDate(currentCompany);
   const left = daysLeft(endDate);
+  const currentSlug = currentCompany?.tariff_slug;
+  const currentPaid = tariffs.find((t) => t.slug === currentSlug);
+  const chosen = tariffs.find((t) => t.slug === selected) || null;
+  const isRenewal = Boolean(chosen && chosen.slug === currentSlug && !isTrial);
+
+  const pay = async () => {
+    if (!chosen || !companyId) return;
+    setPaying(true);
+    try {
+      const res = await fetch(functionUrls['subscription-checkout'], {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'pay', company_id: companyId, tariff_slug: chosen.slug, period })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        toast({ title: 'Не удалось оплатить', description: data.error, variant: 'destructive' });
+        return;
+      }
+      toast({
+        title: isRenewal ? 'Подписка продлена' : `Тариф «${data.tariff_name}» активирован`,
+        description: `Оплачено до ${formatLongDate(data.period_end)}`
+      });
+      setSelected(null);
+      await refreshCompanies();
+      load();
+    } catch {
+      toast({ title: 'Ошибка подключения', variant: 'destructive' });
+    } finally {
+      setPaying(false);
+    }
+  };
+
+  const price = (t: PlanTariff) => (period === 'year' ? t.year_price : t.price);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Подписка</DialogTitle>
           <DialogDescription>
@@ -40,9 +129,9 @@ const SubscriptionDialog = ({ open, onOpenChange }: SubscriptionDialogProps) => 
         </DialogHeader>
 
         {currentCompany && (
-          <div className="space-y-4 py-2">
+          <div className="space-y-6 py-2">
             <div className="rounded-lg border border-border bg-muted/30 p-4">
-              <div className="flex items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <div className="text-xs text-muted-foreground">Текущий тариф</div>
                   <div className="text-xl font-display font-bold">{currentCompany.tariff_name || '—'}</div>
@@ -51,17 +140,163 @@ const SubscriptionDialog = ({ open, onOpenChange }: SubscriptionDialogProps) => 
                   {status.label}
                 </Badge>
               </div>
-              {left !== null && (
-                <div className={`mt-3 text-sm font-medium ${left <= 3 ? 'text-warning' : 'text-primary'}`}>
-                  {left > 0 ? `Осталось дней: ${left}` : 'Срок закончился'}
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-sm">
+                <span className="text-muted-foreground">
+                  {isTrial ? 'Пробный период до' : 'Оплачено до'}:{' '}
+                  <span className="font-medium text-foreground">{formatLongDate(endDate)}</span>
+                  {left !== null && (
+                    <span className={`ml-2 font-medium ${left <= 3 ? 'text-warning' : 'text-primary'}`}>
+                      {left > 0 ? `(осталось дней: ${left})` : '(срок закончился)'}
+                    </span>
+                  )}
+                </span>
+                {canPay && currentPaid && !isTrial && (
+                  <Button size="sm" onClick={() => setSelected(currentPaid.slug)}>
+                    <Icon name="RefreshCw" size={16} className="mr-2" />
+                    Продлить
+                  </Button>
+                )}
+              </div>
+            </div>
+
+            <div>
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                <h3 className="font-semibold">{isTrial ? 'Выберите тариф' : 'Тарифы'}</h3>
+                <div className="inline-flex rounded-lg border border-border p-1">
+                  {(['month', 'year'] as Period[]).map((p) => (
+                    <button
+                      key={p}
+                      onClick={() => setPeriod(p)}
+                      className={`rounded-md px-3 py-1.5 text-sm transition-colors ${
+                        period === p ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      {p === 'month' ? 'Месяц' : 'Год — выгоднее'}
+                    </button>
+                  ))}
                 </div>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                {tariffs.map((t) => {
+                  const isCurrent = t.slug === currentSlug && !isTrial;
+                  const isChosen = t.slug === selected;
+                  const opensModule = highlightModule && t.modules.includes(highlightModule);
+                  return (
+                    <div
+                      key={t.slug}
+                      className={`flex flex-col rounded-xl border p-4 transition-colors ${
+                        isChosen ? 'border-primary bg-primary/5' : 'border-border'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="font-display text-lg font-bold">{t.name}</div>
+                        {isCurrent && <Badge variant="outline">Ваш тариф</Badge>}
+                        {!isCurrent && opensModule && (
+                          <Badge variant="outline" className="border-primary/30 bg-primary/15 text-primary">
+                            Откроет раздел
+                          </Badge>
+                        )}
+                      </div>
+                      <div className="mt-1">
+                        <span className="text-2xl font-bold">{money(price(t))}</span>
+                        <span className="text-sm text-muted-foreground">
+                          {' '}/ {period === 'year' ? 'год' : `${t.period_days} дн.`}
+                        </span>
+                      </div>
+                      {period === 'year' && t.yearly_discount_percent > 0 && (
+                        <div className="text-xs text-primary">
+                          Скидка {t.yearly_discount_percent}% — вместо {money(t.price * 12)}
+                        </div>
+                      )}
+                      <div className="mt-3 flex flex-wrap gap-1.5">
+                        {APP_MODULES.filter((m) => !m.hidden).map((m) => {
+                          const on = t.modules.includes(m.id);
+                          return (
+                            <span
+                              key={m.id}
+                              className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs ${
+                                on ? 'bg-primary/10 text-foreground' : 'bg-muted text-muted-foreground line-through'
+                              }`}
+                            >
+                              <Icon name={on ? 'Check' : 'X'} size={12} />
+                              {m.name}
+                            </span>
+                          );
+                        })}
+                      </div>
+                      <ul className="mt-3 space-y-0.5 text-xs text-muted-foreground">
+                        <li>{limit(t.max_companies, 'Компаний')}</li>
+                        <li>{limit(t.max_users, 'Пользователей')}</li>
+                        <li>{limit(t.max_integrations, 'Интеграций')}</li>
+                        <li>{limit(t.max_automations, 'Автоматизаций')}</li>
+                      </ul>
+                      {canPay && (
+                        <Button
+                          className="mt-auto pt-0"
+                          style={{ marginTop: 16 }}
+                          variant={isChosen ? 'default' : 'outline'}
+                          onClick={() => setSelected(t.slug)}
+                        >
+                          {isCurrent ? 'Продлить' : isTrial ? 'Выбрать' : 'Перейти'}
+                        </Button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {!canPay && (
+                <p className="mt-3 text-sm text-muted-foreground">
+                  Оплатить или сменить тариф может владелец или админ компании.
+                </p>
               )}
             </div>
 
-            <div className="divide-y divide-border">
-              <Row icon="CalendarClock" label={isTrial ? 'Пробный период до' : 'Оплачено до'} value={formatLongDate(endDate)} />
-              <Row icon="Users" label="Пользователей в тарифе" value={currentCompany.max_users ?? 'Без ограничений'} />
-            </div>
+            {chosen && canPay && (
+              <div className="rounded-xl border border-primary/40 bg-primary/5 p-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="text-sm">
+                    <div className="font-semibold">
+                      {isRenewal ? `Продление тарифа «${chosen.name}»` : `Переход на тариф «${chosen.name}»`}
+                    </div>
+                    <div className="text-muted-foreground">
+                      {period === 'year' ? 'На 365 дней' : `На ${chosen.period_days} дн.`}
+                      {isRenewal ? ' — добавится к текущему сроку' : ' — с сегодняшнего дня'}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button variant="ghost" onClick={() => setSelected(null)} disabled={paying}>
+                      Отмена
+                    </Button>
+                    <Button onClick={pay} disabled={paying}>
+                      <Icon
+                        name={paying ? 'Loader2' : 'CreditCard'}
+                        size={16}
+                        className={`mr-2 ${paying ? 'animate-spin' : ''}`}
+                      />
+                      Оплатить {money(price(chosen))}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {payments.length > 0 && (
+              <div>
+                <h3 className="mb-2 font-semibold">История оплат</h3>
+                <div className="divide-y divide-border rounded-lg border border-border">
+                  {payments.map((p) => (
+                    <div key={p.id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5 text-sm">
+                      <span>
+                        {formatLongDate(p.created_at)} · {p.tariff_name} · {p.period === 'year' ? 'год' : 'месяц'}
+                      </span>
+                      <span className="font-medium">{money(p.amount)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </DialogContent>

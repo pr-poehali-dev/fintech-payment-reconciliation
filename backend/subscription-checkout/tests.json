@@ -1,0 +1,10 @@
+{
+  "tests": [
+    {
+      "name": "Requires session",
+      "method": "GET",
+      "path": "/?company_id=1",
+      "expectedStatus": 401
+    }
+  ]
+}
