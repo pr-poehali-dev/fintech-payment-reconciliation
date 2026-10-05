@@ -83,13 +83,13 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
         if method == 'GET':
             cur.execute(f'''
-                SELECT p.id, t.name, p.period, p.days, p.amount, p.status, p.period_end, p.created_at
+                SELECT p.id, t.name, p.period, p.days, p.amount, p.status, p.period_end, p.created_at, p.method
                 FROM {SCHEMA}.subscription_payments p JOIN {SCHEMA}.tariffs t ON t.id = p.tariff_id
                 WHERE p.company_id = %s ORDER BY p.created_at DESC LIMIT 20
             ''', (company_id,))
             payments = [{
                 'id': r[0], 'tariff_name': r[1], 'period': r[2], 'days': r[3], 'amount': float(r[4]),
-                'status': r[5], 'period_end': r[6], 'created_at': r[7]
+                'status': r[5], 'period_end': r[6], 'created_at': r[7], 'method': r[8]
             } for r in cur.fetchall()]
             cur.execute(f'''
                 SELECT t.modules, t.max_companies, t.max_users, t.max_integrations, t.max_automations
@@ -167,8 +167,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
             cur.execute(f'''
                 INSERT INTO {SCHEMA}.subscription_payments
-                    (company_id, user_id, tariff_id, period, days, amount, status, period_end)
-                VALUES (%s, %s, %s, %s, %s, %s, 'paid', %s)
+                    (company_id, user_id, tariff_id, period, days, amount, status, period_end, method)
+                VALUES (%s, %s, %s, %s, %s, %s, 'paid', %s, 'manual')
             ''', (company_id, user_id, tariff['id'], period, days, amount, period_end))
             conn.commit()
             print(f"pay ok company={company_id} tariff={tariff['slug']} until={period_end}")

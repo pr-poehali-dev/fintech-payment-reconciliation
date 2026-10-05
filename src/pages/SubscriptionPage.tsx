@@ -42,7 +42,15 @@ interface Payment {
   amount: number;
   period_end: string | null;
   created_at: string;
+  method?: string;
 }
+
+const PAYMENT_METHODS: Record<string, { label: string; icon: string }> = {
+  platform: { label: 'Начислено платформой', icon: 'Gift' },
+  manual: { label: 'Оплата без платёжной системы', icon: 'CreditCard' },
+  tbank: { label: 'Т-Банк', icon: 'CreditCard' },
+  tochka: { label: 'Точка', icon: 'CreditCard' }
+};
 
 type Period = 'month' | 'year';
 
@@ -470,14 +478,26 @@ const SubscriptionPage = ({ highlightModule }: SubscriptionPageProps) => {
               <div>
                 <h3 className="mb-2 font-semibold">История оплат</h3>
                 <div className="divide-y divide-border rounded-lg border border-border">
-                  {payments.map((p) => (
-                    <div key={p.id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5 text-sm">
-                      <span>
-                        {formatLongDate(p.created_at)} · {p.tariff_name} · {p.period === 'year' ? 'год' : 'месяц'}
-                      </span>
-                      <span className="font-medium">{money(p.amount)}</span>
-                    </div>
-                  ))}
+                  {payments.map((p) => {
+                    const m = PAYMENT_METHODS[p.method || 'manual'] || { label: p.method || '—', icon: 'CreditCard' };
+                    const isGrant = p.method === 'platform';
+                    return (
+                      <div key={p.id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5 text-sm">
+                        <div>
+                          <div>
+                            {formatLongDate(p.created_at)} · {p.tariff_name} ·{' '}
+                            {p.period === 'year' ? 'год' : 'месяц'}
+                          </div>
+                          <div className={`flex items-center gap-1 text-xs ${isGrant ? 'text-primary' : 'text-muted-foreground'}`}>
+                            <Icon name={m.icon} size={12} />
+                            {m.label}
+                            {p.period_end && <span className="text-muted-foreground">· до {formatLongDate(p.period_end)}</span>}
+                          </div>
+                        </div>
+                        <span className="font-medium">{isGrant ? 'Бесплатно' : money(p.amount)}</span>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}

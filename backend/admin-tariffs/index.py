@@ -141,6 +141,13 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 RETURNING current_period_end, trial_ends_at, status
             ''', (days, is_trial, days, 'trial' if is_trial else 'active', sub_id))
             end, trial_end, status = cur.fetchone()
+            # Движение в истории оплат компании: начисление платформой, без оплаты.
+            cur.execute(f'''
+                INSERT INTO {SCHEMA}.subscription_payments
+                    (company_id, user_id, tariff_id, period, days, amount, status, period_end, method)
+                SELECT %s, %s, tariff_id, %s, %s, 0, 'paid', %s, 'platform'
+                FROM {SCHEMA}.subscriptions WHERE id = %s
+            ''', (company_id, requester, 'year' if period == 'year' else 'month', days, end, sub_id))
             conn.commit()
             return respond(200, {'success': True, 'days': days, 'subscription_status': status,
                                  'current_period_end': end.isoformat(),
