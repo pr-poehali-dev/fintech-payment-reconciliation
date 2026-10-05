@@ -154,9 +154,7 @@ export const PROVIDER_FIELDS: Record<string, FieldConfig[]> = {
   // Токен и касса вводятся в OfdKktPicker: по токену и ИНН компании загружаем список касс из OFD.RU.
   ofdru: [],
   bitrix24: [
-    { key: 'webhook_url', label: 'Входящий вебхук Битрикс24', type: 'text', placeholder: 'https://yourcompany.bitrix24.ru/rest/1/xxxxxxxxxx/', hint: 'Битрикс24 → Разработчикам → Другое → Входящий вебхук. Права: crm' },
-    { key: 'sync_schedule', label: 'Обмен по расписанию', type: 'checkbox', default: true, required: false, hint: 'Клиенты и статусы синхронизируются сами, без кнопки' },
-    { key: 'sync_interval_minutes', label: 'Как часто, минут', type: 'number', placeholder: '60', default: 60, required: false, hint: 'Реже — меньше нагрузки на Битрикс' }
+    { key: 'webhook_url', label: 'Входящий вебхук Битрикс24', type: 'text', placeholder: 'https://yourcompany.bitrix24.ru/rest/1/xxxxxxxxxx/', hint: 'Битрикс24 → Разработчикам → Другое → Входящий вебхук. Права: crm' }
   ],
   amocrm: [
     { key: 'subdomain', label: 'Поддомен AmoCRM', type: 'text', placeholder: 'yourcompany', hint: 'Из адреса вида yourcompany.amocrm.ru' },
