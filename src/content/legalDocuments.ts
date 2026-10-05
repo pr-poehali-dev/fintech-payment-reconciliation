@@ -1,5 +1,5 @@
 export const LEGAL_SITE = 'https://s-verka.ru';
-export const LEGAL_EMAIL = 'sales@ecomkassa.pro';
+export const LEGAL_EMAIL = 'sales@ecomkassa.ru';
 export const LEGAL_OPERATOR = 'ИП Носов Александр Сергеевич (ОГРНИП 319774600198593)';
 
 export interface LegalSection {
