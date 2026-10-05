@@ -1,87 +1,24 @@
 import { useEffect, useRef, useState } from 'react';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
-import Icon from '@/components/ui/icon';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { SUBSCRIPTION_STATUS, subscriptionEndDate, daysLeft, formatLongDate } from '@/lib/subscription';
-import { APP_MODULES } from '@/config/modules';
 import functionUrls from '../../backend/func2url.json';
-import DowngradeKeepPicker, {
+import {
   KeepState,
   Overage,
   initialKeep,
   keepIsValid,
   removalCount
 } from '@/components/profile/DowngradeKeepPicker';
+import { CurrentPlan, Payment, Period, PlanTariff } from '@/components/subscription/subscriptionTypes';
+import CurrentPlanCard from '@/components/subscription/CurrentPlanCard';
+import TariffPlansSection from '@/components/subscription/TariffPlansSection';
+import CheckoutPanel from '@/components/subscription/CheckoutPanel';
+import PaymentResultAndHistory from '@/components/subscription/PaymentResultAndHistory';
 
 interface SubscriptionPageProps {
   highlightModule?: string | null;
 }
-
-interface PlanTariff {
-  slug: string;
-  name: string;
-  description?: string;
-  price: number;
-  period_days: number;
-  yearly_discount_percent: number;
-  year_price: number;
-  modules: string[];
-  max_companies: number | null;
-  max_users: number | null;
-  max_integrations: number | null;
-  max_automations: number | null;
-}
-
-interface Payment {
-  id: number;
-  tariff_name: string;
-  period: string;
-  amount: number;
-  period_end: string | null;
-  created_at: string;
-  method?: string;
-}
-
-const PAYMENT_METHODS: Record<string, { label: string; icon: string }> = {
-  platform: { label: 'Начислено платформой', icon: 'Gift' },
-  manual: { label: 'Оплата без платёжной системы', icon: 'CreditCard' },
-  tbank: { label: 'Т-Банк', icon: 'CreditCard' },
-  tochka: { label: 'Точка', icon: 'CreditCard' }
-};
-
-type Period = 'month' | 'year';
-
-interface CurrentPlan {
-  modules: string[];
-  max_companies: number | null;
-  max_users: number | null;
-  max_integrations: number | null;
-  max_automations: number | null;
-}
-
-type LimitKey = 'max_companies' | 'max_users' | 'max_integrations' | 'max_automations';
-
-const LIMITS: { key: LimitKey; label: string }[] = [
-  { key: 'max_companies', label: 'Компаний' },
-  { key: 'max_users', label: 'Пользователей' },
-  { key: 'max_integrations', label: 'Интеграций' },
-  { key: 'max_automations', label: 'Автоматизаций' }
-];
-
-const money = (n: number) => `${new Intl.NumberFormat('ru-RU').format(n)} ₽`;
-
-// Изменение лимита относительно текущего тарифа: null в лимите - без ограничений.
-const limitDiff = (next: number | null, cur: number | null | undefined): { up: boolean; text: string } | null => {
-  if (cur === undefined) return null;
-  if (cur === null && next === null) return null;
-  if (next === null) return { up: true, text: '' };
-  if (cur === null) return { up: false, text: '' };
-  if (next === cur) return null;
-  return next > cur ? { up: true, text: `+${next - cur}` } : { up: false, text: `−${cur - next}` };
-};
 
 const SubscriptionPage = ({ highlightModule }: SubscriptionPageProps) => {
   const { currentCompany, refreshCompanies } = useAuth();
@@ -231,276 +168,53 @@ const SubscriptionPage = ({ highlightModule }: SubscriptionPageProps) => {
 
         {currentCompany && (
           <div className="space-y-6 py-2">
-            <div className="rounded-lg border border-border bg-muted/30 p-4">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <div className="text-xs text-muted-foreground">Текущий тариф</div>
-                  <div className="text-xl font-display font-bold">{currentCompany.tariff_name || '—'}</div>
-                </div>
-                <Badge variant="outline" className={status.className}>
-                  {status.label}
-                </Badge>
-              </div>
-              <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-sm">
-                <span className="text-muted-foreground">
-                  {isTrial ? 'Пробный период до' : 'Оплачено до'}:{' '}
-                  <span className="font-medium text-foreground">{formatLongDate(endDate)}</span>
-                  {left !== null && (
-                    <span className={`ml-2 font-medium ${left <= 3 ? 'text-warning' : 'text-primary'}`}>
-                      {left > 0 ? `(осталось дней: ${left})` : '(срок закончился)'}
-                    </span>
-                  )}
-                </span>
-                {canPay && currentPaid && !isTrial && (
-                  <Button size="sm" onClick={() => setSelected(currentPaid.slug)}>
-                    <Icon name="RefreshCw" size={16} className="mr-2" />
-                    Продлить
-                  </Button>
-                )}
-              </div>
-            </div>
+            <CurrentPlanCard
+              tariffName={currentCompany.tariff_name}
+              status={status}
+              isTrial={isTrial}
+              endDate={endDate}
+              left={left}
+              canPay={canPay}
+              currentPaid={currentPaid}
+              onRenew={setSelected}
+            />
 
-            <div>
-              <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-                <h3 className="font-semibold">{isTrial ? 'Выберите тариф' : 'Тарифы'}</h3>
-                <div className="inline-flex rounded-lg border border-border p-1">
-                  {(['month', 'year'] as Period[]).map((p) => (
-                    <button
-                      key={p}
-                      onClick={() => setPeriod(p)}
-                      className={`rounded-md px-3 py-1.5 text-sm transition-colors ${
-                        period === p ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
-                      }`}
-                    >
-                      {p === 'month' ? 'Месяц' : 'Год — выгоднее'}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                {tariffs.map((t) => {
-                  const isCurrent = t.slug === currentSlug && !isTrial;
-                  const isChosen = t.slug === selected;
-                  const opensModule = highlightModule && t.modules.includes(highlightModule);
-                  return (
-                    <div
-                      key={t.slug}
-                      className={`flex flex-col rounded-xl border p-4 transition-colors ${
-                        isChosen ? 'border-primary bg-primary/5' : 'border-border'
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="font-display text-lg font-bold">{t.name}</div>
-                        {isCurrent && <Badge variant="outline">Ваш тариф</Badge>}
-                        {!isCurrent && opensModule && (
-                          <Badge variant="outline" className="border-primary/30 bg-primary/15 text-primary">
-                            Откроет раздел
-                          </Badge>
-                        )}
-                      </div>
-                      <div className="mt-1">
-                        <span className="text-2xl font-bold">{money(price(t))}</span>
-                        <span className="text-sm text-muted-foreground">
-                          {' '}/ {period === 'year' ? 'год' : `${t.period_days} дн.`}
-                        </span>
-                      </div>
-                      {period === 'year' && t.yearly_discount_percent > 0 && (
-                        <div className="text-xs text-primary">
-                          Скидка {t.yearly_discount_percent}% — вместо {money(t.price * 12)}
-                        </div>
-                      )}
-                      <div className="mt-3 flex flex-wrap gap-1.5">
-                        {APP_MODULES.filter((m) => !m.hidden).map((m) => {
-                          const on = t.modules.includes(m.id);
-                          const had = current !== null && current.modules.includes(m.id);
-                          const added = on && !isCurrent && current !== null && !had;
-                          const lost = !on && !isCurrent && had;
-                          return (
-                            <span
-                              key={m.id}
-                              title={added ? 'Добавится к вашему тарифу' : lost ? 'Пропадёт при переходе' : undefined}
-                              className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs ${
-                                added
-                                  ? 'bg-success/15 text-success font-medium'
-                                  : lost
-                                    ? 'bg-destructive/15 text-destructive font-medium line-through'
-                                    : on
-                                      ? 'bg-primary/10 text-foreground'
-                                      : 'bg-muted text-muted-foreground line-through'
-                              }`}
-                            >
-                              <Icon name={added ? 'Plus' : lost ? 'Minus' : on ? 'Check' : 'X'} size={12} />
-                              {m.name}
-                            </span>
-                          );
-                        })}
-                      </div>
-                      <ul className="mt-3 space-y-0.5 text-xs text-muted-foreground">
-                        {LIMITS.map(({ key, label }) => {
-                          const diff = isCurrent ? null : limitDiff(t[key], current?.[key]);
-                          const color = diff ? (diff.up ? 'text-success' : 'text-destructive') : '';
-                          return (
-                            <li key={key}>
-                              {label}: {t[key] === null ? 'без ограничений' : t[key]}
-                              {diff && diff.text && <span className={`ml-1.5 font-semibold ${color}`}>{diff.text}</span>}
-                              {diff && !diff.text && (
-                                <Icon name={diff.up ? 'ArrowUp' : 'ArrowDown'} size={12} className={`ml-1 inline ${color}`} />
-                              )}
-                            </li>
-                          );
-                        })}
-                      </ul>
-                      {canPay && (
-                        <Button
-                          className="mt-auto pt-0"
-                          style={{ marginTop: 16 }}
-                          variant={isChosen ? 'default' : 'outline'}
-                          onClick={() => setSelected(t.slug)}
-                        >
-                          {isCurrent ? 'Продлить' : isTrial ? 'Выбрать' : 'Перейти'}
-                        </Button>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-
-              {!canPay && (
-                <p className="mt-3 text-sm text-muted-foreground">
-                  Оплатить или сменить тариф может владелец или админ компании.
-                </p>
-              )}
-            </div>
+            <TariffPlansSection
+              tariffs={tariffs}
+              current={current}
+              currentSlug={currentSlug}
+              isTrial={isTrial}
+              selected={selected}
+              period={period}
+              canPay={canPay}
+              highlightModule={highlightModule}
+              price={price}
+              onPeriodChange={setPeriod}
+              onSelect={setSelected}
+            />
 
             {chosen && canPay && (
-              <div className="rounded-xl border border-primary/40 bg-primary/5 p-4">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div className="text-sm">
-                    <div className="font-semibold">
-                      {isRenewal ? `Продление тарифа «${chosen.name}»` : `Переход на тариф «${chosen.name}»`}
-                    </div>
-                    <div className="text-muted-foreground">
-                      {period === 'year' ? 'На 365 дней' : `На ${chosen.period_days} дн.`}
-                      {isRenewal ? ' — добавится к текущему сроку' : ' — с сегодняшнего дня'}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Button variant="ghost" onClick={() => setSelected(null)} disabled={paying}>
-                      Отмена
-                    </Button>
-                    <Button
-                      onClick={pay}
-                      disabled={paying || payBlocked}
-                      variant={removing > 0 ? 'destructive' : 'default'}
-                    >
-                      <Icon
-                        name={paying ? 'Loader2' : 'CreditCard'}
-                        size={16}
-                        className={`mr-2 ${paying ? 'animate-spin' : ''}`}
-                      />
-                      Оплатить {money(price(chosen))}
-                    </Button>
-                  </div>
-                </div>
-
-                {checking && (
-                  <div className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
-                    <Icon name="Loader2" size={14} className="animate-spin" />
-                    Проверяем лимиты тарифа…
-                  </div>
-                )}
-
-                {overage && (
-                  <div className="mt-4 space-y-4">
-                    <div className="flex items-start gap-3 rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm">
-                      <Icon name="TriangleAlert" size={20} className="mt-0.5 shrink-0 text-destructive" />
-                      <div>
-                        <div className="font-semibold text-foreground">
-                          В тариф «{chosen.name}» помещается не всё, что есть сейчас
-                        </div>
-                        <div className="text-muted-foreground">
-                          Отметьте, что оставить. Всё неотмеченное будет удалено безвозвратно при оплате — восстановить
-                          это будет нельзя, даже если потом перейти на тариф выше.
-                        </div>
-                      </div>
-                    </div>
-
-                    <DowngradeKeepPicker overage={overage} keep={keep} onChange={setKeep} />
-
-                    {removing > 0 && (
-                      <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-destructive/40 p-3 text-sm">
-                        <Checkbox
-                          checked={confirmDelete}
-                          onCheckedChange={(v) => setConfirmDelete(Boolean(v))}
-                          className="mt-0.5"
-                        />
-                        <span>
-                          Понимаю, что <span className="font-semibold text-destructive">{removing}</span>{' '}
-                          {removing === 1 ? 'элемент будет удалён' : 'элементов будут удалены'} навсегда вместе со всеми
-                          данными
-                        </span>
-                      </label>
-                    )}
-                    {!keepValid && (
-                      <div className="text-sm text-destructive">Отмечено больше, чем позволяет тариф.</div>
-                    )}
-                  </div>
-                )}
-              </div>
+              <CheckoutPanel
+                chosen={chosen}
+                isRenewal={isRenewal}
+                period={period}
+                paying={paying}
+                payBlocked={payBlocked}
+                removing={removing}
+                checking={checking}
+                overage={overage}
+                keep={keep}
+                keepValid={keepValid}
+                confirmDelete={confirmDelete}
+                price={price}
+                onCancel={() => setSelected(null)}
+                onPay={pay}
+                onKeepChange={setKeep}
+                onConfirmDeleteChange={setConfirmDelete}
+              />
             )}
 
-            {paid && (
-              <div ref={resultRef} />
-            )}
-            {paid && (
-              <div className="flex items-start gap-3 rounded-xl border border-success/40 bg-success/10 p-4">
-                <Icon name="CircleCheck" size={22} className="mt-0.5 shrink-0 text-success" />
-                <div className="text-sm">
-                  <div className="font-semibold text-foreground">{paid.title}</div>
-                  <div className="text-muted-foreground">
-                    Срок действия: до <span className="font-medium text-foreground">{paid.until}</span>
-                  </div>
-                </div>
-              </div>
-            )}
-            {payError && <div ref={resultRef} />}
-            {payError && (
-              <div className="flex items-start gap-3 rounded-xl border border-destructive/40 bg-destructive/10 p-4 text-sm">
-                <Icon name="CircleAlert" size={22} className="mt-0.5 shrink-0 text-destructive" />
-                <div>
-                  <div className="font-semibold text-foreground">Не удалось оплатить</div>
-                  <div className="text-muted-foreground">{payError}</div>
-                </div>
-              </div>
-            )}
-            {payments.length > 0 && (
-              <div>
-                <h3 className="mb-2 font-semibold">История оплат</h3>
-                <div className="divide-y divide-border rounded-lg border border-border">
-                  {payments.map((p) => {
-                    const m = PAYMENT_METHODS[p.method || 'manual'] || { label: p.method || '—', icon: 'CreditCard' };
-                    const isGrant = p.method === 'platform';
-                    return (
-                      <div key={p.id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5 text-sm">
-                        <div>
-                          <div>
-                            {formatLongDate(p.created_at)} · {p.tariff_name} ·{' '}
-                            {p.period === 'year' ? 'год' : 'месяц'}
-                          </div>
-                          <div className={`flex items-center gap-1 text-xs ${isGrant ? 'text-primary' : 'text-muted-foreground'}`}>
-                            <Icon name={m.icon} size={12} />
-                            {m.label}
-                            {p.period_end && <span className="text-muted-foreground">· до {formatLongDate(p.period_end)}</span>}
-                          </div>
-                        </div>
-                        <span className="font-medium">{isGrant ? 'Бесплатно' : money(p.amount)}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
+            <PaymentResultAndHistory paid={paid} payError={payError} resultRef={resultRef} payments={payments} />
           </div>
         )}
     </div>
