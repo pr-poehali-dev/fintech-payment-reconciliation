@@ -46,6 +46,22 @@ export const formatDateTime = (
   }
 };
 
+/**
+ * Дата операции для реестра: банк отдаёт по выписке только день (без времени) - такая
+ * операция хранится как полночь, и в поясе компании превращалась в «03:00». Показываем дату.
+ */
+export const formatTxDateTime = (
+  dateStr: string | null | undefined,
+  type: string,
+  timezone: string = DEFAULT_TIMEZONE
+): string => {
+  if (type === 'money' && dateStr && /T00:00:00(\.0+)?$/.test(dateStr)) {
+    const [y, m, d] = dateStr.slice(0, 10).split('-');
+    return `${d}.${m}.${y}`;
+  }
+  return formatDateTime(dateStr, timezone);
+};
+
 export const formatDateOnly = (
   dateStr: string | null | undefined,
   timezone: string = DEFAULT_TIMEZONE

@@ -5,7 +5,7 @@ import Icon from "@/components/ui/icon";
 import { TableCell, TableRow } from "@/components/ui/table";
 import { Transaction } from "../transactionsTypes";
 import { TransactionGroup, nodeKey } from "@/lib/transactionGrouping";
-import { formatDateTime } from "@/lib/formatDate";
+import { formatTxDateTime } from "@/lib/formatDate";
 import {
   SelectCell,
   TypeBadge,
@@ -68,7 +68,7 @@ const TransactionGroupRow = ({
         </TableCell>
         <InfoCells
           tx={primary}
-          dateText={formatDateTime(primary.occurred_at, timezone)}
+          dateText={formatTxDateTime(primary.occurred_at, primary.type, timezone)}
         />
         <TableCell>
           {primary.status && (
@@ -139,7 +139,7 @@ const TransactionGroupRow = ({
             key={`${tx.type}-${tx.source}-${tx.id}`}
             tx={tx}
             isSelected={selectedKeys.has(nodeKey(tx))}
-            dateText={formatDateTime(tx.occurred_at, timezone)}
+            dateText={formatTxDateTime(tx.occurred_at, tx.type, timezone)}
             onRowClick={onRowClick}
             onToggleSelect={onToggleSelect}
             onDetach={onDetach}
