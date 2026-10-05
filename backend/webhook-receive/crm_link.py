@@ -279,7 +279,7 @@ def link_deals_by_pay_link(cur, company_id: int, deal_row_id: Optional[int] = No
                 ORDER BY r.id DESC LIMIT 1
             ) AS receipt_id
             FROM {SCHEMA}.crm_deals d2
-            WHERE d2.company_id = %s AND d2.linked_receipt_id IS NULL
+            WHERE d2.company_id = %s AND d2.linked_receipt_id IS NULL AND d2.removed_at IS NULL
               AND d2.updated_at > NOW() - make_interval(days => %s)
               AND (%s::int IS NULL OR d2.id = %s::int)
             ) c
@@ -319,7 +319,7 @@ def link_deals(cur, company_id: int, deal_row_id: Optional[int] = None) -> int:
                 LIMIT 1
             ) AS receipt_id
             FROM {SCHEMA}.crm_deals d2
-            WHERE d2.company_id = %s AND d2.linked_receipt_id IS NULL
+            WHERE d2.company_id = %s AND d2.linked_receipt_id IS NULL AND d2.removed_at IS NULL
               AND COALESCE(d2.customer_emails, '') <> '' AND d2.amount > 0
               AND d2.updated_at > NOW() - make_interval(days => %s)
               AND (%s::int IS NULL OR d2.id = %s::int)

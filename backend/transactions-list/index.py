@@ -504,6 +504,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     JOIN {SCHEMA}.automation_scenarios s ON s.id = j.scenario_id
                     JOIN {SCHEMA}.crm_deals cd ON cd.integration_id = s.source_integration_id
                          AND cd.external_deal_id = j.source_id AND cd.company_id = ekr.company_id
+                         AND cd.removed_at IS NULL
                     WHERE d.company_id = ekr.company_id AND d.kassa_integration_id = ekr.integration_id
                       AND d.ecom_uuid = ekr.order_id
                     ORDER BY d.id DESC LIMIT 1
@@ -546,7 +547,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     NULL::text AS group_key,
                     NULL::text AS linked_ofd_status
                 FROM {SCHEMA}.crm_deals cd
-                JOIN {SCHEMA}.user_integrations ui ON ui.id = cd.integration_id
+                JOIN {SCHEMA}.user_integrations ui ON ui.id = cd.integration_id AND cd.removed_at IS NULL
                 LEFT JOIN {SCHEMA}.ecomkassa_receipts lr ON lr.id = cd.linked_receipt_id AND lr.removed_at IS NULL
                 LEFT JOIN LATERAL (
                     SELECT ekr.id, ekr.status, ekr.order_id

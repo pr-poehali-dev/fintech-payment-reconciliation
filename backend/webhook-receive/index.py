@@ -42,7 +42,7 @@ EVENT_TYPE_BY_PROVIDER = {
 def link_deal_now(cur, company_id: int, integration_id: int, external_deal_id: str) -> None:
     cur.execute('''
         SELECT id FROM t_p83864310_fintech_payment_reco.crm_deals
-        WHERE integration_id = %s AND external_deal_id = %s AND linked_receipt_id IS NULL
+        WHERE integration_id = %s AND external_deal_id = %s AND linked_receipt_id IS NULL AND removed_at IS NULL
     ''', (integration_id, str(external_deal_id)))
     row = cur.fetchone()
     if not row:

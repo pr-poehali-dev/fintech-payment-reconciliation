@@ -14,7 +14,7 @@ CORS_HEADERS = {
     'Access-Control-Max-Age': '86400'
 }
 
-ALLOWED_TYPES = {'payment', 'receipt_ofd', 'receipt_kassa', 'receipt_order', 'money'}
+ALLOWED_TYPES = {'payment', 'receipt_ofd', 'receipt_kassa', 'receipt_order', 'money', 'crm_deal'}
 
 # Каждому типу транзакции соответствует своя исходная таблица - удаление
 # всегда "мягкое" (removed_at = NOW()), физически строка не пропадает, т.к.
@@ -28,6 +28,7 @@ TABLE_BY_TYPE = {
     'receipt_kassa': ('ecomkassa_receipts', 'company_id'),
     'receipt_order': ('ecomkassa_receipts', 'company_id'),
     'money': ('bank_statement_transactions', 'company_id'),
+    'crm_deal': ('crm_deals', 'company_id'),
 }
 
 
