@@ -452,19 +452,45 @@ def platform_members(cur) -> List[Dict[str, Any]]:
             for r in cur.fetchall()]
 
 
+# Страницы личного кабинета, где можно показать баннер. 'all' - на всех страницах.
+BANNER_PAGES = [
+    {'id': 'all', 'name': 'Все страницы'},
+    {'id': 'reconciliation', 'name': 'Сверка'},
+    {'id': 'events', 'name': 'События'},
+    {'id': 'transactions', 'name': 'Транзакции'},
+    {'id': 'automation', 'name': 'Автоматизация'},
+    {'id': 'integrations', 'name': 'Интеграции'},
+    {'id': 'access', 'name': 'Доступ'},
+    {'id': 'settings', 'name': 'Настройки'},
+]
+BANNER_VARIANTS = ('info', 'warning', 'danger', 'success')
+
+
+def load_banners(cur, only_active: bool = False) -> List[Dict[str, Any]]:
+    cur.execute(f'''
+        SELECT page, text, button_text, button_url, variant, updated_at FROM {SCHEMA}.platform_banners
+        {"WHERE btrim(text) <> ''" if only_active else ''}
+    ''')
+    return [{'page': r[0], 'text': r[1], 'button_text': r[2], 'button_url': r[3], 'variant': r[4],
+             'updated_at': r[5].isoformat() if r[5] else None} for r in cur.fetchall()]
+
+
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     '''
     Настройки платформы (только для администраторов платформы) и точка запуска
     фоновых задач по расписанию.
     GET ?requester_user_id= - настройки + список компаний для выбора управляющей
     GET ?public=1 - номер счётчика Яндекс Метрики (без авторизации)
+    GET ?banners=1 - баннеры с текстом для страниц кабинета (без авторизации)
+    GET ?requester_user_id=&section=banners - все баннеры для редактирования
+    POST {action: "save_banner", requester_user_id, page, text, button_text, button_url, variant}
     POST {action: "save", requester_user_id, managing_company_id, cron_enabled, metrika_counter_id}
     GET ?requester_user_id=&section=admins - сотрудники компании платформы и доступ к админке
     POST {action: "set_admin", requester_user_id, user_id, enabled} - дать/забрать доступ (только владелец)
     POST {action: "tick"} + заголовок X-Cron-Token - шаг планировщика по всем компаниям
          (работает, только если включён режим cron)
     '''
-    denied = guard(event, public_actions=('tick',), public_query=('public',), override=('requester_user_id',), check_company=False)
+    denied = guard(event, public_actions=('tick',), public_query=('public', 'banners'), override=('requester_user_id',), check_company=False)
     if denied:
         return denied
 
@@ -489,6 +515,10 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 return respond(409, {'error': 'Автоматический режим (cron) выключен в настройках платформы'})
             return respond(200, {'success': True, **tick(cur, conn, settings)})
 
+        # Публично: баннеры для страниц личного кабинета (пустой текст - баннера нет).
+        if method == 'GET' and params.get('banners') == '1':
+            return respond(200, {'success': True, 'banners': load_banners(cur, only_active=True)})
+
         # Публично: номер счётчика Яндекс Метрики - сайт подключает его при загрузке.
         if method == 'GET' and params.get('public') == '1':
             return respond(200, {'success': True, 'metrika_counter_id': settings.get('metrika_counter_id')})
@@ -496,6 +526,28 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         requester = body.get('requester_user_id') or params.get('requester_user_id')
         if not requester or not is_admin(cur, requester):
             return respond(403, {'error': 'Доступно только администраторам платформы'})
+
+        if method == 'GET' and params.get('section') == 'banners':
+            return respond(200, {'success': True, 'banners': load_banners(cur), 'pages': BANNER_PAGES})
+
+        if method == 'POST' and body.get('action') == 'save_banner':
+            page = body.get('page')
+            if page not in {p['id'] for p in BANNER_PAGES}:
+                return respond(400, {'error': 'Неизвестная страница'})
+            variant = body.get('variant') if body.get('variant') in BANNER_VARIANTS else 'info'
+            url = str(body.get('button_url') or '').strip()[:500]
+            if url and not re.match(r'^(https?://|/)', url):
+                return respond(400, {'error': 'Ссылка должна начинаться с https:// или /'})
+            cur.execute(f'''
+                INSERT INTO {SCHEMA}.platform_banners (page, text, button_text, button_url, variant, updated_by, updated_at)
+                VALUES (%s, %s, %s, %s, %s, %s, NOW())
+                ON CONFLICT (page) DO UPDATE SET text = EXCLUDED.text, button_text = EXCLUDED.button_text,
+                    button_url = EXCLUDED.button_url, variant = EXCLUDED.variant,
+                    updated_by = EXCLUDED.updated_by, updated_at = NOW()
+            ''', (page, str(body.get('text') or '').strip()[:2000], str(body.get('button_text') or '').strip()[:80],
+                  url, variant, requester))
+            conn.commit()
+            return respond(200, {'success': True, 'banners': load_banners(cur), 'pages': BANNER_PAGES})
 
         if method == 'GET' and params.get('section') == 'admins':
             return respond(200, {'success': True, 'members': platform_members(cur),

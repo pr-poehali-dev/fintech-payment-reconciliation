@@ -21,6 +21,16 @@
       "bodyMatcher": "partial"
     },
     {
+      "name": "Public banners",
+      "method": "GET",
+      "path": "/?banners=1",
+      "expectedStatus": 200,
+      "expectedBody": {
+        "success": true
+      },
+      "bodyMatcher": "partial"
+    },
+    {
       "name": "Без входа доступ закрыт",
       "method": "GET",
       "path": "/",

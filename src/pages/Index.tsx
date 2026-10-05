@@ -12,6 +12,8 @@ import ReconciliationPage from './ReconciliationPage';
 import SettingsPlaceholder from './SettingsPlaceholder';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAutomationHeartbeat } from '@/hooks/useAutomationHeartbeat';
+import { usePageBanners } from '@/hooks/usePageBanners';
+import PageBanner from '@/components/banners/PageBanner';
 import { useNotifications, AppNotification } from '@/hooks/useNotifications';
 import { canOpenModule, defaultModuleFor, effectiveModules } from '@/config/modules';
 import SubscriptionDialog from '@/components/profile/SubscriptionDialog';
@@ -77,6 +79,7 @@ const Index = () => {
   const companyId = currentCompany?.id;
   useAutomationHeartbeat(companyId, cronEnabled);
   const notifications = useNotifications(companyId, user?.user_id);
+  const banners = usePageBanners();
 
 
 
@@ -109,6 +112,7 @@ const Index = () => {
       <AppSidebar activeModule={shownModule ?? ''} onModuleChange={handleModuleChange} />
 
       <main className="ml-64 mt-16 p-8">
+        {shownModule && banners.forPage(shownModule).map((b) => <PageBanner key={b.page} banner={b} />)}
         {shownModule === 'reconciliation' && (
           <ReconciliationPage onOpenTransactions={canOpenTransactions ? openTransactionsForPeriod : undefined} />
         )}
