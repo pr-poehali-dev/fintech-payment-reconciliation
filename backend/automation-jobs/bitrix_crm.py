@@ -244,9 +244,15 @@ def _item(name: str, price: float, quantity: float, vat: str) -> Dict[str, Any]:
     }
 
 
+def human_date(value: str) -> str:
+    '''Дата из Битрикс24 (2026-10-05 или 2026-10-05T03:00:00+03:00) -> 05.10.2026. Остальное - как есть.'''
+    m = re.fullmatch(r'(\d{4})-(\d{2})-(\d{2})(?:T[\d:.]+(?:[+-]\d{2}:?\d{2}|Z)?)?', str(value).strip())
+    return f'{m.group(3)}.{m.group(2)}.{m.group(1)}' if m else value
+
+
 def single_name(record: Dict[str, Any], entity: str, mapping: Dict[str, Any]) -> str:
     '''Название позиции «одной суммой»: {КОД} - поле сделки/лида, {contact.КОД} / {company.КОД} - контакта/компании.'''
-    name = re.sub(r'\{([\w.]+)\}', lambda m: resolve(record, entity, m.group(1)) or '',
+    name = re.sub(r'\{([\w.]+)\}', lambda m: human_date(resolve(record, entity, m.group(1)) or ''),
                   mapping.get('single_item_name') or 'Оплата')
     return re.sub(r'\s{2,}', ' ', name).strip() or 'Оплата'
 
