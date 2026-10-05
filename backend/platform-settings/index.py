@@ -519,9 +519,19 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         if method == 'GET' and params.get('banners') == '1':
             return respond(200, {'success': True, 'banners': load_banners(cur, only_active=True)})
 
-        # Публично: номер счётчика Яндекс Метрики - сайт подключает его при загрузке.
+        # Публично: номер счётчика Метрики и реквизиты управляющей компании (оператор в документах сайта).
         if method == 'GET' and params.get('public') == '1':
-            return respond(200, {'success': True, 'metrika_counter_id': settings.get('metrika_counter_id')})
+            operator = None
+            if settings.get('managing_company_id'):
+                cur.execute(f'''
+                    SELECT COALESCE(NULLIF(full_name, ''), name), inn, ogrn, legal_address
+                    FROM {SCHEMA}.companies WHERE id = %s
+                ''', (settings['managing_company_id'],))
+                row = cur.fetchone()
+                if row:
+                    operator = {'name': row[0], 'inn': row[1], 'ogrn': row[2], 'address': row[3]}
+            return respond(200, {'success': True, 'metrika_counter_id': settings.get('metrika_counter_id'),
+                                 'operator': operator})
 
         requester = body.get('requester_user_id') or params.get('requester_user_id')
         if not requester or not is_admin(cur, requester):

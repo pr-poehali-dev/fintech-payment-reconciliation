@@ -1,8 +1,9 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import Icon from '@/components/ui/icon';
 import LandingFooter from '@/components/landing/LandingFooter';
-import { LegalSection, PRIVACY_POLICY, TERMS } from '@/content/legalDocuments';
+import functionUrls from '../../backend/func2url.json';
+import { LEGAL_EMAIL, LEGAL_SITE, LegalOperator, LegalSection, PRIVACY_POLICY, TERMS, operatorTitle } from '@/content/legalDocuments';
 
 const DOCUMENTS: Record<'terms' | 'privacy', { title: string; sections: LegalSection[] }> = {
   terms: { title: 'Пользовательское соглашение', sections: TERMS },
@@ -11,6 +12,16 @@ const DOCUMENTS: Record<'terms' | 'privacy', { title: string; sections: LegalSec
 
 const LegalDocumentPage = ({ doc }: { doc: 'terms' | 'privacy' }) => {
   const { title, sections } = DOCUMENTS[doc];
+  const [operator, setOperator] = useState<LegalOperator | null>(null);
+
+  useEffect(() => {
+    fetch(`${(functionUrls as Record<string, string>)['platform-settings']}?public=1`)
+      .then((r) => r.json())
+      .then((d) => d.operator?.name && setOperator(d.operator))
+      .catch(() => undefined);
+  }, []);
+
+  const fill = (text: string) => text.split('{{OPERATOR}}').join(operatorTitle(operator));
 
   useEffect(() => {
     document.title = `${title} — Сверка`;
@@ -45,11 +56,45 @@ const LegalDocumentPage = ({ doc }: { doc: 'terms' | 'privacy' }) => {
               <h2 className="mb-3 text-lg font-semibold text-foreground">{s.title}</h2>
               <div className="space-y-2 text-sm leading-relaxed text-muted-foreground">
                 {s.items.map((item, i) => (
-                  <p key={i}>{item}</p>
+                  <p key={i}>{fill(item)}</p>
                 ))}
               </div>
             </section>
           ))}
+
+          <section className="rounded-xl border border-border bg-card p-5">
+            <h2 className="mb-3 text-lg font-semibold text-foreground">Реквизиты Оператора</h2>
+            <dl className="grid gap-x-6 gap-y-1.5 text-sm sm:grid-cols-[auto_1fr]">
+              <dt className="text-muted-foreground">Наименование</dt>
+              <dd className="text-foreground">{operatorTitle(operator).replace(/ \((ОГРНИП|ОГРН) .*\)$/, '')}</dd>
+              {operator?.inn && (
+                <>
+                  <dt className="text-muted-foreground">ИНН</dt>
+                  <dd className="text-foreground">{operator.inn}</dd>
+                </>
+              )}
+              {operator?.ogrn && (
+                <>
+                  <dt className="text-muted-foreground">{operator.ogrn.length === 15 ? 'ОГРНИП' : 'ОГРН'}</dt>
+                  <dd className="text-foreground">{operator.ogrn}</dd>
+                </>
+              )}
+              {operator?.address && (
+                <>
+                  <dt className="text-muted-foreground">Адрес</dt>
+                  <dd className="text-foreground">{operator.address}</dd>
+                </>
+              )}
+              <dt className="text-muted-foreground">Эл. почта</dt>
+              <dd>
+                <a href={`mailto:${LEGAL_EMAIL}`} className="text-primary hover:underline">{LEGAL_EMAIL}</a>
+              </dd>
+              <dt className="text-muted-foreground">Сайт</dt>
+              <dd>
+                <a href={LEGAL_SITE} className="text-primary hover:underline">{LEGAL_SITE.replace('https://', '')}</a>
+              </dd>
+            </dl>
+          </section>
         </div>
       </main>
 
