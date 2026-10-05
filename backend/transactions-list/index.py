@@ -560,7 +560,11 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                       AND d.operation NOT LIKE 'sell_refund%%'
                     ORDER BY d.id DESC LIMIT 1
                 ) ao ON true
-                WHERE cd.company_id = %(company_id)s AND (ao.id IS NOT NULL OR lr.id IS NOT NULL)
+                WHERE cd.company_id = %(company_id)s
+                  AND (ao.id IS NOT NULL OR lr.id IS NOT NULL OR cd.candidate_receipt_id IS NOT NULL
+                       OR EXISTS (SELECT 1 FROM {SCHEMA}.manual_transaction_links ml
+                                  WHERE ml.company_id = cd.company_id AND ml.tx_type = 'crm_deal'
+                                    AND ml.tx_id = cd.id))
             ''')
 
         if wants(type_filter, 'money'):

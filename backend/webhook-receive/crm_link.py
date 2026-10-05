@@ -1,4 +1,5 @@
 import json
+from datetime import timedelta
 import re
 import urllib.parse
 import urllib.request
@@ -163,9 +164,88 @@ def recover_missed_deals(cur, company_id: int) -> int:
     return sent
 
 
-def _send_hook(webhook_token: str, deal_id: str) -> None:
+CANDIDATE_WINDOW_MIN = 5
+CANDIDATE_MIN_AGE_MIN = 10
+CANDIDATES_PER_RECEIPT = 3
+
+
+def recover_candidate_deals(cur, company_id: int) -> int:
+    '''
+    Сделки из воронок без хука и без ссылки на оплату: для оплаченного счёта/чека без сделки ищем
+    в Битриксе сделки на ту же сумму, сменившие стадию в пределах ±5 минут от оплаты, и загружаем
+    их как кандидатов - БЕЗ связи и без сценариев: связывает человек вручную в «Транзакциях».
+    Каждый чек ищется один раз (не раньше чем через 10 минут, после поиска по ссылке на оплату).
+    '''
+    cur.execute(f'''
+        SELECT r.id, r.total_sum, r.doc_datetime
+        FROM {SCHEMA}.ecomkassa_receipts r
+        WHERE r.company_id = %s AND r.removed_at IS NULL AND r.status = 'done' AND r.deal_search_at IS NULL
+          AND r.total_sum > 0 AND r.doc_datetime IS NOT NULL
+          AND COALESCE(r.order_type, 'VCHR') IN ('INVC', 'VCHR') AND COALESCE(r.is_correction, false) = false
+          AND r.created_at > NOW() - make_interval(hours => %s)
+          AND r.created_at < NOW() - make_interval(mins => %s)
+          AND NOT EXISTS (SELECT 1 FROM {SCHEMA}.crm_deals o
+                          WHERE o.linked_receipt_id = r.id OR o.candidate_receipt_id = r.id)
+        ORDER BY r.id DESC LIMIT %s
+    ''', (company_id, RECOVER_LOOKBACK_HOURS, CANDIDATE_MIN_AGE_MIN, RECOVER_PER_RUN))
+    receipts = cur.fetchall()
+    if not receipts:
+        return 0
+    cur.execute(f'''
+        UPDATE {SCHEMA}.ecomkassa_receipts SET deal_search_at = NOW() WHERE id = ANY(%s)
+    ''', ([r[0] for r in receipts],))
+    portals = _bitrix_portals(cur, company_id)
+    if not portals:
+        return 0
+
+    def lookup(receipt):
+        receipt_id, total, paid_at = receipt
+        found_all = []
+        for url, integrations in portals.items():
+            query = urllib.parse.urlencode([
+                ('filter[OPPORTUNITY]', f'{float(total):.2f}'),
+                ('filter[>MOVED_TIME]', (paid_at - timedelta(minutes=CANDIDATE_WINDOW_MIN)).strftime('%Y-%m-%dT%H:%M:%S+00:00')),
+                ('filter[<MOVED_TIME]', (paid_at + timedelta(minutes=CANDIDATE_WINDOW_MIN)).strftime('%Y-%m-%dT%H:%M:%S+00:00')),
+                ('select[]', 'ID'), ('select[]', 'CATEGORY_ID')])
+            found = _get_json(f'{url}/crm.deal.list.json?{query}', {}, timeout=2.5)
+            for d in ((found or {}).get('result') or [])[:CANDIDATES_PER_RECEIPT]:
+                category = str(d.get('CATEGORY_ID') or '0')
+                target = next((i for i in integrations if category in i[2]), integrations[0])
+                found_all.append((target, str(d['ID']), receipt_id))
+        return found_all
+
+    with ThreadPoolExecutor(max_workers=len(receipts)) as pool:
+        hits = [h for group in pool.map(lookup, receipts) for h in group]
+    if hits:
+        with ThreadPoolExecutor(max_workers=len(hits)) as pool:
+            list(pool.map(lambda h: _send_hook(h[0][1], h[1], 'cron_candidate', h[2]), hits))
+    for target, deal_id, receipt_id in hits:
+        print(f'crm candidate: deal {deal_id} for receipt {receipt_id} -> integration {target[0]}')
+    return len(hits)
+
+
+def _bitrix_portals(cur, company_id: int) -> Dict[str, List[Any]]:
+    '''Порталы Битрикса компании: ссылка API -> интеграции (id, токен хука, воронки их сделок).'''
+    cur.execute(f'''
+        SELECT ui.id, ui.config, ui.webhook_token,
+               ARRAY(SELECT DISTINCT d.raw_data->>'CATEGORY_ID' FROM {SCHEMA}.crm_deals d WHERE d.integration_id = ui.id)
+        FROM {SCHEMA}.user_integrations ui
+        JOIN {SCHEMA}.integration_providers p ON p.id = ui.provider_id
+        WHERE ui.company_id = %s AND p.slug = 'bitrix24' AND ui.status = 'active' AND ui.webhook_token IS NOT NULL
+        ORDER BY ui.last_webhook_at DESC NULLS LAST, ui.id
+    ''', (company_id,))
+    portals: Dict[str, List[Any]] = {}
+    for ui_id, config, token, categories in cur.fetchall():
+        config = config if isinstance(config, dict) else json.loads(config or '{}')
+        url = (config.get('webhook_url') or '').rstrip('/')
+        if url:
+            portals.setdefault(url, []).append((ui_id, token, set(c for c in categories if c)))
+    return portals
+
+
+def _send_hook(webhook_token: str, deal_id: str, source: str = 'cron_recovery', receipt_id: Optional[int] = None) -> None:
     '''Тот же приём, что у хука Битрикса; ответа не ждём - обработка идёт сама.'''
-    body = json.dumps({'deal_id': deal_id, 'source': 'cron_recovery'}).encode('utf-8')
+    body = json.dumps({'deal_id': deal_id, 'source': source, 'receipt_id': receipt_id}).encode('utf-8')
     url = f'{WEBHOOK_RECEIVE_URL}?' + urllib.parse.urlencode({'token': webhook_token, 'deal_id': deal_id})
     try:
         urllib.request.urlopen(urllib.request.Request(url, data=body, method='POST',

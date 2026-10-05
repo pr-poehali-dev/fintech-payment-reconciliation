@@ -174,7 +174,10 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         # это гарантирует, что даже при сбое обработчика сырые данные не потеряются.
         event_type = EVENT_TYPE_BY_PROVIDER.get(provider_slug, 'unknown')
         # Источник для ленты «События»: хук или подтянуто кроном вместо потерянного хука.
-        origin = 'recovery' if isinstance(webhook_data, dict) and webhook_data.get('source') == 'cron_recovery' else 'webhook'
+        source = webhook_data.get('source') if isinstance(webhook_data, dict) else None
+        origin = {'cron_recovery': 'recovery', 'cron_candidate': 'candidate'}.get(source, 'webhook')
+        # Кандидат по сумме и времени: только загружаем сделку - без автосвязи и без сценариев.
+        is_candidate = origin == 'candidate'
         event_id = save_event(cur, integration_id, company_id, provider_slug, event_type, webhook_data, origin)
         conn.commit()
 
@@ -252,7 +255,13 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         conn.commit()
         jobs_created = 0
         has_cart = provider_slug == 'tbank' and isinstance(webhook_data.get('Receipt'), dict)
-        if provider_slug == 'bitrix24' and not handler_error and external_deal_id:
+        if provider_slug == 'bitrix24' and not handler_error and external_deal_id and is_candidate:
+            cur.execute('''
+                UPDATE t_p83864310_fintech_payment_reco.crm_deals SET candidate_receipt_id = %s
+                WHERE integration_id = %s AND external_deal_id = %s AND linked_receipt_id IS NULL
+            ''', (webhook_data.get('receipt_id'), integration_id, str(external_deal_id)))
+            conn.commit()
+        if provider_slug == 'bitrix24' and not handler_error and external_deal_id and not is_candidate:
             # Сразу по хуку CRM ищем чек и платёж этой сделки (почта + сумма + ±5 минут от хука),
             # чтобы в реестре сделка встала в одну группу с ними без ожидания крона.
             try:
@@ -261,7 +270,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             except Exception as e:
                 conn.rollback()
                 print(f'crm link failed: {e}')
-        if provider_slug == 'bitrix24' and not handler_error:
+        if provider_slug == 'bitrix24' and not handler_error and not is_candidate:
             try:
                 crm_entity, crm_id = bitrix24_handler.extract_entity(webhook_data)
                 jobs_created = automation.enqueue_crm_jobs(cur, company_id, integration_id, crm_entity, crm_id, event_id)
