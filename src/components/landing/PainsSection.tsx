@@ -34,7 +34,7 @@ const PainsSection = () => {
             <span className="text-xs font-medium text-destructive">Знакомо?</span>
           </div>
           <h2 className="text-3xl sm:text-4xl font-display font-bold text-foreground mb-4">
-            Почему чеки — головная боль бизнеса
+            Почему пропущенные чеки — головная боль бизнеса
           </h2>
           <p className="text-lg text-muted-foreground">
             Платежи приходят из разных каналов, а отвечаете за каждый чек вы.
