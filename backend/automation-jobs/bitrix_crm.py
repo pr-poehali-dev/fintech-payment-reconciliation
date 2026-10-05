@@ -197,12 +197,20 @@ def resolve_all(record: Dict[str, Any], entity: str, ref: Optional[str]) -> List
     raw = [v.get('VALUE') if isinstance(v, dict) else v for v in value] if isinstance(value, list) else [value]
     phones = []
     for part in ','.join(str(v) for v in raw if v not in (None, '', False)).split(','):
-        digits = re.sub(r'\D', '', part)
-        if len(digits) == 11 and digits[0] == '8':
-            digits = '7' + digits[1:]
-        if 10 <= len(digits) <= 19 and f'+{digits}' not in phones:
-            phones.append(f'+{digits}')
+        phone = ffd_phone(part)
+        if phone and phone not in phones:
+            phones.append(phone)
     return phones
+
+
+def ffd_phone(value: Any) -> Optional[str]:
+    '''Телефон по ФФД: +7 и 10 цифр (+79999999999). 8XXXXXXXXXX и XXXXXXXXXX приводим, остальное - None.'''
+    digits = re.sub(r'\D', '', str(value or ''))
+    if len(digits) == 10:
+        digits = '7' + digits
+    elif len(digits) == 11 and digits[0] == '8':
+        digits = '7' + digits[1:]
+    return f'+{digits}' if len(digits) == 11 and digits[0] == '7' else None
 
 
 def _number(value: Any) -> Optional[float]:
