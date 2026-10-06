@@ -232,7 +232,7 @@ def prepare_moyklass(cur, payment: Dict[str, Any], data: Dict[str, Any],
     if not user:
         return 'error', data, f'Не удалось получить ученика #{obj.get("userId")}: {err}'
 
-    item_name = str(config.get('default_item_name') or '').strip() or 'Оплата обучения'
+    item_name = 'Оплата обучения'
     payment_method = None
     note = ''
     sub_id = obj.get('userSubscriptionId')

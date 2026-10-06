@@ -274,14 +274,6 @@ export const PROVIDER_FIELDS: Record<string, FieldConfig[]> = {
         { value: 'vat20', label: 'НДС 20%' },
         { value: 'vat22', label: 'НДС 22%' }
       ]
-    },
-    {
-      key: 'default_item_name',
-      label: 'Название позиции, если платёж без абонемента',
-      type: 'text',
-      default: 'Оплата обучения',
-      required: false,
-      hint: 'При оплате абонемента в чек попадёт его вид, например «Абонемент «8 занятий»»'
     }
   ]
 };
