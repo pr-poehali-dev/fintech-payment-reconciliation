@@ -127,12 +127,25 @@ const EventsPage = () => {
     <div className="space-y-6 animate-fade-in">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h2 className="text-2xl sm:text-3xl font-display font-bold text-foreground mb-2">События</h2>
+          <div className="flex items-center justify-between gap-3 mb-2">
+            <h2 className="text-2xl sm:text-3xl font-display font-bold text-foreground">События</h2>
+            <Button
+              onClick={fetchEvents}
+              variant="outline"
+              size="icon"
+              className="sm:hidden shrink-0"
+              disabled={isRefreshing}
+              aria-label="Обновить"
+              title="Обновить"
+            >
+              <Icon name="RefreshCw" size={16} className={isRefreshing ? 'animate-spin' : ''} />
+            </Button>
+          </div>
           <p className="text-muted-foreground">
             Все входящие вебхуки и операции по интеграциям компании
           </p>
         </div>
-        <Button onClick={fetchEvents} variant="outline" disabled={isRefreshing}>
+        <Button onClick={fetchEvents} variant="outline" disabled={isRefreshing} className="hidden sm:inline-flex shrink-0">
           <Icon name="RefreshCw" size={16} className={`mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
           Обновить
         </Button>
