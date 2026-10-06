@@ -64,7 +64,7 @@ const ReconciliationTiles = ({ totals, onTileClick }: ReconciliationTilesProps) 
   ) : null;
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+    <div className="grid grid-cols-[repeat(auto-fit,minmax(240px,1fr))] gap-4">
       <Card className={cardClass} {...clickable('payments')}>
         <CardHeader className="pb-2">
           <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
@@ -74,7 +74,7 @@ const ReconciliationTiles = ({ totals, onTileClick }: ReconciliationTilesProps) 
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="text-3xl font-display font-bold text-foreground">
+          <div className="text-2xl xl:text-3xl font-display font-bold text-foreground whitespace-nowrap">
             {formatMoney(totals.payments.amount)}
           </div>
           <p className="text-xs text-muted-foreground mt-1">
@@ -92,7 +92,7 @@ const ReconciliationTiles = ({ totals, onTileClick }: ReconciliationTilesProps) 
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="text-3xl font-display font-bold text-foreground">
+          <div className="text-2xl xl:text-3xl font-display font-bold text-foreground whitespace-nowrap">
             {formatMoney(totals.receipts.amount)}
           </div>
           {ofdCount !== undefined && (
@@ -112,7 +112,7 @@ const ReconciliationTiles = ({ totals, onTileClick }: ReconciliationTilesProps) 
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="text-3xl font-display font-bold text-foreground">
+          <div className="text-2xl xl:text-3xl font-display font-bold text-foreground whitespace-nowrap">
             {formatMoney(totals.bank.amount)}
           </div>
           <p className={`text-xs mt-1 ${bankVsReceipts.color}`}>
