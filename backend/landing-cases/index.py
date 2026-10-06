@@ -72,6 +72,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     GET ?public=1 - все кейсы (без авторизации, для лендинга)
     GET ?requester_user_id= - кейсы для админки
     POST {action: "create", requester_user_id, task, company_name, niche, solution, logo?: data-url base64}
+    POST {action: "update", requester_user_id, id, task, company_name, niche, solution,
+          logo?: новый data-url, remove_logo?: true} - без logo и remove_logo логотип не меняется
     POST {action: "delete", requester_user_id, id}
     '''
     denied = guard(event, public_query=('public',), check_company=False)
@@ -96,7 +98,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             return respond(200, {'success': True, 'cases': list_cases(cur)})
 
         action = body.get('action')
-        if action == 'create':
+        if action in ('create', 'update'):
             fields = {k: str(body.get(k) or '').strip() for k in ('task', 'company_name', 'niche', 'solution')}
             if not all(fields.values()):
                 return respond(400, {'error': 'Заполните задачу, компанию, нишу и решение'})
@@ -106,6 +108,20 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     logo_url = upload_logo(body['logo'])
                 except ValueError as e:
                     return respond(400, {'error': str(e)})
+            if action == 'update':
+                case_id = int(body.get('id') or 0)
+                cur.execute(f'SELECT logo_url FROM {SCHEMA}.landing_cases WHERE id = %s', (case_id,))
+                row = cur.fetchone()
+                if not row:
+                    return respond(404, {'error': 'Кейс не найден'})
+                if not logo_url and not body.get('remove_logo'):
+                    logo_url = row[0]
+                cur.execute(f'''
+                    UPDATE {SCHEMA}.landing_cases
+                    SET task = %s, company_name = %s, logo_url = %s, niche = %s, solution = %s WHERE id = %s
+                ''', (fields['task'][:5000], fields['company_name'][:200], logo_url, fields['niche'][:200], fields['solution'][:5000], case_id))
+                conn.commit()
+                return respond(200, {'success': True, 'cases': list_cases(cur)})
             cur.execute(f'''
                 INSERT INTO {SCHEMA}.landing_cases (task, company_name, logo_url, niche, solution)
                 VALUES (%s, %s, %s, %s, %s)

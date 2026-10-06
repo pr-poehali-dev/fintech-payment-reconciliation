@@ -27,6 +27,7 @@ const AdminCasesSection = () => {
   const [form, setForm] = useState(EMPTY);
   const [logo, setLogo] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -63,14 +64,33 @@ const AdminCasesSection = () => {
     setLogo(await readAsDataUrl(file));
   };
 
-  const create = async () => {
+  const resetForm = () => {
+    setForm(EMPTY);
+    setLogo(null);
+    setEditingId(null);
+    if (fileRef.current) fileRef.current.value = '';
+  };
+
+  const startEdit = (item: LandingCase) => {
+    setEditingId(item.id);
+    setForm({ task: item.task, company_name: item.company_name, niche: item.niche, solution: item.solution });
+    setLogo(item.logo_url);
+    if (fileRef.current) fileRef.current.value = '';
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const save = async () => {
     setSaving(true);
     try {
-      await post({ action: 'create', ...form, logo });
-      setForm(EMPTY);
-      setLogo(null);
-      if (fileRef.current) fileRef.current.value = '';
-      toast({ title: 'Кейс добавлен на главную' });
+      const newLogo = logo?.startsWith('data:') ? logo : null;
+      if (editingId) {
+        await post({ action: 'update', id: editingId, ...form, logo: newLogo, remove_logo: !logo });
+        toast({ title: 'Кейс обновлён' });
+      } else {
+        await post({ action: 'create', ...form, logo: newLogo });
+        toast({ title: 'Кейс добавлен на главную' });
+      }
+      resetForm();
     } catch (e) {
       toast({ title: 'Ошибка', description: e instanceof Error ? e.message : 'Не удалось сохранить', variant: 'destructive' });
     } finally {
@@ -83,6 +103,7 @@ const AdminCasesSection = () => {
     setDeletingId(item.id);
     try {
       await post({ action: 'delete', id: item.id });
+      if (editingId === item.id) resetForm();
       toast({ title: 'Кейс удалён' });
     } catch (e) {
       toast({ title: 'Ошибка', description: e instanceof Error ? e.message : 'Не удалось удалить', variant: 'destructive' });
@@ -105,9 +126,9 @@ const AdminCasesSection = () => {
         </p>
       </div>
 
-      <Card>
+      <Card className={editingId ? 'border-primary' : undefined}>
         <CardContent className="p-5 space-y-4">
-          <div className="font-medium">Новый кейс</div>
+          <div className="font-medium">{editingId ? `Редактирование: ${cases.find((c) => c.id === editingId)?.company_name || ''}` : 'Новый кейс'}</div>
           <div className="grid gap-4 md:grid-cols-2">
             <div>
               <label className="text-sm text-muted-foreground">Название компании</label>
@@ -144,10 +165,17 @@ const AdminCasesSection = () => {
               )}
             </div>
           </div>
-          <Button onClick={create} disabled={!ready || saving}>
-            {saving ? <Icon name="Loader2" size={16} className="mr-2 animate-spin" /> : <Icon name="Plus" size={16} className="mr-2" />}
-            Добавить кейс
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button onClick={save} disabled={!ready || saving}>
+              {saving ? <Icon name="Loader2" size={16} className="mr-2 animate-spin" /> : <Icon name={editingId ? 'Save' : 'Plus'} size={16} className="mr-2" />}
+              {editingId ? 'Сохранить изменения' : 'Добавить кейс'}
+            </Button>
+            {editingId && (
+              <Button variant="outline" onClick={resetForm} disabled={saving}>
+                Отменить
+              </Button>
+            )}
+          </div>
         </CardContent>
       </Card>
 
@@ -172,6 +200,9 @@ const AdminCasesSection = () => {
                 <p className="text-sm"><span className="text-muted-foreground">Задача: </span>{item.task}</p>
                 <p className="text-sm"><span className="text-muted-foreground">Решение: </span>{item.solution}</p>
               </div>
+              <Button variant="ghost" size="icon" onClick={() => startEdit(item)} disabled={saving}>
+                <Icon name="Pencil" size={16} />
+              </Button>
               <Button variant="ghost" size="icon" onClick={() => remove(item)} disabled={deletingId === item.id}>
                 <Icon name={deletingId === item.id ? 'Loader2' : 'Trash2'} size={16} className={deletingId === item.id ? 'animate-spin' : 'text-destructive'} />
               </Button>
