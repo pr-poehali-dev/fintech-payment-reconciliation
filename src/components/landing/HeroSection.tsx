@@ -3,9 +3,9 @@ import Icon from '@/components/ui/icon';
 import { pluralDays } from '@/lib/trialDays';
 
 const HERO_STATS = [
-  { value: '54-ФЗ', label: 'Полное соответствие закону' },
-  { value: '100%', label: 'Автоматический учёт чеков' },
-  { value: '24/7', label: 'Контроль касс онлайн' }
+  { value: '0 ₽', label: 'Штрафов за пропущенные чеки' },
+  { value: '100%', label: 'Платежей сверено автоматически' },
+  { value: '24/7', label: 'Контроль касс без бухгалтера' }
 ];
 
 const HeroSection = ({ onCtaClick, trialDays }: { onCtaClick: () => void; trialDays: number }) => {
@@ -29,9 +29,9 @@ const HeroSection = ({ onCtaClick, trialDays }: { onCtaClick: () => void; trialD
             </h1>
 
             <p className="text-lg text-muted-foreground mb-8 max-w-xl">
-              Сверка автоматически сверяет платежи из CRM, банков и эквайринга
-              с чеками из ОФД и кассы — чтобы бизнес не получил штраф за отсутствие
-              фискального документа.
+              Без штрафов и без бухгалтера на ручной сверке. Сверка каждый день сводит
+              платежи из CRM, банков и эквайринга с чеками из ОФД и кассы, сама находит
+              пропущенные чеки и показывает, с какой суммы платить налоги без доначислений.
             </p>
 
             <div className="flex flex-col sm:flex-row gap-4 mb-8">
