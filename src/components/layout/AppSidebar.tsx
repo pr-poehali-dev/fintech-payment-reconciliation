@@ -17,6 +17,8 @@ import ProfileDialog from '@/components/profile/ProfileDialog';
 interface AppSidebarProps {
   activeModule: string;
   onModuleChange: (moduleId: string) => void;
+  open?: boolean;
+  onClose?: () => void;
 }
 
 const CompanySwitcher = ({ companies, currentCompany, onSelect }: {
@@ -146,11 +148,29 @@ const UserProfileMenu = ({ onOpenSettings, onOpenSubscription }: { onOpenSetting
   );
 };
 
-const AppSidebar = ({ activeModule, onModuleChange }: AppSidebarProps) => {
+const AppSidebar = ({ activeModule, onModuleChange, open = false, onClose }: AppSidebarProps) => {
   const { companies, currentCompany, setCurrentCompanyId } = useAuth();
+  const select = (moduleId: string) => {
+    onModuleChange(moduleId);
+    onClose?.();
+  };
 
   return (
-    <aside className="fixed left-0 top-0 h-full w-64 bg-sidebar border-r border-sidebar-border p-4 animate-slide-in-right">
+    <>
+    {open && <div className="fixed inset-0 z-40 bg-black/60 lg:hidden animate-fade-in" onClick={onClose} />}
+    <aside
+      className={`fixed left-0 top-0 z-50 h-full w-64 bg-sidebar border-r border-sidebar-border p-4 transition-transform duration-300 lg:translate-x-0 ${
+        open ? 'translate-x-0' : '-translate-x-full'
+      }`}
+    >
+      <button
+        type="button"
+        onClick={onClose}
+        aria-label="Закрыть меню"
+        className="lg:hidden absolute top-4 right-3 p-1.5 rounded-md text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent/50"
+      >
+        <Icon name="X" size={20} />
+      </button>
       <div className="mb-6">
         <h1 className="text-2xl font-display font-bold text-primary flex items-center gap-2">
           <Icon name="Zap" size={28} />
@@ -171,7 +191,7 @@ const AppSidebar = ({ activeModule, onModuleChange }: AppSidebarProps) => {
           return (
             <button
               key={module.id}
-              onClick={() => onModuleChange(module.id)}
+              onClick={() => select(module.id)}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 ${
                 activeModule === module.id
                   ? 'bg-sidebar-accent text-sidebar-accent-foreground shadow-lg scale-105'
@@ -187,10 +207,11 @@ const AppSidebar = ({ activeModule, onModuleChange }: AppSidebarProps) => {
       </nav>
 
       <UserProfileMenu
-        onOpenSettings={() => onModuleChange('settings')}
-        onOpenSubscription={() => onModuleChange('subscription')}
+        onOpenSettings={() => select('settings')}
+        onOpenSubscription={() => select('subscription')}
       />
     </aside>
+    </>
   );
 };
 

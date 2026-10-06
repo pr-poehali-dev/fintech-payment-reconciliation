@@ -9,9 +9,10 @@ interface AppHeaderProps {
   onShowNotifications: () => void;
   onOpenSubscription?: () => void;
   subscriptionActive?: boolean;
+  onOpenMenu?: () => void;
 }
 
-const AppHeader = ({ unreadCount, onShowNotifications, onOpenSubscription, subscriptionActive }: AppHeaderProps) => {
+const AppHeader = ({ unreadCount, onShowNotifications, onOpenSubscription, subscriptionActive, onOpenMenu }: AppHeaderProps) => {
   const { logout, isPlatformAdmin, currentCompany } = useAuth();
   const endDate = subscriptionEndDate(currentCompany);
   const left = daysLeft(endDate);
@@ -20,22 +21,25 @@ const AppHeader = ({ unreadCount, onShowNotifications, onOpenSubscription, subsc
   const navigate = useNavigate();
 
   return (
-    <header className="fixed top-0 left-64 right-0 h-16 bg-background/95 backdrop-blur-sm border-b border-border z-40 px-8 flex items-center justify-between">
-      <div className="flex items-center gap-4">
+    <header className="fixed top-0 left-0 lg:left-64 right-0 h-16 bg-background/95 backdrop-blur-sm border-b border-border z-30 px-3 sm:px-6 lg:px-8 flex items-center justify-between gap-2">
+      <div className="flex items-center gap-2 sm:gap-4 min-w-0">
+        <Button variant="ghost" size="icon" className="lg:hidden shrink-0" onClick={onOpenMenu} aria-label="Открыть меню">
+          <Icon name="Menu" size={22} />
+        </Button>
         {currentCompany?.tariff_name && (
           <button
             type="button"
             onClick={onOpenSubscription}
-            className={`flex items-center gap-3 rounded-lg border px-3 py-1.5 text-left transition-colors hover:border-primary/50 hover:bg-muted/40 ${
+            className={`flex items-center gap-2 sm:gap-3 min-w-0 rounded-lg border px-2.5 sm:px-3 py-1.5 text-left transition-colors hover:border-primary/50 hover:bg-muted/40 ${
               subscriptionActive ? 'border-primary/60 bg-muted/40' : 'border-border'
             }`}
             title="Управление подпиской"
           >
             <Icon name="CreditCard" size={18} className="text-primary shrink-0" />
-            <span className="text-sm font-semibold text-foreground">{currentCompany.tariff_name}</span>
+            <span className="text-sm font-semibold text-foreground truncate">{currentCompany.tariff_name}</span>
             {endDate && (
               <span
-                className={`text-sm ${
+                className={`hidden sm:inline text-sm whitespace-nowrap ${
                   expired ? 'text-destructive font-medium' : soon ? 'text-warning font-medium' : 'text-muted-foreground'
                 }`}
               >
@@ -48,7 +52,7 @@ const AppHeader = ({ unreadCount, onShowNotifications, onOpenSubscription, subsc
         )}
       </div>
 
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2 sm:gap-3 shrink-0">
         {isPlatformAdmin && (
           <Button
             variant="outline"
@@ -57,7 +61,7 @@ const AppHeader = ({ unreadCount, onShowNotifications, onOpenSubscription, subsc
             onClick={() => navigate('/admin')}
           >
             <Icon name="ShieldCheck" size={16} />
-            Админка
+            <span className="hidden sm:inline">Админка</span>
           </Button>
         )}
 
@@ -79,7 +83,7 @@ const AppHeader = ({ unreadCount, onShowNotifications, onOpenSubscription, subsc
 
         <Button variant="outline" size="sm" className="gap-2 text-destructive hover:text-destructive" onClick={logout}>
           <Icon name="LogOut" size={16} />
-          Выход
+          <span className="hidden sm:inline">Выход</span>
         </Button>
       </div>
     </header>

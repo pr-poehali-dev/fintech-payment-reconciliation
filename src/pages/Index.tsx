@@ -28,6 +28,7 @@ const Index = () => {
   const [searchParams] = useSearchParams();
   const [activeModule, setActiveModule] = useState<string | null>(() => searchParams.get('section'));
   const [showNotifications, setShowNotifications] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   // Раздел, из которого пришли в «Подписку» с экрана закрытого раздела - подсветить тарифы.
   const [upgradeFor, setUpgradeFor] = useState<string | null>(null);
   const [transactionsDateFilter, setTransactionsDateFilter] = useState<DateFilter | null>(null);
@@ -109,6 +110,7 @@ const Index = () => {
       <AppHeader
         onOpenSubscription={() => handleModuleChange('subscription')}
         subscriptionActive={shownModule === 'subscription'}
+        onOpenMenu={() => setMenuOpen(true)}
         unreadCount={notifications.unread}
         onShowNotifications={() => {
           setShowNotifications(true);
@@ -117,9 +119,9 @@ const Index = () => {
       />
 
 
-      <AppSidebar activeModule={shownModule ?? ''} onModuleChange={handleModuleChange} />
+      <AppSidebar activeModule={shownModule ?? ''} onModuleChange={handleModuleChange} open={menuOpen} onClose={() => setMenuOpen(false)} />
 
-      <main className="ml-64 mt-16 p-8">
+      <main className="lg:ml-64 mt-16 p-4 sm:p-6 lg:p-8">
         {lockedModule && <TariffLockedScreen
             moduleId={lockedModule}
             onUpgrade={() => {
