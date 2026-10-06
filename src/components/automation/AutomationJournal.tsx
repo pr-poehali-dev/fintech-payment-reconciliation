@@ -30,6 +30,30 @@ const FILTERS: { value: string; label: string }[] = [
   { value: 'ready', label: 'Собраны' }
 ];
 
+const URL_RE = /(https?:\/\/[^\s)]+)/g;
+
+const Message = ({ text }: { text: string }) => (
+  <>
+    {text.split(URL_RE).map((part, i) =>
+      i % 2 === 1 ? (
+        <a
+          key={i}
+          href={part}
+          target="_blank"
+          rel="noreferrer"
+          onClick={(e) => e.stopPropagation()}
+          className="inline-flex items-center gap-0.5 font-medium text-primary underline-offset-2 hover:underline"
+        >
+          открыть
+          <Icon name="ExternalLink" size={12} />
+        </a>
+      ) : (
+        <span key={i}>{part.replace(/\(\s*$/, '').replace(/^\s*\)/, '')}</span>
+      )
+    )}
+  </>
+);
+
 const AutomationJournal = ({ open, onOpenChange }: AutomationJournalProps) => {
   const { currentCompany } = useAuth();
   const { toast } = useToast();
@@ -90,8 +114,8 @@ const AutomationJournal = ({ open, onOpenChange }: AutomationJournalProps) => {
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="right" className="w-full overflow-y-auto sm:max-w-xl">
-        <SheetHeader>
+      <SheetContent side="right" className="w-full overflow-y-auto p-4 sm:max-w-xl sm:p-6 lg:max-w-2xl">
+        <SheetHeader className="pr-8 text-left">
           <SheetTitle className="flex items-center gap-2">
             <Icon name="ScrollText" size={20} />
             Журнал
@@ -100,17 +124,20 @@ const AutomationJournal = ({ open, onOpenChange }: AutomationJournalProps) => {
         </SheetHeader>
 
         <div className="mt-4 flex items-center gap-2">
-          {FILTERS.map((f) => (
-            <Button
-              key={f.value}
-              size="sm"
-              variant={filter === f.value ? 'default' : 'outline'}
-              onClick={() => setFilter(f.value)}
-            >
-              {f.label}
-            </Button>
-          ))}
-          <Button size="icon" variant="ghost" className="ml-auto" onClick={load} title="Обновить">
+          <div className="-mx-1 flex min-w-0 flex-1 gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none] sm:flex-wrap sm:overflow-visible [&::-webkit-scrollbar]:hidden">
+            {FILTERS.map((f) => (
+              <Button
+                key={f.value}
+                size="sm"
+                className="shrink-0"
+                variant={filter === f.value ? 'default' : 'outline'}
+                onClick={() => setFilter(f.value)}
+              >
+                {f.label}
+              </Button>
+            ))}
+          </div>
+          <Button size="icon" variant="ghost" className="shrink-0 self-start" onClick={load} title="Обновить">
             <Icon name="RefreshCw" size={16} className={isLoading ? 'animate-spin' : ''} />
           </Button>
         </div>
@@ -124,31 +151,33 @@ const AutomationJournal = ({ open, onOpenChange }: AutomationJournalProps) => {
           {jobs.map((job) => {
             const st = JOB_STATUS[job.status] || JOB_STATUS.new;
             return (
-              <div key={job.id} className="rounded-lg border border-border">
-                <button type="button" onClick={() => toggle(job)} className="flex w-full items-start gap-3 p-3 text-left hover:bg-muted/40">
+              <div key={job.id} className="overflow-hidden rounded-lg border border-border">
+                <button type="button" onClick={() => toggle(job)} className="flex w-full min-w-0 items-start gap-3 p-3 text-left hover:bg-muted/40">
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="truncate text-sm font-medium">{job.scenario_name}</span>
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <span className="min-w-0 break-words text-sm font-medium">{job.scenario_name}</span>
                       <Badge variant="outline" className={`shrink-0 ${st.className}`}>{st.label}</Badge>
                     </div>
-                    <div className="mt-1 text-xs text-muted-foreground">
+                    <div className="mt-1 break-words text-xs text-muted-foreground">
                       {SOURCE_LABELS[job.source_type] || job.source_type} #{job.source_id} · {formatDateTime(job.created_at, timezone)}
                       {job.attempts > 1 && ` · попыток: ${job.attempts}`}
                       {job.status === 'error' && job.next_attempt_at && ` · следующая попытка ${formatDateTime(job.next_attempt_at, timezone, true)}`}
                     </div>
-                    {job.last_error && <div className="mt-1 text-xs text-destructive">{job.last_error}</div>}
+                    {job.last_error && <div className="mt-1 break-words text-xs text-destructive [overflow-wrap:anywhere]">{job.last_error}</div>}
                     {job.status === 'failed' && (
                       <div className="mt-1 text-xs text-muted-foreground">Автоповторы закончились - проверьте причину и нажмите «Повторить сейчас»</div>
                     )}
                   </div>
-                  <Icon name={expanded === job.id ? 'ChevronUp' : 'ChevronDown'} size={16} className="mt-1 text-muted-foreground" />
+                  <Icon name={expanded === job.id ? 'ChevronUp' : 'ChevronDown'} size={16} className="mt-1 shrink-0 text-muted-foreground" />
                 </button>
                 {expanded === job.id && (
-                  <div className="space-y-2 border-t border-border bg-muted/20 p-3">
+                  <div className="space-y-3 border-t border-border bg-muted/20 p-3 sm:space-y-2">
                     {history.map((h, i) => (
-                      <div key={i} className="flex gap-2 text-xs">
-                        <span className="shrink-0 text-muted-foreground">{formatDateTime(h.created_at, timezone, true)}</span>
-                        <span className={h.level === 'error' ? 'text-destructive' : ''}>{h.message}</span>
+                      <div key={i} className="flex flex-col gap-0.5 text-xs sm:flex-row sm:gap-3">
+                        <span className="shrink-0 tabular-nums text-muted-foreground">{formatDateTime(h.created_at, timezone, true)}</span>
+                        <span className={`min-w-0 break-words [overflow-wrap:anywhere] ${h.level === 'error' ? 'text-destructive' : ''}`}>
+                          <Message text={h.message} />
+                        </span>
                       </div>
                     ))}
                     {(job.status === 'error' || job.status === 'failed') && (
