@@ -149,12 +149,25 @@ const ReconciliationPage = ({ onOpenTransactions }: ReconciliationPageProps) => 
     <div className="space-y-6 animate-fade-in">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h2 className="text-2xl sm:text-3xl font-display font-bold text-foreground mb-2">Сверка</h2>
+          <div className="flex items-center justify-between gap-3 mb-2">
+            <h2 className="text-2xl sm:text-3xl font-display font-bold text-foreground">Сверка</h2>
+            <Button
+              onClick={() => { fetchStats(); fetchStatus(); }}
+              variant="outline"
+              size="icon"
+              className="sm:hidden shrink-0"
+              disabled={isLoading}
+              aria-label="Обновить"
+              title="Обновить"
+            >
+              <Icon name="RefreshCw" size={16} className={isLoading ? 'animate-spin' : ''} />
+            </Button>
+          </div>
           <p className="text-muted-foreground">
             Автоматическая сверка платежей, чеков и поступлений на расчётный счёт
           </p>
         </div>
-        <Button onClick={() => { fetchStats(); fetchStatus(); }} variant="outline" disabled={isLoading}>
+        <Button onClick={() => { fetchStats(); fetchStatus(); }} variant="outline" disabled={isLoading} className="hidden sm:inline-flex shrink-0">
           <Icon name="RefreshCw" size={16} className={`mr-2 ${isLoading ? 'animate-spin' : ''}`} />
           Обновить
         </Button>
