@@ -81,7 +81,7 @@ const PricingSection = ({ onCtaClick, trialDays, tariffs: loaded }: { onCtaClick
             Простые и понятные тарифы
           </h2>
           <p className="text-lg text-muted-foreground">
-            Начните с бесплатного периода, растите — переключайтесь на тариф с бо́льшим числом компаний.
+            Начните с бесплатного периода, растите — переключайтесь на тариф с бо́льшим числом функций для бизнеса.
           </p>
           <div className="mt-8 inline-flex items-center rounded-full border border-border bg-card p-1">
             {[false, true].map((isYear) => (
