@@ -6,6 +6,7 @@ import bitrix_crm
 import alfabank_api
 import tochka_acquiring_api
 import moyklass_crm
+import realtycalendar_crm
 
 SCHEMA = 't_p83864310_fintech_payment_reco'
 
@@ -31,7 +32,7 @@ def _payment(cur, payment_id: str) -> Optional[Dict[str, Any]]:
         'status': r[4], 'customer_email': r[5], 'customer_phone': r[6],
         'payment_provider': r[7], 'receipt_id': r[8], 'created_at': r[9].isoformat() if r[9] else None,
         'integration_id': r[10], 'provider_slug': r[11],
-        'raw': (r[12] if isinstance(r[12], dict) else json.loads(r[12] or '{}')) if r[11] == 'moyklass' else None
+        'raw': (r[12] if isinstance(r[12], dict) else json.loads(r[12] or '{}')) if r[11] in ('moyklass', 'realtycalendar') else None
     }
 
 
@@ -89,7 +90,8 @@ def prepare(cur, job: Dict[str, Any], scenario: Dict[str, Any]) -> Tuple[str, Di
     payment = _payment(cur, job['source_id'])
     if not payment:
         return 'error', {}, 'Платёж не найден в базе'
-    if payment['status'] not in ('CONFIRMED', 'AUTHORIZED', 'done', 'OFFSET'):
+    rk_refund = payment['provider_slug'] == 'realtycalendar' and payment['status'] == 'REFUNDED'
+    if payment['status'] not in ('CONFIRMED', 'AUTHORIZED', 'done', 'OFFSET') and not rk_refund:
         return 'skipped', {'payment': payment}, f"Платёж в статусе {payment['status']} - документ не нужен"
     if payment['receipt_id'] and scenario['action_template'] == 'regular':
         return 'skipped', {'payment': payment}, 'По платежу уже есть чек в кассе'
@@ -165,6 +167,9 @@ def prepare(cur, job: Dict[str, Any], scenario: Dict[str, Any]) -> Tuple[str, Di
 
     if payment['provider_slug'] == 'moyklass':
         return prepare_moyklass(cur, payment, data, scenario)
+
+    if payment['provider_slug'] == 'realtycalendar':
+        return prepare_realtycalendar(payment, data, scenario)
 
     if payment['provider_slug'] == 'ecomkassa_gateway':
         # Платёж через шлюз Екомкассы (Точка и др.): идентификатор платежа = номер
@@ -242,6 +247,31 @@ def prepare_moyklass(cur, payment: Dict[str, Any], data: Dict[str, Any],
         f"{'Списание (зачёт аванса)' if offset else 'Платёж'} «Мой Класс» #{payment['payment_id']}: "
         f"«{item.get('name', '')}»{extra} "
         f"на {total:.2f} ₽, ученик {customer.get('name') or obj.get('userId')} ({contact}){note}"
+    )
+
+
+def prepare_realtycalendar(payment: Dict[str, Any], data: Dict[str, Any],
+                           scenario: Dict[str, Any]) -> Tuple[str, Dict[str, Any], str]:
+    '''
+    Платёж/возврат RealtyCalendar: всё уже есть в вебхуке (бронь, гость, объект, платёж) -
+    собираем чек по сопоставлению полей сценария (realtycalendar_crm), без запросов в API РК.
+    '''
+    raw = payment.get('raw') or {}
+    record = realtycalendar_crm.record_from_raw(raw)
+    refund = payment['status'] == 'REFUNDED'
+    built, err, note = realtycalendar_crm.build_data(record, scenario.get('field_mapping') or {}, refund)
+    if err:
+        return 'error', data, err
+    data.update(built)
+    item = built['items'][0] if built['items'] else {}
+    customer = built['customer']
+    total = sum(i['sum'] for i in built['items'])
+    extra = f" и ещё {len(built['items']) - 1} поз." if len(built['items']) > 1 else ''
+    contact = customer.get('phone') or customer.get('email') or 'нет контакта'
+    booking = record.get('booking') or {}
+    return 'ready', data, (
+        f"{'Возврат' if refund else 'Платёж'} RealtyCalendar #{payment['payment_id']} по брони #{booking.get('id')}: "
+        f"«{item.get('name', '')}»{extra} на {total:.2f} ₽, гость {customer.get('name') or '—'} ({contact}){note}"
     )
 
 

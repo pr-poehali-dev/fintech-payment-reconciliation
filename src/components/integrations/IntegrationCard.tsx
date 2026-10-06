@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import Icon from '@/components/ui/icon';
 import { UserIntegration } from './integrationsPageTypes';
-import { suggestsReceiptScenario, MOYKLASS_STAGE_HINTS } from './providerFieldsConfig';
+import { suggestsReceiptScenario, MOYKLASS_STAGE_HINTS, RK_STAGE_TITLES, RK_PAYMENT_SYSTEM_OPTIONS } from './providerFieldsConfig';
 
 interface IntegrationCardProps {
   integration: UserIntegration;
@@ -184,6 +184,17 @@ const IntegrationCard = ({
               ) : null}
             </>
           )}
+          {integration.provider_slug === 'realtycalendar' && (
+            <>
+              <Chip tone="primary">Этап: {RK_STAGE_TITLES[String(cfg.stage || 'income')] || String(cfg.stage)}</Chip>
+              <Chip>
+                {Array.isArray(cfg.payment_systems) && cfg.payment_systems.length
+                  ? (cfg.payment_systems as string[]).map((v) => RK_PAYMENT_SYSTEM_OPTIONS.find((o) => o.value === v)?.label.replace(/ \(.*\)/, '') || v).join(', ')
+                  : 'Все платёжные системы'}
+              </Chip>
+              {cfg.include_deposits ? <Chip>С залогами</Chip> : null}
+            </>
+          )}
           {integration.provider_slug === 'moyklass' && (
             <>
               <Chip tone="primary">Этап: {MOYKLASS_STAGE_HINTS[String(cfg.stage || 'payment_new')]?.title || String(cfg.stage)}</Chip>
@@ -198,7 +209,7 @@ const IntegrationCard = ({
           )}
           {usesWebhook && (
             <>
-              {isCrm && integration.provider_slug !== 'moyklass' && <Chip>По вебхуку от CRM</Chip>}
+              {isCrm && !['moyklass', 'realtycalendar'].includes(integration.provider_slug) && <Chip>По вебхуку от CRM</Chip>}
               <Chip>Последний вебхук: {formatDate(integration.last_webhook_at)}</Chip>
               <Chip>Вебхуков: {integration.webhook_count}</Chip>
               {integration.forward_url && <Chip tone="primary">Переадресация</Chip>}

@@ -7,6 +7,7 @@ import psycopg2
 import bitrix_crm
 import moyklass_crm
 import moyklass_api
+import realtycalendar_crm
 from auth_guard import guard
 
 SCHEMA = 't_p83864310_fintech_payment_reco'
@@ -80,6 +81,57 @@ def moyklass(method: str, body: Dict[str, Any], config: Dict[str, Any]) -> Dict[
     })
 
 
+def realtycalendar(method: str, body: Dict[str, Any], config: Dict[str, Any], integration_id: int, company_id: int) -> Dict[str, Any]:
+    '''
+    RealtyCalendar: GET - поля (бронь, гость, объект, платёж);
+    POST {entity_id: ID платежа (необязательно), mapping} - чек по платежу, уже полученному вебхуком
+    (без номера - последний полученный). В API РК не ходим - бронь берём из сохранённого вебхука.
+    '''
+    if method == 'GET':
+        return respond(200, {'success': True, **realtycalendar_crm.load_fields()})
+    refund = str(config.get('stage') or 'income') == 'refund'
+    pay_id = str(body.get('entity_id') or '').strip()
+    conn = psycopg2.connect(os.environ['DATABASE_URL'])
+    cur = conn.cursor()
+    try:
+        cur.execute(f'''
+            SELECT payment_id, raw_data, status FROM {SCHEMA}.webhook_payments
+            WHERE integration_id = %s AND company_id = %s AND removed_at IS NULL {'AND payment_id = %s' if pay_id else ''}
+            ORDER BY created_at DESC LIMIT 1
+        ''', (integration_id, company_id, pay_id) if pay_id else (integration_id, company_id))
+        row = cur.fetchone()
+    finally:
+        cur.close()
+        conn.close()
+    if not row:
+        return respond(200, {'success': False, 'error': (
+            f'Платёж #{pay_id} ещё не приходил вебхуком в эту интеграцию' if pay_id else
+            'Вебхуков с платежами ещё не было - добавьте платёж в бронь RealtyCalendar и нажмите «Проверить» снова')})
+    raw = row[1] if isinstance(row[1], dict) else json.loads(row[1] or '{}')
+    record = realtycalendar_crm.record_from_raw(raw)
+    mapping = {**realtycalendar_crm.DEFAULT_MAPPING, **(body.get('mapping') or {})}
+    data, build_error, note = realtycalendar_crm.build_data(record, mapping, refund)
+    values = {k: realtycalendar_crm.resolve(record, mapping.get(k)) for k in
+              ('order_id', 'amount', 'customer_email', 'customer_phone', 'customer_name', 'customer_inn')}
+    booking = record.get('booking') or {}
+    items = (data or {}).get('items') or []
+    return respond(200, {
+        'success': True,
+        'title': (f"{'возврат' if refund else 'платёж'} #{row[0]} по брони #{booking.get('id')}, "
+                  f"{realtycalendar_crm.human_date(str(booking.get('begin_date') or ''))}–{realtycalendar_crm.human_date(str(booking.get('end_date') or ''))}, "
+                  f"гость {(record.get('client') or {}).get('fio') or '—'}"),
+        'stage_matches': True,
+        'stage_note': 'документ будет создан',
+        'values': values,
+        'items': items,
+        'name_limit': realtycalendar_crm.NAME_LIMIT,
+        'full_names': realtycalendar_crm.full_item_names(record, mapping) if items else [],
+        'total': round(sum(i['sum'] for i in items), 2),
+        'error': build_error or None,
+        'note': note.lstrip(', ') or None,
+    })
+
+
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     '''
     Поля CRM для настройки сценария автоматизации (Битрикс24 и «Мой Класс»).
@@ -120,6 +172,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     config = json.loads(config) if isinstance(config, str) else (config or {})
     if slug == 'moyklass':
         return moyklass(method, body, config)
+    if slug == 'realtycalendar':
+        return realtycalendar(method, body, config, int(integration_id), int(company_id))
     if slug != 'bitrix24':
         return respond(400, {'error': 'Загрузка полей доступна для Битрикс24 и «Мой Класс»'})
     webhook_url = config.get('webhook_url', '')

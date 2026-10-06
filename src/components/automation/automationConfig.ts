@@ -48,7 +48,7 @@ export interface IntegrationOption {
 
 // sourceCategories: категории интеграций для выбора источника (null - внутренний источник)
 export const TRIGGERS: Record<TriggerType, { label: string; icon: string; description: string; sourceCategories: string[] | null; needsMapping: boolean; actions?: ActionType[] }> = {
-  new_payment: { label: 'Новый платёж', icon: 'CreditCard', description: 'Пришёл вебхук об оплате от эквайринга или платёж из «Мой Класс»', sourceCategories: ['payments', 'moyklass'], needsMapping: false },
+  new_payment: { label: 'Новый платёж', icon: 'CreditCard', description: 'Пришёл вебхук об оплате от эквайринга или платёж из «Мой Класс» / RealtyCalendar', sourceCategories: ['payments', 'moyklass', 'realtycalendar'], needsMapping: false },
   crm_order: { label: 'Заказ в CRM', icon: 'Users', description: 'Сделка или заказ в CRM перешли в нужную стадию', sourceCategories: ['crm'], needsMapping: true },
   discrepancy: { label: 'Расхождение', icon: 'TriangleAlert', description: 'Оплаченный платёж так и не получил чек — пробиваем чек (обычно коррекции) по его корзине', sourceCategories: null, needsMapping: false, actions: ['create_receipt'] }
 };
@@ -150,6 +150,7 @@ export const DEFAULT_CRM_MAPPING: Record<string, unknown> = {
 
 export const ENTITY_LABELS: Record<string, string> = {
   deal: 'Сделка', lead: 'Лид', contact: 'Контакт', company: 'Компания',
+  booking: 'Бронь', client: 'Гость', apartment: 'Объект',
   payment: 'Платёж', user: 'Ученик', subscription: 'Абонемент', sub_type: 'Вид абонемента', group: 'Группа', course: 'Программа'
 };
 
@@ -159,6 +160,21 @@ export const MOYKLASS_ITEMS_MODES: { value: ItemsMode; label: string; descriptio
   { value: 'single', label: 'Одной позицией', description: 'Одна строка: название и сумма — из полей «Мой Класс» (можно формулой)' },
   { value: 'fixed', label: 'Фиксированный', description: 'Всегда один и тот же состав чека' }
 ];
+export const RK_ENTITIES = ['booking', 'client', 'apartment', 'payment'];
+export const realtycalendarDefaultMapping = (): Record<string, unknown> => ({
+  order_id: 'booking.id',
+  amount: 'payment.amount',
+  customer_email: 'client.email',
+  customer_phone: 'client.phone',
+  customer_name: 'client.fio',
+  customer_inn: '',
+  items_mode: 'single',
+  fixed_items: [],
+  single_item_name: 'Проживание «{apartment.title}» с {booking.begin_date} по {booking.end_date}',
+  single_item_amount: '',
+  vat: 'none'
+});
+
 export const moyklassDefaultMapping = (offset: boolean): Record<string, unknown> => ({
   order_id: 'payment.id',
   amount: 'payment.summa',

@@ -170,6 +170,20 @@ export const MOYKLASS_STAGE_HINTS: Record<string, { event: string; title: string
   debit_new: { event: 'Новое списание у ученика', title: 'Новое списание', template: 'advance_offset_service' }
 };
 
+export const RK_STAGE_OPTIONS: FieldOption[] = [
+  { value: 'income', label: 'Платёж гостя → чек предоплаты' },
+  { value: 'refund', label: 'Возврат гостю → чек возврата предоплаты' }
+];
+
+export const RK_STAGE_TITLES: Record<string, string> = { income: 'Платёж гостя', refund: 'Возврат гостю' };
+
+export const RK_PAYMENT_SYSTEM_OPTIONS: FieldOption[] = [
+  { value: 'manual', label: 'Вручную (наличные, переводы)' },
+  { value: 'moneta', label: 'Монета' },
+  { value: 'moneta_le', label: 'Монета (юрлицо)' },
+  { value: 'yandex_kassa', label: 'ЮKassa' }
+];
+
 export const PROVIDER_FIELDS: Record<string, FieldConfig[]> = {
   tochka_acquiring: [
     { key: 'api_token', label: 'JWT-токен Точки', type: 'password', placeholder: 'eyJhbGciOi…', hint: 'Интернет-банк Точки → Интеграции и API → Подключить → токен с разрешением «Интернет-эквайринг». Проверим его у банка при сохранении' },
@@ -245,6 +259,32 @@ export const PROVIDER_FIELDS: Record<string, FieldConfig[]> = {
   // Чек по UUID платежа он находит сам в активной кассе "Екомкасса" той же
   // компании - отдельно указывать магазин здесь не нужно.
   ecomkassa_gateway: [],
+  // Одна интеграция RealtyCalendar = один этап со своими фильтрами и своим адресом вебхука.
+  realtycalendar: [
+    {
+      key: 'stage',
+      label: 'Этап, который обрабатывает интеграция',
+      type: 'select',
+      default: 'income',
+      options: RK_STAGE_OPTIONS,
+      hint: 'RealtyCalendar присылает бронь целиком при любом изменении — мы берём из неё только новые платежи этого этапа. Для другого этапа подключите ещё одну интеграцию со своим адресом вебхука'
+    },
+    {
+      key: 'payment_systems',
+      label: 'Платёжные системы, по которым создавать чеки',
+      type: 'multiselect',
+      default: ['manual'],
+      options: RK_PAYMENT_SYSTEM_OPTIONS,
+      hint: 'Онлайн-оплаты через Монету или ЮKassa обычно уже пробивает касса платёжной системы — не выбирайте их, иначе чеки задвоятся'
+    },
+    {
+      key: 'include_deposits',
+      label: 'Пробивать чеки по залогам',
+      type: 'checkbox',
+      default: false,
+      required: false
+    }
+  ],
   // Одна интеграция «Мой Класс» = один этап (событие вебхука). Зачёт аванса по списаниям -
   // отдельной интеграцией со своим адресом вебхука, чтобы события не смешивались.
   moyklass: [
@@ -267,7 +307,7 @@ export const PROVIDER_FIELDS: Record<string, FieldConfig[]> = {
 
 // Провайдеры, для которых наш сервис принимает входящие вебхуки.
 // Только для них имеет смысл показывать URL для вебхука и переадресацию.
-const PROVIDERS_WITH_INCOMING_WEBHOOK = ['tbank', 'alfabank', 'tochka_acquiring', 'ecomkassa_gateway', 'moyklass'];
+const PROVIDERS_WITH_INCOMING_WEBHOOK = ['tbank', 'alfabank', 'tochka_acquiring', 'ecomkassa_gateway', 'moyklass', 'realtycalendar'];
 
 export const buildDefaultConfig = (slug: string): ConfigState => {
   const fields = PROVIDER_FIELDS[slug] || [];
@@ -280,7 +320,7 @@ export const buildDefaultConfig = (slug: string): ConfigState => {
 
 // Платёжки, по которым чек делаем сами из корзины: после подключения предлагаем сценарий чеков.
 // Шлюз Екомкассы сюда не входит - чек по нему пробивает сама Екомкасса.
-const PROVIDERS_WITH_RECEIPT_SCENARIO = ['tbank', 'alfabank', 'tochka_acquiring', 'moyklass'];
+const PROVIDERS_WITH_RECEIPT_SCENARIO = ['tbank', 'alfabank', 'tochka_acquiring', 'moyklass', 'realtycalendar'];
 export const suggestsReceiptScenario = (slug?: string) => !!slug && PROVIDERS_WITH_RECEIPT_SCENARIO.includes(slug);
 
 export const acceptsIncomingWebhook = (slug?: string) => !!slug && PROVIDERS_WITH_INCOMING_WEBHOOK.includes(slug);

@@ -216,13 +216,19 @@ const AutomationPage = ({ prefillSourceId, onPrefillUsed }: AutomationPageProps 
       const kassas = integrations.filter((i) => i.category === 'cash_registers');
       setEditing(null);
       setPrefill({
-        name: source.providerSlug === 'moyklass' && source.stage === 'debit_new' ? `Зачёт аванса ${source.name}` : `Чек по оплатам ${source.name}`,
+        name: source.providerSlug === 'moyklass' && source.stage === 'debit_new'
+          ? `Зачёт аванса ${source.name}`
+          : source.providerSlug === 'realtycalendar' && source.stage === 'refund'
+            ? `Возвраты ${source.name}`
+            : `Чек по оплатам ${source.name}`,
         trigger_type: 'new_payment',
         source_integration_id: source.id,
         action_type: 'create_receipt',
         ...(() => {
-          if (source.providerSlug !== 'moyklass') return {};
-          const code = source.stage === 'debit_new' ? 'advance_offset_service' : 'prepayment_service';
+          if (source.providerSlug !== 'moyklass' && source.providerSlug !== 'realtycalendar') return {};
+          const code = source.providerSlug === 'realtycalendar'
+            ? (source.stage === 'refund' ? 'refund_prepayment_service' : 'prepayment_service')
+            : source.stage === 'debit_new' ? 'advance_offset_service' : 'prepayment_service';
           return templates.some((t) => t.code === code) ? { action_template: code } : {};
         })(),
         target_integration_id: kassas.length === 1 ? kassas[0].id : null

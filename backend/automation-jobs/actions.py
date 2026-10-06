@@ -394,6 +394,11 @@ def create_receipt(cur, job: Dict[str, Any], scenario: Dict[str, Any], data: Dic
             and int(template.get('payment_type') if template.get('payment_type') is not None else 1) == 2:
         return 'error', {}, ('Оплата «Мой Класс» - это новые деньги, а шаблон сценария делает зачёт аванса. '
                              'Для оплат выберите шаблон предоплаты, для списаний - отдельную интеграцию с этапом «Новое списание»')
+    if data.get('items_source') == 'RealtyCalendar':
+        is_refund_doc = (template.get('operation') or 'sell') == 'sell_refund'
+        if bool(data.get('refund')) != is_refund_doc:
+            return 'error', {}, ('Возврат RealtyCalendar пробивается шаблоном с операцией «возврат прихода», а платёж - шаблоном прихода. '
+                                 'Проверьте шаблон сценария и этап интеграции')
     if data.get('item_payment_method') in ('prepayment', 'advance') and template.get('payment_method') in ('full_prepayment', 'prepayment'):
         # Абонемент «Мой Класс» оплачен не полностью - это частичная предоплата, а не 100%.
         items = [{**i, 'payment_method': data['item_payment_method']} for i in items]

@@ -18,7 +18,7 @@ CORS_HEADERS = {
 # Источник -> категории интеграций, которые можно выбрать как источник
 # (None - источник внутренний, без интеграции).
 TRIGGERS = {
-    'new_payment': ['payments', 'moyklass'],
+    'new_payment': ['payments', 'moyklass', 'realtycalendar'],
     'crm_order': ['crm'],
     'discrepancy': None,
 }
@@ -52,7 +52,7 @@ def integration_category(cur, company_id: int, integration_id: Optional[int]) ->
     if not row:
         return None
     # «Мой Класс» - CRM, но платежи учеников приходят как оплаты: источник сценария «Новый платёж».
-    return 'moyklass' if row[1] == 'moyklass' else row[0]
+    return row[1] if row[1] in ('moyklass', 'realtycalendar') else row[0]
 
 
 def validate(cur, company_id: int, body: Dict[str, Any]) -> Optional[str]:

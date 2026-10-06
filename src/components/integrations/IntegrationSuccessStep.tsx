@@ -2,7 +2,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import Icon from '@/components/ui/icon';
-import { Provider, acceptsIncomingWebhook, suggestsReceiptScenario, MOYKLASS_STAGE_HINTS } from './providerFieldsConfig';
+import { Provider, acceptsIncomingWebhook, suggestsReceiptScenario, MOYKLASS_STAGE_HINTS, RK_STAGE_TITLES } from './providerFieldsConfig';
 
 interface IntegrationSuccessStepProps {
   selectedProvider: Provider;
@@ -52,7 +52,14 @@ const IntegrationSuccessStep = ({
                 <p className="font-semibold text-foreground mb-2">
                   Инструкция по настройке:
                 </p>
-                {selectedProvider.slug === 'moyklass' ? (
+                {selectedProvider.slug === 'realtycalendar' ? (
+                  <ol className="list-decimal list-inside space-y-1 text-muted-foreground">
+                    <li>RealtyCalendar → Настройки → CRM-интеграции → поле «Введите URL нового Webhook»: вставьте этот URL и нажмите «Запустить»</li>
+                    <li>Этот адрес обрабатывает только этап «{RK_STAGE_TITLES[stage || 'income']}». Для другого этапа подключите ещё одну интеграцию — RealtyCalendar поддерживает несколько адресов</li>
+                    <li>RealtyCalendar списывает плату по своему тарифу «за интеграцию с внешними системами»</li>
+                    <li>Чек: {stage === 'refund' ? 'возврат предоплаты' : 'предоплата за проживание'}, название — объект и даты, контакт — телефон или почта гостя</li>
+                  </ol>
+                ) : selectedProvider.slug === 'moyklass' ? (
                   <ol className="list-decimal list-inside space-y-1 text-muted-foreground">
                     <li>«Мой Класс» → Настройки → API и webhooks → вкладка «Webhooks» → «+ Webhook»: вставьте этот URL и сохраните</li>
                     <li>Настройки → Сценарии → сценарий по событию «{MOYKLASS_STAGE_HINTS[stage || 'payment_new']?.event}» → действие «Отправить вебхук» с этим вебхуком</li>

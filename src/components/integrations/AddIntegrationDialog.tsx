@@ -274,7 +274,7 @@ const AddIntegrationDialog = ({
         {step === 3 && selectedProvider && (
           <IntegrationSuccessStep
             selectedProvider={selectedProvider}
-            stage={String(config.stage || 'payment_new')}
+            stage={String(config.stage || (selectedProvider.slug === 'realtycalendar' ? 'income' : 'payment_new'))}
             webhookUrl={webhookUrl}
             onCopyWebhookUrl={copyToClipboard}
             onFinish={handleFinish}

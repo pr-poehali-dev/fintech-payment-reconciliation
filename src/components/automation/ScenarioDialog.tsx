@@ -25,7 +25,8 @@ import {
   TARGET_CATEGORIES,
   TRIGGERS,
   TriggerType,
-  moyklassDefaultMapping
+  moyklassDefaultMapping,
+  realtycalendarDefaultMapping
 } from './automationConfig';
 
 export interface ScenarioForm {
@@ -132,8 +133,11 @@ const ScenarioDialog = ({ open, onOpenChange, scenario, prefill, integrations, t
     : [];
   const sourceIntegration = integrations.find((i) => i.id === form.source_integration_id);
   const isBitrix = sourceIntegration?.providerSlug === 'bitrix24';
-  const isMoyklass = sourceIntegration?.providerSlug === 'moyklass';
-  const moyklassOffset = isMoyklass && sourceIntegration?.stage === 'debit_new';
+  const isRk = sourceIntegration?.providerSlug === 'realtycalendar';
+  const isMoyklass = sourceIntegration?.providerSlug === 'moyklass' || isRk;
+  const moyklassOffset = isRk ? sourceIntegration?.stage === 'refund' : isMoyklass && sourceIntegration?.stage === 'debit_new';
+  const sourceDefaults = (slug?: string, stage?: string) =>
+    slug === 'realtycalendar' ? realtycalendarDefaultMapping() : moyklassDefaultMapping(stage === 'debit_new');
   const isAgent = form.action_type === 'create_receipt' && currentTemplate?.receipt_type === 'agent';
   // Поля поставщика, сопоставленные с CRM, в блоке «Агентский чек» не обязательны.
   const agentFromCrm = isAgent && trigger.needsMapping && isBitrix
@@ -145,7 +149,7 @@ const ScenarioDialog = ({ open, onOpenChange, scenario, prefill, integrations, t
   // Сценарий «Мой Класс» без сопоставления (создан раньше или из предложения после подключения) - поля по умолчанию.
   useEffect(() => {
     if (open && isMoyklass && !form.field_mapping.order_id) {
-      setForm((f) => ({ ...f, field_mapping: { ...moyklassDefaultMapping(moyklassOffset), ...f.field_mapping } }));
+      setForm((f) => ({ ...f, field_mapping: { ...sourceDefaults(sourceIntegration?.providerSlug, sourceIntegration?.stage), ...f.field_mapping } }));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, isMoyklass, moyklassOffset, form.field_mapping.order_id]);
@@ -239,16 +243,17 @@ const ScenarioDialog = ({ open, onOpenChange, scenario, prefill, integrations, t
                 onValueChange={(v) => {
                   const picked = integrations.find((i) => i.id === Number(v));
                   const crmDefaults = trigger.needsMapping && picked?.providerSlug === 'bitrix24' && !form.field_mapping.items_mode;
-                  const mkDefaults = picked?.providerSlug === 'moyklass' && form.field_mapping.order_id !== 'payment.id'
-                    && !String(form.field_mapping.order_id || '').startsWith('payment.');
+                  const pickedCrm = picked?.providerSlug === 'moyklass' || picked?.providerSlug === 'realtycalendar';
+                  const prefix = picked?.providerSlug === 'realtycalendar' ? 'booking.' : 'payment.';
+                  const mkDefaults = pickedCrm && !String(form.field_mapping.order_id || '').startsWith(prefix);
                   setForm({
                     ...form,
                     source_integration_id: Number(v),
                     field_mapping: crmDefaults
                       ? { ...DEFAULT_CRM_MAPPING }
                       : mkDefaults
-                        ? moyklassDefaultMapping(picked?.stage === 'debit_new')
-                        : picked?.providerSlug !== 'moyklass' && trigger.sourceCategories?.includes('payments') && !trigger.needsMapping
+                        ? sourceDefaults(picked?.providerSlug, picked?.stage)
+                        : !pickedCrm && trigger.sourceCategories?.includes('payments') && !trigger.needsMapping
                           ? {}
                           : form.field_mapping
                   });
@@ -427,11 +432,12 @@ const ScenarioDialog = ({ open, onOpenChange, scenario, prefill, integrations, t
           </Step>
 
           {isMoyklass && form.source_integration_id && currentCompany && (
-            <Step n={step++} title="Сопоставление полей «Мой Класс»">
+            <Step n={step++} title={`Сопоставление полей ${isRk ? 'RealtyCalendar' : '«Мой Класс»'}`}>
               <MoyklassMappingBlock
                 companyId={currentCompany.id}
                 integrationId={form.source_integration_id}
                 offset={moyklassOffset}
+                provider={isRk ? 'realtycalendar' : 'moyklass'}
                 mapping={form.field_mapping}
                 onChange={(m) => setForm({ ...form, field_mapping: m })}
                 templatePaymentMethod={currentTemplate?.payment_method}

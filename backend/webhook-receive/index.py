@@ -17,6 +17,7 @@ from ecomkassa_token import ensure_valid_token as ensure_kassa_token
 import amocrm_handler
 import ecomkassa_gateway_handler
 import moyklass_handler
+import realtycalendar_handler
 import automation
 from auth_guard import guard
 
@@ -176,6 +177,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         event_type = EVENT_TYPE_BY_PROVIDER.get(provider_slug, 'unknown')
         if provider_slug == 'moyklass':
             event_type = moyklass_handler.event_type(webhook_data)
+        elif provider_slug == 'realtycalendar':
+            event_type = realtycalendar_handler.event_type(webhook_data)
         # Источник для ленты «События»: хук или подтянуто кроном вместо потерянного хука.
         source = webhook_data.get('source') if isinstance(webhook_data, dict) else None
         origin = {'cron_recovery': 'recovery', 'cron_candidate': 'candidate'}.get(source, 'webhook')
@@ -189,6 +192,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         external_deal_id = None
         handler_error = None
         skip_note = None
+        extra_payment_ids = []
 
         if provider_slug == 'tbank':
             signature_valid, webhook_payment_id, handler_error = tbank_handler.process(
@@ -242,6 +246,15 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             webhook_payment_id, handler_error, skip_note = moyklass_handler.process(
                 cur, integration_id, company_id, config, webhook_data
             )
+        elif provider_slug == 'realtycalendar':
+            rk_ids, handler_error, skip_note = realtycalendar_handler.process(
+                cur, integration_id, company_id, config, webhook_data
+            )
+            if rk_ids:
+                webhook_payment_id, extra_payment_ids = rk_ids[0], rk_ids[1:]
+            booking = (webhook_data.get('data') or {}).get('booking') if isinstance(webhook_data.get('data'), dict) else None
+            if isinstance(booking, dict) and booking.get('id'):
+                external_deal_id = str(booking['id'])
         elif provider_slug == 'ecomkassa_gateway':
             _, webhook_payment_id, handler_error = ecomkassa_gateway_handler.process(
                 cur, integration_id, company_id, config, webhook_settings, webhook_data
@@ -293,6 +306,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         if (webhook_payment_id or has_cart) and not handler_error:
             try:
                 jobs_created = automation.enqueue_payment_jobs(cur, company_id, integration_id, webhook_payment_id, event_id)
+                for extra_id in extra_payment_ids:
+                    jobs_created += automation.enqueue_payment_jobs(cur, company_id, integration_id, extra_id, event_id)
                 if has_cart:
                     jobs_created += automation.wake_payment_jobs(cur, integration_id, webhook_data.get('PaymentId'))
                 conn.commit()

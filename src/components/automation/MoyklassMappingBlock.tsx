@@ -6,12 +6,13 @@ import Icon from '@/components/ui/icon';
 import functionUrls from '../../../backend/func2url.json';
 import CrmFieldPicker from './CrmFieldPicker';
 import CrmTemplateInput from './CrmTemplateInput';
-import { CrmMeta, FixedItem, ItemsMode, MAPPING_FIELDS, MOYKLASS_ENTITIES, MOYKLASS_ITEMS_MODES, VAT_OPTIONS } from './automationConfig';
+import { CrmMeta, FixedItem, ItemsMode, MAPPING_FIELDS, MOYKLASS_ENTITIES, MOYKLASS_ITEMS_MODES, RK_ENTITIES, VAT_OPTIONS } from './automationConfig';
 
 interface MoyklassMappingBlockProps {
   companyId: number;
   integrationId: number;
   offset: boolean;
+  provider?: 'moyklass' | 'realtycalendar';
   mapping: Record<string, unknown>;
   onChange: (mapping: Record<string, unknown>) => void;
   templatePaymentMethod?: string;
@@ -42,7 +43,10 @@ const METHOD_LABELS: Record<string, string> = {
   partial_payment: 'частичный расчёт'
 };
 
-const MoyklassMappingBlock = ({ companyId, integrationId, offset, mapping, onChange, templatePaymentMethod }: MoyklassMappingBlockProps) => {
+const MoyklassMappingBlock = ({ companyId, integrationId, offset, provider = 'moyklass', mapping, onChange, templatePaymentMethod }: MoyklassMappingBlockProps) => {
+  const isRk = provider === 'realtycalendar';
+  const entities = isRk ? RK_ENTITIES : MOYKLASS_ENTITIES;
+  const crmName = isRk ? 'RealtyCalendar' : '«Мой Класс»';
   const [meta, setMeta] = useState<CrmMeta | null>(metaCache[integrationId] || null);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -105,7 +109,7 @@ const MoyklassMappingBlock = ({ companyId, integrationId, offset, mapping, onCha
         {loading ? (
           <span className="flex items-center gap-2 text-muted-foreground">
             <Icon name="Loader2" size={16} className="animate-spin" />
-            Загружаем поля из «Мой Класс»...
+            Загружаем поля {crmName}...
           </span>
         ) : (
           <>
@@ -119,7 +123,7 @@ const MoyklassMappingBlock = ({ companyId, integrationId, offset, mapping, onCha
 
   const fieldsHint = (
     <p className="text-xs text-muted-foreground">
-      Лупа — вставить поле: ученик, абонемент, вид абонемента, группа, программа, платёж. Пустые поля в кавычках убираются автоматически
+      Лупа — вставить поле: {isRk ? 'бронь, гость, объект, платёж' : 'ученик, абонемент, вид абонемента, группа, программа, платёж'}. Пустые поля в кавычках убираются автоматически
     </p>
   );
 
@@ -128,7 +132,9 @@ const MoyklassMappingBlock = ({ companyId, integrationId, offset, mapping, onCha
       <div className="rounded-lg border border-border bg-muted/30 p-3 text-xs text-muted-foreground space-y-1">
         <div className="flex items-center justify-between gap-2">
           <span className="text-sm font-medium text-foreground">
-            {offset ? 'Списание за занятие → зачёт аванса' : 'Оплата абонемента → предоплата'}
+            {isRk
+              ? (offset ? 'Возврат гостю → возврат предоплаты' : 'Платёж гостя → предоплата')
+              : (offset ? 'Списание за занятие → зачёт аванса' : 'Оплата абонемента → предоплата')}
           </span>
           <Button size="sm" variant="ghost" className="h-7 gap-1 px-2 text-xs" onClick={() => load(true)} disabled={loading}>
             <Icon name={loading ? 'Loader2' : 'RefreshCw'} size={12} className={loading ? 'animate-spin' : ''} />
@@ -138,7 +144,7 @@ const MoyklassMappingBlock = ({ companyId, integrationId, offset, mapping, onCha
         <p>
           Этап задан в интеграции. Признак расчёта берётся из шаблона действия
           {templatePaymentMethod ? <> — сейчас «{METHOD_LABELS[templatePaymentMethod] || templatePaymentMethod}»</> : null}
-          {!offset && ', если абонемент оплачен не полностью — частичная предоплата'}.
+          {!offset && (isRk ? ', если бронь оплачена не полностью — частичная предоплата' : ', если абонемент оплачен не полностью — частичная предоплата')}.
         </p>
       </div>
 
@@ -154,7 +160,7 @@ const MoyklassMappingBlock = ({ companyId, integrationId, offset, mapping, onCha
               value={String(mapping[f.key] || '')}
               onChange={(ref) => set({ [f.key]: ref })}
               fields={meta.fields}
-              entities={MOYKLASS_ENTITIES}
+              entities={entities}
             />
           </div>
         ))}
@@ -186,10 +192,10 @@ const MoyklassMappingBlock = ({ companyId, integrationId, offset, mapping, onCha
                 value={String(mapping.single_item_name || '')}
                 onChange={(v) => set({ single_item_name: v })}
                 fields={meta.fields}
-                entities={MOYKLASS_ENTITIES}
+                entities={entities}
                 mainEntity="__none__"
                 fieldKind="text"
-                placeholder={offset ? 'Например: Занятие в группе «{group.name}»' : 'Например: Абонемент «{sub_type.name}»'}
+                placeholder={isRk ? 'Например: Проживание «{apartment.title}» с {booking.begin_date}' : offset ? 'Например: Занятие в группе «{group.name}»' : 'Например: Абонемент «{sub_type.name}»'}
               />
               {fieldsHint}
             </div>
@@ -199,13 +205,13 @@ const MoyklassMappingBlock = ({ companyId, integrationId, offset, mapping, onCha
                 value={String(mapping.single_item_amount || '')}
                 onChange={(v) => set({ single_item_amount: v })}
                 fields={meta.fields}
-                entities={MOYKLASS_ENTITIES}
+                entities={entities}
                 mainEntity="__none__"
                 fieldKind="number"
-                placeholder={`Пусто — сумма ${offset ? 'списания' : 'платежа'}. Например {subscription.lesson_price}`}
+                placeholder={isRk ? `Пусто — сумма ${offset ? 'возврата' : 'платежа'}. Например {booking.price_per_day} * {booking.number_of_nights}` : `Пусто — сумма ${offset ? 'списания' : 'платежа'}. Например {subscription.lesson_price}`}
               />
               <p className="text-xs text-muted-foreground">
-                Можно считать: + - * / и скобки, например <code>{'{subscription.price} / {subscription.visitCount}'}</code>. Пустое поле считается нулём
+                Можно считать: + - * / и скобки, например <code>{isRk ? '{payment.amount} - 500' : '{subscription.price} / {subscription.visitCount}'}</code>. Пустое поле считается нулём
               </p>
             </div>
           </>
@@ -225,27 +231,29 @@ const MoyklassMappingBlock = ({ companyId, integrationId, offset, mapping, onCha
                   value={it.name}
                   onChange={(v) => setFixed(i, { name: v })}
                   fields={meta.fields}
-                  entities={MOYKLASS_ENTITIES}
+                  entities={entities}
                   mainEntity="__none__"
                   fieldKind="text"
-                  placeholder="Название, например: Учебные материалы «{course.name}»"
+                  placeholder={isRk ? 'Название, например: Уборка «{apartment.title}»' : 'Название, например: Учебные материалы «{course.name}»'}
                 />
                 <div className="grid grid-cols-[1fr_72px] gap-2">
                   <CrmTemplateInput
                     value={it.price}
                     onChange={(v) => setFixed(i, { price: v })}
                     fields={meta.fields}
-                    entities={MOYKLASS_ENTITIES}
+                    entities={entities}
                     mainEntity="__none__"
                     fieldKind="number"
-                    placeholder="Цена: 500 или {payment.summa} - 500"
+                    placeholder={isRk ? 'Цена: 500 или {payment.amount} - 500' : 'Цена: 500 или {payment.summa} - 500'}
                   />
                   <Input className="h-9" placeholder="Кол." inputMode="decimal" value={it.quantity} onChange={(e) => setFixed(i, { quantity: e.target.value.replace(/[^\d.,]/g, '') })} />
                 </div>
               </div>
             ))}
             <p className="text-xs text-muted-foreground">
-              Цена — число, поле или формула. Например, разбить оплату на две строки: «Абонемент» на <code>{'{payment.summa} - 500'}</code> и «Учебные материалы» на <code>500</code>
+              {isRk
+                ? <>Цена — число, поле или формула. Например, разбить оплату на две строки: «Проживание» на <code>{'{payment.amount} - 1500'}</code> и «Уборка» на <code>1500</code></>
+                : <>Цена — число, поле или формула. Например, разбить оплату на две строки: «Абонемент» на <code>{'{payment.summa} - 500'}</code> и «Учебные материалы» на <code>500</code></>}
             </p>
             <Button size="sm" variant="outline" className="w-full gap-1" onClick={() => set({ fixed_items: [...fixedItems, { name: '', price: '', quantity: '1' }] })}>
               <Icon name="Plus" size={14} />
@@ -270,21 +278,27 @@ const MoyklassMappingBlock = ({ companyId, integrationId, offset, mapping, onCha
       </div>
 
       <div className="w-full min-w-0 space-y-2 rounded-lg border border-dashed border-primary/40 bg-primary/5 p-3">
-        <div className="text-sm font-medium">Проверить на реальном {offset ? 'списании' : 'платеже'}</div>
+        <div className="text-sm font-medium">
+          {isRk ? 'Проверить на полученном платеже' : `Проверить на реальном ${offset ? 'списании' : 'платеже'}`}
+        </div>
         <div className="flex gap-2">
           <Input
             className="h-9"
             inputMode="numeric"
-            placeholder={`ID ${offset ? 'списания' : 'платежа'} в «Мой Класс»`}
+            placeholder={isRk ? 'ID платежа (пусто — последний полученный)' : `ID ${offset ? 'списания' : 'платежа'} в «Мой Класс»`}
             value={testId}
             onChange={(e) => setTestId(e.target.value.replace(/\D/g, ''))}
           />
-          <Button size="sm" className="h-9 gap-1" disabled={!testId || testing} onClick={runTest}>
+          <Button size="sm" className="h-9 gap-1" disabled={(!testId && !isRk) || testing} onClick={runTest}>
             <Icon name={testing ? 'Loader2' : 'Play'} size={14} className={testing ? 'animate-spin' : ''} />
             Проверить
           </Button>
         </div>
-        <p className="text-xs text-muted-foreground">ID есть в «Мой Класс» в карточке ученика → Платежи, или в ленте «События» после первого вебхука</p>
+        <p className="text-xs text-muted-foreground">
+          {isRk
+            ? 'Берём платёж из вебхука, который RealtyCalendar уже прислал в эту интеграцию: добавьте платёж в бронь и нажмите «Проверить»'
+            : 'ID есть в «Мой Класс» в карточке ученика → Платежи, или в ленте «События» после первого вебхука'}
+        </p>
 
         {test && !test.success && <p className="text-sm text-destructive">{test.error}</p>}
         {test?.success && (
