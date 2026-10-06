@@ -6,7 +6,7 @@ const CtaSection = ({ onCtaClick, trialDays }: { onCtaClick: () => void; trialDa
   return (
     <section className="py-20 sm:py-28">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-        <div className="bg-gradient-to-br from-primary/10 to-transparent border border-primary/20 rounded-3xl p-10 sm:p-16">
+        <div className="bg-gradient-to-br from-primary/10 to-transparent border border-primary/20 rounded-3xl px-5 py-10 sm:p-16">
           <Icon name="ShieldCheck" size={40} className="text-primary mx-auto mb-6" />
           <h2 className="text-3xl sm:text-4xl font-display font-bold text-foreground mb-4">
             Перестаньте терять деньги и время на чеках уже сегодня
@@ -15,7 +15,7 @@ const CtaSection = ({ onCtaClick, trialDays }: { onCtaClick: () => void; trialDa
             Подключите компанию за пару минут, и Сверка сама найдёт пропущенные чеки раньше налоговой.
             {' '}{pluralDays(trialDays)} бесплатно, без банковской карты.
           </p>
-          <Button size="lg" onClick={onCtaClick} className="text-base h-14 px-10 gap-2">
+          <Button size="lg" onClick={onCtaClick} className="w-full sm:w-auto max-w-full whitespace-normal text-base min-h-14 h-auto py-3 px-6 sm:px-10 gap-2">
             <Icon name="Rocket" size={18} />
             Попробовать {pluralDays(trialDays)} бесплатно
           </Button>
