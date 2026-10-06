@@ -5,29 +5,25 @@ const STEPS = [
     number: '01',
     icon: 'UserPlus',
     title: 'Регистрируетесь по телефону',
-    description: 'Без пароля — вход по коду из WhatsApp, Telegram или Max. Создаёте компанию за пару минут.',
-    benefit: 'Старт за 2 минуты — без договоров и IT-специалиста'
+    description: 'Без пароля — вход по коду из WhatsApp, Telegram или Max. Создаёте компанию за пару минут.'
   },
   {
     number: '02',
     icon: 'Plug',
     title: 'Подключаете источники данных',
-    description: 'CRM, платёжные системы, ОФД, банк — интеграция настраивается в интерфейсе, без кода.',
-    benefit: 'Все деньги бизнеса видны в одном месте'
+    description: 'CRM, платёжные системы, ОФД, банк — интеграция настраивается в интерфейсе, без кода.'
   },
   {
     number: '03',
     icon: 'GitCompare',
     title: 'Платформа сверяет автоматически',
-    description: 'Каждый платёж и заказ сопоставляется с чеком, включая авансы и их зачёт по факту отгрузки.',
-    benefit: 'Не нужно платить бухгалтеру за ручную сверку'
+    description: 'Каждый платёж и заказ сопоставляется с чеком, включая авансы и их зачёт по факту отгрузки.'
   },
   {
     number: '04',
     icon: 'ShieldCheck',
     title: 'Вы исправляете расхождения раньше проверки',
-    description: 'Уведомления и отчёты показывают проблему сразу — до того, как её найдёт налоговая.',
-    benefit: 'Ни одного штрафа за пропущенный чек'
+    description: 'Уведомления и отчёты показывают проблему сразу — до того, как её найдёт налоговая.'
   }
 ];
 
@@ -40,7 +36,7 @@ const HowItWorksSection = () => {
             Как это работает
           </h2>
           <p className="text-lg text-muted-foreground">
-            Четыре шага — и чеки под контролем без бухгалтера и без штрафов.
+            От регистрации до первой сверки — четыре простых шага.
           </p>
         </div>
 
@@ -61,10 +57,6 @@ const HowItWorksSection = () => {
               <p className="text-sm text-muted-foreground leading-relaxed">
                 {step.description}
               </p>
-              <div className="flex items-start gap-1.5 mt-3 text-sm font-medium text-primary">
-                <Icon name="CircleCheck" size={16} className="shrink-0 mt-0.5" />
-                {step.benefit}
-              </div>
 
               {index < STEPS.length - 1 && (
                 <Icon
