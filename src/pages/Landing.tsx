@@ -73,7 +73,7 @@ const Landing = () => {
       <PricingSection onCtaClick={handleTariffClick} trialDays={trialDays} tariffs={tariffs} />
       <CtaSection onCtaClick={handleCtaClick} trialDays={trialDays} />
       <FaqSection />
-      <LandingFooter />
+      <LandingFooter showCases={cases.length > 0} />
     </div>
   );
 };
