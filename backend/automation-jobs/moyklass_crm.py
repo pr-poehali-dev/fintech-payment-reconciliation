@@ -210,11 +210,28 @@ def render_name(record: Dict[str, Any], template: str, fallback: str) -> str:
     return name or fallback
 
 
+def _fixed_rows(record: Dict[str, Any], mapping: Dict[str, Any]) -> Tuple[List[Tuple[str, float, float]], str]:
+    '''Фиксированный состав: название и цена каждой строки - текст/число, поле {объект.код} или формула.'''
+    rows = []
+    for i, row in enumerate(mapping.get('fixed_items') or [], 1):
+        name_tpl = str(row.get('name') or '').strip()
+        price_tpl = str(row.get('price') or '').strip()
+        if not name_tpl or not price_tpl:
+            continue
+        price = _number(price_tpl) if '{' not in price_tpl and not re.search(r'[+*/()]|\d-', price_tpl) else None
+        if price is None:
+            price, expr, err = calc_amount(record, price_tpl)
+            if err:
+                return [], f'Позиция {i}, цена «{price_tpl}» ({expr}): {err}'
+        rows.append((render_name(record, name_tpl, f'Позиция {i}'), price, _number(row.get('quantity')) or 1))
+    return rows, '' if rows else 'В сценарии не заполнен фиксированный состав чека'
+
+
 def full_item_names(record: Dict[str, Any], mapping: Dict[str, Any], offset: bool) -> List[str]:
     mode = mapping.get('items_mode') or 'single'
     if mode == 'fixed':
-        return [r['name'].strip() for r in mapping.get('fixed_items') or []
-                if (r.get('name') or '').strip() and _number(r.get('price')) is not None]
+        rows, _ = _fixed_rows(record, mapping)
+        return [r[0] for r in rows]
     fallback = 'Занятие' if offset else 'Оплата обучения'
     return [render_name(record, mapping.get('single_item_name') or default_item_name(offset), fallback)]
 
@@ -234,13 +251,10 @@ def build_items(record: Dict[str, Any], mapping: Dict[str, Any], offset: bool) -
         vat = 'none'
     mode = mapping.get('items_mode') or 'single'
     if mode == 'fixed':
-        items = []
-        for row in mapping.get('fixed_items') or []:
-            price = _number(row.get('price'))
-            if not (row.get('name') or '').strip() or price is None:
-                continue
-            items.append(_item(row['name'].strip(), price, _number(row.get('quantity')) or 1, vat, offset))
-        return items, '' if items else 'В сценарии не заполнен фиксированный состав чека'
+        rows, err = _fixed_rows(record, mapping)
+        if err:
+            return [], err
+        return [_item(name, price, qty, vat, offset) for name, price, qty in rows], ''
 
     template = str(mapping.get('single_item_amount') or '').strip()
     if template:

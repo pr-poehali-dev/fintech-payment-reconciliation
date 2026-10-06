@@ -188,6 +188,7 @@ const MoyklassMappingBlock = ({ companyId, integrationId, offset, mapping, onCha
                 fields={meta.fields}
                 entities={MOYKLASS_ENTITIES}
                 mainEntity="__none__"
+                fieldKind="text"
                 placeholder={offset ? 'Например: Занятие в группе «{group.name}»' : 'Например: Абонемент «{sub_type.name}»'}
               />
               {fieldsHint}
@@ -200,6 +201,7 @@ const MoyklassMappingBlock = ({ companyId, integrationId, offset, mapping, onCha
                 fields={meta.fields}
                 entities={MOYKLASS_ENTITIES}
                 mainEntity="__none__"
+                fieldKind="number"
                 placeholder={`Пусто — сумма ${offset ? 'списания' : 'платежа'}. Например {subscription.lesson_price}`}
               />
               <p className="text-xs text-muted-foreground">
@@ -212,15 +214,39 @@ const MoyklassMappingBlock = ({ companyId, integrationId, offset, mapping, onCha
         {itemsMode === 'fixed' && (
           <div className="space-y-2">
             {fixedItems.map((it, i) => (
-              <div key={i} className="grid grid-cols-[1fr_80px_56px_32px] gap-2">
-                <Input className="h-9" placeholder="Название" value={it.name} onChange={(e) => setFixed(i, { name: e.target.value })} />
-                <Input className="h-9" placeholder="Цена" inputMode="decimal" value={it.price} onChange={(e) => setFixed(i, { price: e.target.value.replace(/[^\d.,]/g, '') })} />
-                <Input className="h-9" placeholder="Кол." inputMode="decimal" value={it.quantity} onChange={(e) => setFixed(i, { quantity: e.target.value.replace(/[^\d.,]/g, '') })} />
-                <Button size="icon" variant="ghost" className="h-9 w-8" onClick={() => set({ fixed_items: fixedItems.filter((_, j) => j !== i) })}>
-                  <Icon name="Trash2" size={14} />
-                </Button>
+              <div key={i} className="space-y-2 rounded-md border border-border p-2">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-medium text-muted-foreground">Позиция {i + 1}</span>
+                  <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => set({ fixed_items: fixedItems.filter((_, j) => j !== i) })}>
+                    <Icon name="Trash2" size={14} />
+                  </Button>
+                </div>
+                <CrmTemplateInput
+                  value={it.name}
+                  onChange={(v) => setFixed(i, { name: v })}
+                  fields={meta.fields}
+                  entities={MOYKLASS_ENTITIES}
+                  mainEntity="__none__"
+                  fieldKind="text"
+                  placeholder="Название, например: Учебные материалы «{course.name}»"
+                />
+                <div className="grid grid-cols-[1fr_72px] gap-2">
+                  <CrmTemplateInput
+                    value={it.price}
+                    onChange={(v) => setFixed(i, { price: v })}
+                    fields={meta.fields}
+                    entities={MOYKLASS_ENTITIES}
+                    mainEntity="__none__"
+                    fieldKind="number"
+                    placeholder="Цена: 500 или {payment.summa} - 500"
+                  />
+                  <Input className="h-9" placeholder="Кол." inputMode="decimal" value={it.quantity} onChange={(e) => setFixed(i, { quantity: e.target.value.replace(/[^\d.,]/g, '') })} />
+                </div>
               </div>
             ))}
+            <p className="text-xs text-muted-foreground">
+              Цена — число, поле или формула. Например, разбить оплату на две строки: «Абонемент» на <code>{'{payment.summa} - 500'}</code> и «Учебные материалы» на <code>500</code>
+            </p>
             <Button size="sm" variant="outline" className="w-full gap-1" onClick={() => set({ fixed_items: [...fixedItems, { name: '', price: '', quantity: '1' }] })}>
               <Icon name="Plus" size={14} />
               Добавить позицию

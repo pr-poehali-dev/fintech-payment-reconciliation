@@ -10,7 +10,12 @@ interface CrmTemplateInputProps {
   entities: string[];
   mainEntity: string;
   placeholder?: string;
+  // Какие поля предлагать: text - годятся для названия, number - для суммы. Без фильтра - все.
+  fieldKind?: 'text' | 'number';
 }
+
+const NUMBER_TYPES = ['double', 'integer', 'number', 'money', 'float'];
+const TEXT_TYPES = ['string', 'date', 'select', 'phone', 'email', 'unique', 'integer', 'text'];
 
 interface Option {
   entity: string;
@@ -20,7 +25,7 @@ interface Option {
 
 // Текст с подстановкой полей CRM. Лупа включает поиск: введённое после неё ищется
 // по названию поля, выбранное поле вставляется кодом ({TITLE}, {contact.NAME}).
-const CrmTemplateInput = ({ value, onChange, fields, entities, mainEntity, placeholder }: CrmTemplateInputProps) => {
+const CrmTemplateInput = ({ value, onChange, fields, entities, mainEntity, placeholder, fieldKind }: CrmTemplateInputProps) => {
   const inputRef = useRef<HTMLInputElement>(null);
   const [anchor, setAnchor] = useState<number | null>(null);
   const [cursor, setCursor] = useState(0);
@@ -28,11 +33,13 @@ const CrmTemplateInput = ({ value, onChange, fields, entities, mainEntity, place
   const searching = anchor !== null;
   const query = searching ? value.slice(anchor, Math.max(anchor, cursor)).trim().toLowerCase() : '';
 
-  const options = useMemo<Option[]>(() => entities.flatMap((e) => (fields[e] || []).map((f) => ({
-    entity: e,
-    field: f,
-    token: e === mainEntity ? `{${f.code}}` : `{${e}.${f.code}}`
-  }))), [fields, entities, mainEntity]);
+  const options = useMemo<Option[]>(() => entities.flatMap((e) => (fields[e] || [])
+    .filter((f) => !fieldKind || (fieldKind === 'number' ? NUMBER_TYPES : TEXT_TYPES).includes(f.type))
+    .map((f) => ({
+      entity: e,
+      field: f,
+      token: e === mainEntity ? `{${f.code}}` : `{${e}.${f.code}}`
+    }))), [fields, entities, mainEntity, fieldKind]);
 
   const found = useMemo(() => {
     if (!searching) return [];

@@ -157,7 +157,7 @@ const ScenarioDialog = ({ open, onOpenChange, scenario, prefill, integrations, t
   const itemsInvalid =
     (trigger.needsMapping || isMoyklass) &&
     form.field_mapping.items_mode === 'fixed' &&
-    !fixedItems.some((i) => i.name?.trim() && Number(String(i.price).replace(',', '.')) > 0);
+    !fixedItems.some((i) => i.name?.trim() && (isMoyklass ? /\{[\w.]+\}|\d/.test(String(i.price)) : Number(String(i.price).replace(',', '.')) > 0));
   const canSave =
     !!form.name.trim() &&
     (!trigger.sourceCategories || !!form.source_integration_id) &&
