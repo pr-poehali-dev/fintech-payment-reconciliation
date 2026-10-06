@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import Icon from '@/components/ui/icon';
 import { useAuth } from '@/contexts/AuthContext';
 import CrmMappingBlock from './CrmMappingBlock';
+import MoyklassMappingBlock from './MoyklassMappingBlock';
 import ScenarioAgentBlock, { agentProblems } from './ScenarioAgentBlock';
 import {
   ACTIONS,
@@ -23,7 +24,8 @@ import {
   Scenario,
   TARGET_CATEGORIES,
   TRIGGERS,
-  TriggerType
+  TriggerType,
+  moyklassDefaultMapping
 } from './automationConfig';
 
 export interface ScenarioForm {
@@ -130,6 +132,8 @@ const ScenarioDialog = ({ open, onOpenChange, scenario, prefill, integrations, t
     : [];
   const sourceIntegration = integrations.find((i) => i.id === form.source_integration_id);
   const isBitrix = sourceIntegration?.providerSlug === 'bitrix24';
+  const isMoyklass = sourceIntegration?.providerSlug === 'moyklass';
+  const moyklassOffset = isMoyklass && sourceIntegration?.stage === 'debit_new';
   const isAgent = form.action_type === 'create_receipt' && currentTemplate?.receipt_type === 'agent';
   // Поля поставщика, сопоставленные с CRM, в блоке «Агентский чек» не обязательны.
   const agentFromCrm = isAgent && trigger.needsMapping && isBitrix
@@ -138,12 +142,20 @@ const ScenarioDialog = ({ open, onOpenChange, scenario, prefill, integrations, t
   const agentMissing = isAgent ? agentProblems(currentTemplate, cs.agent, agentFromCrm) : [];
   let step = 1;
 
-  const missingMapping = trigger.needsMapping
+  // Сценарий «Мой Класс» без сопоставления (создан раньше или из предложения после подключения) - поля по умолчанию.
+  useEffect(() => {
+    if (open && isMoyklass && !form.field_mapping.order_id) {
+      setForm((f) => ({ ...f, field_mapping: { ...moyklassDefaultMapping(moyklassOffset), ...f.field_mapping } }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, isMoyklass, moyklassOffset, form.field_mapping.order_id]);
+
+  const missingMapping = trigger.needsMapping || isMoyklass
     ? MAPPING_FIELDS.filter((f) => f.required && !String(form.field_mapping[f.key] || '').trim())
     : [];
   const fixedItems = (form.field_mapping.fixed_items as { name: string; price: string }[] | undefined) || [];
   const itemsInvalid =
-    trigger.needsMapping &&
+    (trigger.needsMapping || isMoyklass) &&
     form.field_mapping.items_mode === 'fixed' &&
     !fixedItems.some((i) => i.name?.trim() && Number(String(i.price).replace(',', '.')) > 0);
   const canSave =
@@ -227,10 +239,18 @@ const ScenarioDialog = ({ open, onOpenChange, scenario, prefill, integrations, t
                 onValueChange={(v) => {
                   const picked = integrations.find((i) => i.id === Number(v));
                   const crmDefaults = trigger.needsMapping && picked?.providerSlug === 'bitrix24' && !form.field_mapping.items_mode;
+                  const mkDefaults = picked?.providerSlug === 'moyklass' && form.field_mapping.order_id !== 'payment.id'
+                    && !String(form.field_mapping.order_id || '').startsWith('payment.');
                   setForm({
                     ...form,
                     source_integration_id: Number(v),
-                    field_mapping: crmDefaults ? { ...DEFAULT_CRM_MAPPING } : form.field_mapping
+                    field_mapping: crmDefaults
+                      ? { ...DEFAULT_CRM_MAPPING }
+                      : mkDefaults
+                        ? moyklassDefaultMapping(picked?.stage === 'debit_new')
+                        : picked?.providerSlug !== 'moyklass' && trigger.sourceCategories?.includes('payments') && !trigger.needsMapping
+                          ? {}
+                          : form.field_mapping
                   });
                 }}
               >
@@ -405,6 +425,19 @@ const ScenarioDialog = ({ open, onOpenChange, scenario, prefill, integrations, t
               </SelectContent>
             </Select>
           </Step>
+
+          {isMoyklass && form.source_integration_id && currentCompany && (
+            <Step n={step++} title="Сопоставление полей «Мой Класс»">
+              <MoyklassMappingBlock
+                companyId={currentCompany.id}
+                integrationId={form.source_integration_id}
+                offset={moyklassOffset}
+                mapping={form.field_mapping}
+                onChange={(m) => setForm({ ...form, field_mapping: m })}
+                templatePaymentMethod={currentTemplate?.payment_method}
+              />
+            </Step>
+          )}
 
           {trigger.needsMapping && (
             <Step n={step++} title="Сопоставление полей">

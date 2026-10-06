@@ -5,6 +5,8 @@ from typing import Any, Dict
 import psycopg2
 
 import bitrix_crm
+import moyklass_crm
+import moyklass_api
 from auth_guard import guard
 
 SCHEMA = 't_p83864310_fintech_payment_reco'
@@ -25,9 +27,62 @@ def respond(status: int, payload: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def moyklass(method: str, body: Dict[str, Any], config: Dict[str, Any]) -> Dict[str, Any]:
+    '''
+    «Мой Класс»: GET - поля (платёж, ученик + доп. признаки, абонемент, вид абонемента, группа, программа);
+    POST {entity_id: ID платежа или списания, mapping} - какой чек получится по этому платежу.
+    '''
+    api_key = str(config.get('api_key') or '').strip()
+    if method == 'GET':
+        result, err = moyklass_crm.load_fields(api_key)
+        if err:
+            return respond(502, {'error': err})
+        return respond(200, {'success': True, **result})
+
+    offset = str(config.get('stage') or 'payment_new') == 'debit_new'
+    payment_id = str(body.get('entity_id') or '').strip()
+    if not payment_id.isdigit():
+        return respond(200, {'success': False, 'error': 'Укажите номер (ID) платежа из «Мой Класс»'})
+    token, err = moyklass_api.get_token(api_key)
+    if not token:
+        return respond(200, {'success': False, 'error': err})
+    row, err = moyklass_api.get_payment(token, payment_id)
+    if not row:
+        return respond(200, {'success': False, 'error': f'Платёж #{payment_id} не найден: {err}'})
+    obj = {'paymentId': row.get('id'), 'summa': row.get('summa'), 'date': row.get('date'), 'userId': row.get('userId'),
+           'userSubscriptionId': row.get('userSubscriptionId') or (row.get('invoice') or {}).get('userSubscriptionId'),
+           'optype': row.get('optype'), 'comment': row.get('comment'), 'paymentTypeId': row.get('paymentTypeId')}
+    record, err = moyklass_crm.load_record(api_key, obj)
+    if err:
+        return respond(200, {'success': False, 'error': err})
+    mapping = {**moyklass_crm.DEFAULT_MAPPING, **(body.get('mapping') or {})}
+    data, build_error, note = moyklass_crm.build_data(record, mapping, offset)
+    values = {k: moyklass_crm.resolve(record, mapping.get(k)) for k in
+              ('order_id', 'amount', 'customer_email', 'customer_phone', 'customer_name', 'customer_inn')}
+    kind = {'income': 'оплата', 'debit': 'списание', 'refund': 'возврат'}.get(str(row.get('optype')), row.get('optype'))
+    expected = 'debit' if offset else 'income'
+    mismatch = row.get('optype') and row.get('optype') != expected
+    items = (data or {}).get('items') or []
+    return respond(200, {
+        'success': True,
+        'title': f"{kind or 'платёж'} #{payment_id} от {moyklass_crm.human_date(str(row.get('date') or ''))}, ученик {record['user'].get('name') or ''}".strip(),
+        'stage': kind,
+        'stage_matches': not mismatch,
+        'stage_note': (f'Это {kind}, а интеграция обрабатывает {"списания" if offset else "оплаты"} - по нему чек не создастся'
+                       if mismatch else 'документ будет создан'),
+        'values': values,
+        'items': items,
+        'name_limit': moyklass_crm.NAME_LIMIT,
+        'full_names': moyklass_crm.full_item_names(record, mapping, offset) if items else [],
+        'total': round(sum(i['sum'] for i in items), 2),
+        'error': build_error or None,
+        'note': note.lstrip(', ') or None,
+    })
+
+
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     '''
-    Поля CRM для настройки сценария автоматизации (сейчас Битрикс24).
+    Поля CRM для настройки сценария автоматизации (Битрикс24 и «Мой Класс»).
     GET ?company_id=&integration_id= - поля сделок, лидов, контактов, компаний и стадии воронок
     POST {company_id, integration_id, entity: deal|lead, entity_id, mapping} - проверка сопоставления
          на реальной сделке/лиде: какие значения подставятся и какой получится чек
@@ -63,8 +118,10 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         return respond(404, {'error': 'Интеграция не найдена'})
     slug, config = row
     config = json.loads(config) if isinstance(config, str) else (config or {})
+    if slug == 'moyklass':
+        return moyklass(method, body, config)
     if slug != 'bitrix24':
-        return respond(400, {'error': 'Загрузка полей пока доступна только для Битрикс24'})
+        return respond(400, {'error': 'Загрузка полей доступна для Битрикс24 и «Мой Класс»'})
     webhook_url = config.get('webhook_url', '')
 
     if method == 'GET':

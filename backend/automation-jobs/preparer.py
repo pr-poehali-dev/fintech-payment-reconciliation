@@ -5,7 +5,7 @@ from ecomkassa_client import company_cash_register, get_receipt_atol
 import bitrix_crm
 import alfabank_api
 import tochka_acquiring_api
-import moyklass_api
+import moyklass_crm
 
 SCHEMA = 't_p83864310_fintech_payment_reco'
 
@@ -211,72 +211,37 @@ def _integration_config(cur, integration_id: int) -> Dict[str, Any]:
 def prepare_moyklass(cur, payment: Dict[str, Any], data: Dict[str, Any],
                      scenario: Dict[str, Any]) -> Tuple[str, Dict[str, Any], str]:
     '''
-    Платёж или списание «Мой Класс»: в вебхуке только ученик, сумма, абонемент/группа.
-    Дозапрашиваем ученика (телефон/почта/имя) и абонемент (вид абонемента - название позиции).
-    Позиция одна, на сумму платежа/списания. Признак расчёта ставит шаблон действия:
-    оплата -> предоплата (частичная, если абонемент оплачен не полностью);
-    списание (OFFSET) -> полный расчёт с оплатой авансом: зачёт предоплаты за проведённое занятие.
+    Платёж (CONFIRMED) или списание (OFFSET) «Мой Класс»: дозапрашиваем ученика, абонемент, вид абонемента,
+    группу и программу, собираем чек по сопоставлению полей сценария (moyklass_crm) - название и сумма
+    позиции шаблонами с подстановкой полей, контакты покупателя из выбранных полей.
+    Признак расчёта ставит шаблон действия: оплата - предоплата (частичная, если абонемент оплачен
+    не полностью), списание - полный расчёт с зачётом аванса.
     '''
     raw = payment.get('raw') or {}
     obj = raw.get('object') if isinstance(raw.get('object'), dict) else {}
+    offset = payment['status'] == 'OFFSET'
     config = _integration_config(cur, payment['integration_id'])
     allowed = [str(v) for v in (config.get('payment_type_ids') or []) if str(v).strip()]
     type_id = obj.get('paymentTypeId')
-    if payment['status'] != 'OFFSET' and allowed and str(type_id) not in allowed:
+    if not offset and allowed and str(type_id) not in allowed:
         return 'skipped', data, f'Способ оплаты #{type_id} не выбран в интеграции «Мой Класс» - чек не создаётся'
 
-    token, err = moyklass_api.get_token(str(config.get('api_key') or '').strip())
-    if not token:
+    record, err = moyklass_crm.load_record(str(config.get('api_key') or '').strip(), obj)
+    if err:
         return 'error', data, err
-
-    user, err = moyklass_api.get_user(token, obj.get('userId')) if obj.get('userId') else (None, 'В платеже нет ученика')
-    if not user:
-        return 'error', data, f'Не удалось получить ученика #{obj.get("userId")}: {err}'
-
-    is_offset = payment['status'] == 'OFFSET'
-    item_name = 'Занятие' if is_offset else 'Оплата обучения'
-    payment_method = None
-    note = ''
-    sub_id = obj.get('userSubscriptionId')
-    if sub_id:
-        user_sub, err = moyklass_api.get_user_subscription(token, sub_id)
-        if user_sub:
-            sub, _ = moyklass_api.get_subscription(token, user_sub.get('subscriptionId')) if user_sub.get('subscriptionId') else (None, None)
-            if sub and sub.get('name'):
-                item_name = f"Занятие по абонементу «{sub['name']}»" if is_offset else f"Абонемент «{sub['name']}»"
-            price = float(user_sub.get('price') or 0)
-            payed = float(user_sub.get('payed') or 0)
-            if not is_offset and price > 0 and payed + 0.01 < price:
-                payment_method = 'prepayment'
-                note = f', абонемент оплачен частично ({payed:.2f} из {price:.2f} ₽) - частичная предоплата'
-        else:
-            note = f', абонемент #{sub_id} не получен ({err}) - позиция «{item_name}»'
-
-    elif is_offset and obj.get('classId'):
-        group, _ = moyklass_api.get_class(token, obj['classId'])
-        if group and group.get('name'):
-            item_name = f"Занятие в группе «{group['name']}»"
-
-    amount = payment['amount']
-    item = {
-        'name': item_name[:128], 'price': amount, 'quantity': 1, 'sum': amount,
-        'measurement_unit': 'шт', 'payment_method': 'full_payment' if is_offset else 'full_prepayment',
-        'payment_object': 'service', 'vat': {'type': 'none'}
-    }
-    data['items'] = [item]
-    data['items_format'] = 'atol'
-    data['items_source'] = 'Мой Класс'
-    data['item_payment_method'] = payment_method
-    data['customer'] = {
-        'email': (user.get('email') or '').strip() or None,
-        'phone': moyklass_api.normalize_phone(user.get('phone')),
-        'name': user.get('name')
-    }
-    data['offset'] = is_offset
-    contact = data['customer']['phone'] or data['customer']['email'] or 'нет контакта'
+    built, err, note = moyklass_crm.build_data(record, scenario.get('field_mapping') or {}, offset)
+    if err:
+        return 'error', data, err
+    data.update(built)
+    item = built['items'][0] if built['items'] else {}
+    customer = built['customer']
+    contact = customer.get('phone') or customer.get('email') or 'нет контакта'
+    total = sum(i['sum'] for i in built['items'])
+    extra = f" и ещё {len(built['items']) - 1} поз." if len(built['items']) > 1 else ''
     return 'ready', data, (
-        f"{'Списание (зачёт аванса)' if is_offset else 'Платёж'} «Мой Класс» #{payment['payment_id']}: «{item['name']}» на {amount:.2f} ₽, "
-        f"ученик {user.get('name') or obj.get('userId')} ({contact}){note}"
+        f"{'Списание (зачёт аванса)' if offset else 'Платёж'} «Мой Класс» #{payment['payment_id']}: "
+        f"«{item.get('name', '')}»{extra} "
+        f"на {total:.2f} ₽, ученик {customer.get('name') or obj.get('userId')} ({contact}){note}"
     )
 
 

@@ -74,6 +74,8 @@ export interface ActionTemplateOption {
   auto_deliver?: boolean;
   cashier_name?: string | null;
   agent_settings?: Record<string, string | string[]> | null;
+  payment_method?: string;
+  payment_type?: number | null;
 }
 
 // Поля чека коррекции, которые задаются в сценарии (АТОЛ Онлайн):
@@ -146,7 +148,30 @@ export const DEFAULT_CRM_MAPPING: Record<string, unknown> = {
   vat: 'auto'
 };
 
-export const ENTITY_LABELS: Record<string, string> = { deal: 'Сделка', lead: 'Лид', contact: 'Контакт', company: 'Компания' };
+export const ENTITY_LABELS: Record<string, string> = {
+  deal: 'Сделка', lead: 'Лид', contact: 'Контакт', company: 'Компания',
+  payment: 'Платёж', user: 'Ученик', subscription: 'Абонемент', sub_type: 'Вид абонемента', group: 'Группа', course: 'Программа'
+};
+
+// «Мой Класс»: сопоставление полей для сценария «Новый платёж» (платёж или списание).
+export const MOYKLASS_ENTITIES = ['payment', 'user', 'subscription', 'sub_type', 'group', 'course'];
+export const MOYKLASS_ITEMS_MODES: { value: ItemsMode; label: string; description: string }[] = [
+  { value: 'single', label: 'Одной позицией', description: 'Одна строка: название и сумма — из полей «Мой Класс» (можно формулой)' },
+  { value: 'fixed', label: 'Фиксированный', description: 'Всегда один и тот же состав чека' }
+];
+export const moyklassDefaultMapping = (offset: boolean): Record<string, unknown> => ({
+  order_id: 'payment.id',
+  amount: 'payment.summa',
+  customer_email: 'user.email',
+  customer_phone: 'user.phone',
+  customer_name: 'user.name',
+  customer_inn: '',
+  items_mode: 'single',
+  fixed_items: [],
+  single_item_name: offset ? 'Занятие по абонементу «{sub_type.name}»' : 'Абонемент «{sub_type.name}»',
+  single_item_amount: '',
+  vat: 'none'
+});
 
 export const ITEMS_MODES: { value: ItemsMode; label: string; description: string }[] = [
   { value: 'products', label: 'Товары из CRM', description: 'Берём товарные строки сделки как есть' },

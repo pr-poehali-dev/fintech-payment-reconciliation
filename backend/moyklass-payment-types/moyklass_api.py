@@ -80,6 +80,15 @@ def get_class(token: str, class_id: Any) -> Tuple[Optional[Dict[str, Any]], Opti
     return _request('GET', f'/v1/company/classes/{int(class_id)}', token)
 
 
+def get_course(token: str, course_id: Any) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+    return _request('GET', f'/v1/company/courses/{int(course_id)}', token)
+
+
+def user_attributes(token: str) -> Tuple[List[Dict[str, Any]], Optional[str]]:
+    data, err = _request('GET', '/v1/company/userAttributes', token)
+    return (data if isinstance(data, list) else []), err
+
+
 def normalize_phone(value: Any) -> Optional[str]:
     '''Телефон по ФФД: +7 и 10 цифр.'''
     digits = re.sub(r'\D', '', str(value or ''))

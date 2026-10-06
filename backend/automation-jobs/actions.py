@@ -252,6 +252,10 @@ def make_external_id(job: Dict[str, Any], data: Dict[str, Any], seller_inn: Opti
     inn = re.sub(r'\D', '', seller_inn or '')
     crm = data.get('crm') or {}
     payment_ref = str((data.get('payment') or {}).get('payment_id') or '').strip()
+    mk_ref = re.sub(r'[^\w-]', '', str((data.get('moyklass') or {}).get('order_id') or ''))
+    if mk_ref:
+        # «Мой Класс»: номер из сопоставления полей сценария (по умолчанию - ID платежа).
+        payment_ref = mk_ref
     if payment_ref and data.get('offset'):
         # Зачёт аванса «Мой Класс»: номер списания может совпасть с номером оплаты - отличаем.
         payment_ref = f'D{payment_ref}'
