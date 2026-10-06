@@ -187,11 +187,13 @@ const IntegrationCard = ({
           {integration.provider_slug === 'moyklass' && (
             <>
               <Chip tone="primary">Этап: {MOYKLASS_STAGE_HINTS[String(cfg.stage || 'payment_new')]?.title || String(cfg.stage)}</Chip>
-              <Chip>
-                {Array.isArray(cfg.payment_type_ids) && cfg.payment_type_ids.length
-                  ? `Способов оплаты: ${cfg.payment_type_ids.length}`
-                  : 'Все способы оплаты'}
-              </Chip>
+              {(cfg.stage || 'payment_new') === 'payment_new' && (
+                <Chip>
+                  {Array.isArray(cfg.payment_type_ids) && cfg.payment_type_ids.length
+                    ? `Способов оплаты: ${cfg.payment_type_ids.length}`
+                    : 'Все способы оплаты'}
+                </Chip>
+              )}
             </>
           )}
           {usesWebhook && (

@@ -1,3 +1,4 @@
+import { transactionStatusLabel } from '@/lib/transactionStatus';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
@@ -21,6 +22,8 @@ const getStatusColor = (status: string | null) => {
       return 'bg-success';
     case 'AUTHORIZED':
       return 'bg-info';
+    case 'OFFSET':
+      return 'bg-primary';
     case 'REJECTED':
     case 'failed':
     case 'rejected':
@@ -40,7 +43,7 @@ const getStatusDisplay = (event: Pick<AppEvent, 'provider_slug' | 'status'>) => 
   if (event.provider_slug === 'ofdru') {
     return { label: ofdFnsStatusLabel(event.status), color: ofdFnsStatusColorClass(event.status) };
   }
-  return { label: event.status, color: getStatusColor(event.status) };
+  return { label: transactionStatusLabel(event.status), color: getStatusColor(event.status) };
 };
 
 const EventDetailsDialog = ({ open, onOpenChange, event }: EventDetailsDialogProps) => {

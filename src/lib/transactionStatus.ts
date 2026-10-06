@@ -10,6 +10,11 @@ const STATUS_LABELS: Record<string, string> = {
   fail: 'Ошибка',
   REFUNDED: 'Возврат',
   CANCELED: 'Отменён',
+  OFFSET: 'Зачёт аванса',
+  skipped: 'Пропущено',
+  processed: 'Обработано',
+  failed: 'Ошибка',
+  rejected: 'Отклонено',
   in: 'Приход',
   out: 'Расход'
 };
@@ -28,6 +33,8 @@ export const transactionStatusColor = (status: string | null): string => {
       return 'bg-success';
     case 'AUTHORIZED':
       return 'bg-info';
+    case 'OFFSET':
+      return 'bg-primary';
     case 'REJECTED':
     case 'fail':
       return 'bg-destructive';

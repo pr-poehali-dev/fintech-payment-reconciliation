@@ -276,7 +276,7 @@ const IntegrationConfigStep = ({
 
       {currentFields.map(renderField)}
 
-      {selectedProvider.slug === 'moyklass' && (
+      {selectedProvider.slug === 'moyklass' && (config.stage || 'payment_new') === 'payment_new' && (
         <MoyklassPaymentTypesPicker
           companyId={companyId}
           integrationId={integrationId}

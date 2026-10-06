@@ -1,10 +1,16 @@
 '''
 Вебхуки CRM «Мой Класс».
 
-Одна интеграция = один этап (config.stage). Сейчас поддерживается этап
-«payment_new» - «Принят платёж» (оплата абонемента/обучения -> чек предоплаты).
+Одна интеграция = один этап (config.stage):
+  payment_new - «Принят платёж»: ученик оплатил абонемент -> чек предоплаты (аванс);
+  debit_new   - «Новое списание»: занятие проведено, с баланса/абонемента списана его
+                стоимость -> чек полного расчёта с зачётом аванса (услуга оказана, 54-ФЗ).
 События другого типа, пришедшие на адрес этой интеграции, не обрабатываются -
-так вебхуки разных этапов (оплата, позже - списание/зачёт аванса) не смешиваются.
+так вебхуки разных этапов не смешиваются.
+
+Списание хранится со статусом OFFSET: это не новые деньги, а зачёт уже полученной
+предоплаты, поэтому в сверке выручки оно не учитывается (там считаются только
+AUTHORIZED/CONFIRMED), но автоматизация по нему пробивает чек зачёта.
 
 Вебхук приходит без подписи, защита - уникальный адрес с токеном интеграции.
 В обработчике только сохраняем платёж (быстро, без запросов в API): ученика,
@@ -17,7 +23,11 @@ SCHEMA = 't_p83864310_fintech_payment_reco'
 
 STAGES = {
     'payment_new': 'Принят платёж',
+    'debit_new': 'Новое списание (зачёт аванса)',
 }
+
+# Этап -> статус платежа в нашей базе.
+STAGE_STATUS = {'payment_new': 'CONFIRMED', 'debit_new': 'OFFSET'}
 
 
 def event_type(webhook_data: Dict[str, Any]) -> str:
@@ -53,23 +63,29 @@ def process(cur, integration_id: int, company_id: int, config: Dict[str, Any],
 
     type_id = obj.get('paymentTypeId')
     allowed = [str(v) for v in (config.get('payment_type_ids') or []) if str(v).strip()]
-    skip_receipt = bool(allowed) and str(type_id) not in allowed
+    # Фильтр способов оплаты - только для оплат: у списания способа оплаты нет.
+    skip_receipt = stage == 'payment_new' and bool(allowed) and str(type_id) not in allowed
+    status = STAGE_STATUS.get(stage, 'CONFIRMED')
+    if stage == 'debit_new':
+        label = 'Мой Класс · зачёт аванса'
+    else:
+        label = f'Мой Класс · способ #{type_id}' if type_id else 'Мой Класс'
 
     cur.execute(f'''
         INSERT INTO {SCHEMA}.webhook_payments (
             integration_id, company_id, payment_id, amount, order_id, status, payment_status,
             raw_data, payment_provider, origin
-        ) VALUES (%s, %s, %s, %s, %s, 'CONFIRMED', %s, %s, %s, 'webhook')
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 'webhook')
         ON CONFLICT (integration_id, payment_id, status) DO NOTHING
         RETURNING id
     ''', (
-        integration_id, company_id, str(payment_id), amount, None, event,
-        json.dumps(webhook_data, ensure_ascii=False),
-        f'Мой Класс · способ #{type_id}' if type_id else 'Мой Класс'
+        integration_id, company_id, str(payment_id), amount, None, status, event,
+        json.dumps(webhook_data, ensure_ascii=False), label
     ))
     row = cur.fetchone()
     if not row:
-        return None, None, f'Платёж #{payment_id} уже получен ранее - повтор вебхука'
+        noun = 'Списание' if stage == 'debit_new' else 'Платёж'
+        return None, None, f'{noun} #{payment_id} уже получено ранее - повтор вебхука'
     if skip_receipt:
         return None, None, (
             f'Платёж #{payment_id} сохранён для сверки, чек не создаётся: способ оплаты #{type_id} '

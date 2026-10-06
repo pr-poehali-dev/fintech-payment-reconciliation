@@ -23,7 +23,7 @@ def enqueue_payment_jobs(cur, company_id: int, integration_id: int, webhook_paym
         INSERT INTO {SCHEMA}.automation_jobs (company_id, scenario_id, source_type, source_id, event_id, payload)
         SELECT s.company_id, s.id, 'payment', %s, %s, %s
         FROM {SCHEMA}.automation_scenarios s
-        JOIN {SCHEMA}.webhook_payments wp ON wp.id = %s AND wp.status = 'CONFIRMED'
+        JOIN {SCHEMA}.webhook_payments wp ON wp.id = %s AND wp.status IN ('CONFIRMED', 'OFFSET')
         WHERE s.company_id = %s AND s.source_integration_id = %s AND s.trigger_type = 'new_payment'
           AND s.status = 'active' AND s.removed_at IS NULL
         ON CONFLICT (scenario_id, source_type, source_id) DO NOTHING

@@ -252,6 +252,9 @@ def make_external_id(job: Dict[str, Any], data: Dict[str, Any], seller_inn: Opti
     inn = re.sub(r'\D', '', seller_inn or '')
     crm = data.get('crm') or {}
     payment_ref = str((data.get('payment') or {}).get('payment_id') or '').strip()
+    if payment_ref and data.get('offset'):
+        # Зачёт аванса «Мой Класс»: номер списания может совпасть с номером оплаты - отличаем.
+        payment_ref = f'D{payment_ref}'
     crm_ref = f"{'L' if crm.get('entity') == 'lead' else ''}{crm['id']}" if crm.get('id') else ''
     if crm_ref and payment_ref:
         base = f'{crm_ref}-{payment_ref}'
@@ -380,6 +383,13 @@ def create_receipt(cur, job: Dict[str, Any], scenario: Dict[str, Any], data: Dic
     if not items:
         return 'error', {}, 'Нет корзины товаров - чек не пробит. Проверьте платёж и пробейте чек вручную'
     items = apply_template(items, template)
+    if data.get('offset') and int(template.get('payment_type') if template.get('payment_type') is not None else 1) != 2:
+        return 'error', {}, ('Списание «Мой Класс» - это зачёт аванса: выберите в сценарии шаблон с оплатой '
+                             '«предварительная оплата (аванс)», например «Зачёт аванса за услугу»')
+    if not data.get('offset') and data.get('items_source') == 'Мой Класс' and template.get('payment_method') == 'full_payment' \
+            and int(template.get('payment_type') if template.get('payment_type') is not None else 1) == 2:
+        return 'error', {}, ('Оплата «Мой Класс» - это новые деньги, а шаблон сценария делает зачёт аванса. '
+                             'Для оплат выберите шаблон предоплаты, для списаний - отдельную интеграцию с этапом «Новое списание»')
     if data.get('item_payment_method') in ('prepayment', 'advance') and template.get('payment_method') in ('full_prepayment', 'prepayment'):
         # Абонемент «Мой Класс» оплачен не полностью - это частичная предоплата, а не 100%.
         items = [{**i, 'payment_method': data['item_payment_method']} for i in items]

@@ -1,3 +1,4 @@
+import { transactionStatusLabel } from '@/lib/transactionStatus';
 import React, { useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -40,6 +41,8 @@ const getStatusColor = (status: string | null) => {
       return 'bg-success';
     case 'AUTHORIZED':
       return 'bg-info';
+    case 'OFFSET':
+      return 'bg-primary';
     case 'REJECTED':
     case 'failed':
     case 'rejected':
@@ -61,7 +64,7 @@ const getStatusDisplay = (event: Pick<AppEvent, 'provider_slug' | 'status'>) => 
   if (event.provider_slug === 'ofdru') {
     return { label: ofdFnsStatusLabel(event.status), color: ofdFnsStatusColorClass(event.status) };
   }
-  return { label: event.status, color: getStatusColor(event.status) };
+  return { label: transactionStatusLabel(event.status), color: getStatusColor(event.status) };
 };
 
 const EventsTable = ({ events, onRowClick }: EventsTableProps) => {

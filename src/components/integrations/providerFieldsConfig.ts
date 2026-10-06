@@ -161,11 +161,13 @@ export const TOCHKA_ACQUIRING_NOTIFY_OPTIONS = [
 ];
 
 export const MOYKLASS_STAGE_OPTIONS: FieldOption[] = [
-  { value: 'payment_new', label: 'Принят платёж → чек предоплаты' }
+  { value: 'payment_new', label: 'Принят платёж → чек предоплаты (аванс)' },
+  { value: 'debit_new', label: 'Новое списание → чек зачёта аванса (услуга оказана)' }
 ];
 
-export const MOYKLASS_STAGE_HINTS: Record<string, { event: string; title: string }> = {
-  payment_new: { event: 'Принят платеж', title: 'Принят платёж' }
+export const MOYKLASS_STAGE_HINTS: Record<string, { event: string; title: string; template: string }> = {
+  payment_new: { event: 'Принят платеж', title: 'Принят платёж', template: 'prepayment_service' },
+  debit_new: { event: 'Новое списание у ученика', title: 'Новое списание', template: 'advance_offset_service' }
 };
 
 export const PROVIDER_FIELDS: Record<string, FieldConfig[]> = {
@@ -258,7 +260,7 @@ export const PROVIDER_FIELDS: Record<string, FieldConfig[]> = {
       type: 'select',
       default: 'payment_new',
       options: MOYKLASS_STAGE_OPTIONS,
-      hint: 'Вебхуки других событий на адрес этой интеграции не обрабатываются. Для другого этапа подключите ещё одну интеграцию «Мой Класс»'
+      hint: 'Оплата абонемента — это аванс (чек предоплаты). Когда занятие проведено, «Мой Класс» списывает его стоимость — по этому списанию пробивается чек полного расчёта с зачётом аванса. Для каждого этапа — своя интеграция со своим адресом вебхука'
     },
     {
       key: 'vat',

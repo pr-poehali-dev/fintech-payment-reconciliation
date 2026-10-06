@@ -76,6 +76,10 @@ def get_subscription(token: str, subscription_id: Any) -> Tuple[Optional[Dict[st
     return _request('GET', f'/v1/company/subscriptions/{int(subscription_id)}', token)
 
 
+def get_class(token: str, class_id: Any) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+    return _request('GET', f'/v1/company/classes/{int(class_id)}', token)
+
+
 def normalize_phone(value: Any) -> Optional[str]:
     '''Телефон по ФФД: +7 и 10 цифр.'''
     digits = re.sub(r'\D', '', str(value or ''))

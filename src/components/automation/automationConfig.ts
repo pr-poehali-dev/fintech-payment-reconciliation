@@ -43,6 +43,7 @@ export interface IntegrationOption {
   providerName: string;
   providerSlug?: string;
   category: string;
+  stage?: string;
 }
 
 // sourceCategories: категории интеграций для выбора источника (null - внутренний источник)

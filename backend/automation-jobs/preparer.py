@@ -89,7 +89,7 @@ def prepare(cur, job: Dict[str, Any], scenario: Dict[str, Any]) -> Tuple[str, Di
     payment = _payment(cur, job['source_id'])
     if not payment:
         return 'error', {}, 'Платёж не найден в базе'
-    if payment['status'] not in ('CONFIRMED', 'AUTHORIZED', 'done'):
+    if payment['status'] not in ('CONFIRMED', 'AUTHORIZED', 'done', 'OFFSET'):
         return 'skipped', {'payment': payment}, f"Платёж в статусе {payment['status']} - документ не нужен"
     if payment['receipt_id'] and scenario['action_template'] == 'regular':
         return 'skipped', {'payment': payment}, 'По платежу уже есть чек в кассе'
@@ -211,17 +211,18 @@ def _integration_config(cur, integration_id: int) -> Dict[str, Any]:
 def prepare_moyklass(cur, payment: Dict[str, Any], data: Dict[str, Any],
                      scenario: Dict[str, Any]) -> Tuple[str, Dict[str, Any], str]:
     '''
-    Платёж «Мой Класс»: в вебхуке только ученик, сумма, абонемент и способ оплаты.
+    Платёж или списание «Мой Класс»: в вебхуке только ученик, сумма, абонемент/группа.
     Дозапрашиваем ученика (телефон/почта/имя) и абонемент (вид абонемента - название позиции).
-    Позиция одна, на сумму платежа. Признак расчёта ставит шаблон действия (предоплата, услуга);
-    если абонемент после платежа оплачен не полностью - частичная предоплата.
+    Позиция одна, на сумму платежа/списания. Признак расчёта ставит шаблон действия:
+    оплата -> предоплата (частичная, если абонемент оплачен не полностью);
+    списание (OFFSET) -> полный расчёт с оплатой авансом: зачёт предоплаты за проведённое занятие.
     '''
     raw = payment.get('raw') or {}
     obj = raw.get('object') if isinstance(raw.get('object'), dict) else {}
     config = _integration_config(cur, payment['integration_id'])
     allowed = [str(v) for v in (config.get('payment_type_ids') or []) if str(v).strip()]
     type_id = obj.get('paymentTypeId')
-    if allowed and str(type_id) not in allowed:
+    if payment['status'] != 'OFFSET' and allowed and str(type_id) not in allowed:
         return 'skipped', data, f'Способ оплаты #{type_id} не выбран в интеграции «Мой Класс» - чек не создаётся'
 
     token, err = moyklass_api.get_token(str(config.get('api_key') or '').strip())
@@ -232,7 +233,8 @@ def prepare_moyklass(cur, payment: Dict[str, Any], data: Dict[str, Any],
     if not user:
         return 'error', data, f'Не удалось получить ученика #{obj.get("userId")}: {err}'
 
-    item_name = 'Оплата обучения'
+    is_offset = payment['status'] == 'OFFSET'
+    item_name = 'Занятие' if is_offset else 'Оплата обучения'
     payment_method = None
     note = ''
     sub_id = obj.get('userSubscriptionId')
@@ -241,19 +243,24 @@ def prepare_moyklass(cur, payment: Dict[str, Any], data: Dict[str, Any],
         if user_sub:
             sub, _ = moyklass_api.get_subscription(token, user_sub.get('subscriptionId')) if user_sub.get('subscriptionId') else (None, None)
             if sub and sub.get('name'):
-                item_name = f"Абонемент «{sub['name']}»"
+                item_name = f"Занятие по абонементу «{sub['name']}»" if is_offset else f"Абонемент «{sub['name']}»"
             price = float(user_sub.get('price') or 0)
             payed = float(user_sub.get('payed') or 0)
-            if price > 0 and payed + 0.01 < price:
+            if not is_offset and price > 0 and payed + 0.01 < price:
                 payment_method = 'prepayment'
                 note = f', абонемент оплачен частично ({payed:.2f} из {price:.2f} ₽) - частичная предоплата'
         else:
             note = f', абонемент #{sub_id} не получен ({err}) - позиция «{item_name}»'
 
+    elif is_offset and obj.get('classId'):
+        group, _ = moyklass_api.get_class(token, obj['classId'])
+        if group and group.get('name'):
+            item_name = f"Занятие в группе «{group['name']}»"
+
     amount = payment['amount']
     item = {
         'name': item_name[:128], 'price': amount, 'quantity': 1, 'sum': amount,
-        'measurement_unit': 'шт', 'payment_method': 'full_prepayment',
+        'measurement_unit': 'шт', 'payment_method': 'full_payment' if is_offset else 'full_prepayment',
         'payment_object': 'service', 'vat': {'type': str(config.get('vat') or 'none')}
     }
     data['items'] = [item]
@@ -265,9 +272,10 @@ def prepare_moyklass(cur, payment: Dict[str, Any], data: Dict[str, Any],
         'phone': moyklass_api.normalize_phone(user.get('phone')),
         'name': user.get('name')
     }
+    data['offset'] = is_offset
     contact = data['customer']['phone'] or data['customer']['email'] or 'нет контакта'
     return 'ready', data, (
-        f"Платёж «Мой Класс» #{payment['payment_id']}: «{item['name']}» на {amount:.2f} ₽, "
+        f"{'Списание (зачёт аванса)' if is_offset else 'Платёж'} «Мой Класс» #{payment['payment_id']}: «{item['name']}» на {amount:.2f} ₽, "
         f"ученик {user.get('name') or obj.get('userId')} ({contact}){note}"
     )
 

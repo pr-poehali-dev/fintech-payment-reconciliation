@@ -57,7 +57,11 @@ const IntegrationSuccessStep = ({
                     <li>«Мой Класс» → Настройки → API и webhooks → вкладка «Webhooks» → «+ Webhook»: вставьте этот URL и сохраните</li>
                     <li>Настройки → Сценарии → сценарий по событию «{MOYKLASS_STAGE_HINTS[stage || 'payment_new']?.event}» → действие «Отправить вебхук» с этим вебхуком</li>
                     <li>Этот адрес принимает только этап «{MOYKLASS_STAGE_HINTS[stage || 'payment_new']?.title}». Другие события сюда не отправляйте — для них подключите отдельную интеграцию</li>
-                    <li>Чек: предоплата за услугу, название — вид абонемента, контакт — телефон или почта ученика</li>
+                    <li>
+                      {stage === 'debit_new'
+                        ? 'Чек: полный расчёт за услугу с зачётом аванса на сумму списания, контакт — телефон или почта ученика'
+                        : 'Чек: предоплата за услугу, название — вид абонемента, контакт — телефон или почта ученика'}
+                    </li>
                   </ol>
                 ) : selectedProvider.slug === 'tochka_acquiring' ? (
                   <ol className="list-decimal list-inside space-y-1 text-muted-foreground">

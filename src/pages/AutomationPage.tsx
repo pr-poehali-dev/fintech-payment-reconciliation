@@ -31,6 +31,7 @@ interface IntegrationRow {
   provider_slug: string;
   category_slug: string;
   status: string;
+  config?: { stage?: string };
 }
 
 interface AutomationPageProps {
@@ -73,7 +74,7 @@ const AutomationPage = ({ prefillSourceId, onPrefillUsed }: AutomationPageProps 
     setIntegrations(
       ((iData.user_integrations || []) as IntegrationRow[])
         .filter((i) => i.status === 'active')
-        .map((i) => ({ id: i.id, name: i.integration_name, providerName: i.provider_name, providerSlug: i.provider_slug, category: i.category_slug }))
+        .map((i) => ({ id: i.id, name: i.integration_name, providerName: i.provider_name, providerSlug: i.provider_slug, category: i.category_slug, stage: i.config?.stage }))
     );
     setIsLoading(false);
   }, [api, companyId]);
@@ -215,13 +216,15 @@ const AutomationPage = ({ prefillSourceId, onPrefillUsed }: AutomationPageProps 
       const kassas = integrations.filter((i) => i.category === 'cash_registers');
       setEditing(null);
       setPrefill({
-        name: `Чек по оплатам ${source.name}`,
+        name: source.providerSlug === 'moyklass' && source.stage === 'debit_new' ? `Зачёт аванса ${source.name}` : `Чек по оплатам ${source.name}`,
         trigger_type: 'new_payment',
         source_integration_id: source.id,
         action_type: 'create_receipt',
-        ...(source.providerSlug === 'moyklass' && templates.some((t) => t.code === 'prepayment_service')
-          ? { action_template: 'prepayment_service' }
-          : {}),
+        ...(() => {
+          if (source.providerSlug !== 'moyklass') return {};
+          const code = source.stage === 'debit_new' ? 'advance_offset_service' : 'prepayment_service';
+          return templates.some((t) => t.code === code) ? { action_template: code } : {};
+        })(),
         target_integration_id: kassas.length === 1 ? kassas[0].id : null
       });
       setDialogOpen(true);
