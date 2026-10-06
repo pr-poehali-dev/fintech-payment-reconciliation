@@ -28,8 +28,8 @@ const ReconciliationByProvider = ({ paymentsByProvider }: ReconciliationByProvid
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Icon name="Wallet" size={18} />
+        <CardTitle className="flex items-start gap-2 text-xl sm:text-2xl leading-tight">
+          <Icon name="Wallet" size={20} className="shrink-0 mt-1" />
           Детализация по видам оплат
         </CardTitle>
         <CardDescription>
@@ -39,11 +39,11 @@ const ReconciliationByProvider = ({ paymentsByProvider }: ReconciliationByProvid
       <CardContent>
         <div className="space-y-2">
           {providers.map(([provider, stats]) => (
-            <div key={provider} className="flex items-center justify-between py-2 border-b border-border last:border-0">
-              <span className="text-sm text-foreground">{provider}</span>
-              <div className="text-right">
-                <div className="text-sm font-medium text-foreground">{formatMoney(stats.amount)}</div>
-                <div className="text-xs text-muted-foreground">{stats.count} {plural(stats.count)}</div>
+            <div key={provider} className="flex items-center justify-between gap-4 py-3 border-b border-border last:border-0">
+              <span className="min-w-0 flex-1 text-sm text-foreground break-words">{provider}</span>
+              <div className="shrink-0 text-right">
+                <div className="text-sm font-medium text-foreground whitespace-nowrap">{formatMoney(stats.amount)}</div>
+                <div className="text-xs text-muted-foreground whitespace-nowrap">{stats.count} {plural(stats.count)}</div>
               </div>
             </div>
           ))}
