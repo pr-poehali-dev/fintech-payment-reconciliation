@@ -11,5 +11,6 @@ export const ADMIN_SECTIONS: AdminSection[] = [
   { id: 'tariffs', name: 'Тарифы', icon: 'Tag' },
   { id: 'integrations', name: 'Интеграции CRM', icon: 'Plug' },
   { id: 'banners', name: 'Баннеры', icon: 'Megaphone' },
+  { id: 'cases', name: 'Кейсы', icon: 'BookOpenCheck' },
   { id: 'settings', name: 'Настройки', icon: 'Settings' }
 ];

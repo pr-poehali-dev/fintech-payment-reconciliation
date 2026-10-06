@@ -1,0 +1,4 @@
+{"tests": [
+  {"name": "Публичный список кейсов", "method": "GET", "path": "/?public=1", "expectedStatus": 200, "expectedBody": {"success": true}, "bodyMatcher": "partial"},
+  {"name": "Админка без входа закрыта", "method": "GET", "path": "/", "expectedStatus": 401, "expectedBody": {"error_code": "session_required"}, "bodyMatcher": "partial"}
+]}

@@ -9,6 +9,7 @@ import HeroSection from '@/components/landing/HeroSection';
 import PainsSection from '@/components/landing/PainsSection';
 import FeaturesSection from '@/components/landing/FeaturesSection';
 import HowItWorksSection from '@/components/landing/HowItWorksSection';
+import CasesSection from '@/components/landing/CasesSection';
 import PricingSection from '@/components/landing/PricingSection';
 import CtaSection from '@/components/landing/CtaSection';
 import LandingFooter from '@/components/landing/LandingFooter';
@@ -57,6 +58,7 @@ const Landing = () => {
       <PainsSection />
       <FeaturesSection />
       <HowItWorksSection />
+      <CasesSection />
       <PricingSection onCtaClick={handleTariffClick} trialDays={trialDays} tariffs={tariffs} />
       <CtaSection onCtaClick={handleCtaClick} trialDays={trialDays} />
       <LandingFooter />

@@ -6,6 +6,7 @@ import AdminRolesSection from '@/components/admin/AdminRolesSection';
 import AdminActionTemplatesSection from '@/components/admin/AdminActionTemplatesSection';
 import AdminSettingsSection from '@/components/admin/AdminSettingsSection';
 import AdminTariffsSection from '@/components/admin/AdminTariffsSection';
+import AdminCasesSection from '@/components/admin/AdminCasesSection';
 import AdminBannersSection from '@/components/admin/AdminBannersSection';
 
 const Admin = () => {
@@ -22,6 +23,7 @@ const Admin = () => {
         {activeSection === 'settings' && <AdminSettingsSection />}
         {activeSection === 'tariffs' && <AdminTariffsSection />}
         {activeSection === 'banners' && <AdminBannersSection />}
+        {activeSection === 'cases' && <AdminCasesSection />}
         {activeSection === 'integrations' && (
           <AdminPlaceholder icon="Plug" title="Интеграции CRM" description="Каталог провайдеров, доступных всем компаниям" />
         )}
