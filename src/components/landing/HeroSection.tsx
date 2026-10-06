@@ -54,11 +54,21 @@ const HeroSection = ({ onCtaClick, trialDays }: { onCtaClick: () => void; trialD
 
           <div className="relative animate-scale-in">
             <div className="absolute inset-0 bg-gradient-to-tr from-primary/20 to-transparent rounded-3xl blur-2xl" />
-            <img
-              src="https://cdn.poehali.dev/projects/c3bbcaf6-3ec5-48e5-aa2f-c4a750b45031/files/6c3e72d7-e59e-4bb4-bcdf-7b0932de6778.jpg"
-              alt="Автоматическая сверка платежей и чеков"
-              className="relative rounded-3xl w-full shadow-2xl border border-border"
-            />
+            <div className="relative mx-auto w-full max-w-2xl">
+              <div className="relative rounded-t-xl sm:rounded-t-2xl bg-zinc-800 p-[2.2%] pb-[2.8%] shadow-2xl ring-1 ring-white/10">
+                <span className="absolute left-1/2 top-[0.8%] h-[1%] w-[1%] min-h-1 min-w-1 -translate-x-1/2 rounded-full bg-zinc-600" />
+                <div className="overflow-hidden rounded-sm bg-black aspect-[1600/906]">
+                  <img
+                    src="/hero-dashboard.webp"
+                    alt="Личный кабинет Сверки: платежи, чеки и деньги на счёте сходятся на 100%"
+                    className="h-full w-full object-cover object-left-top"
+                  />
+                </div>
+              </div>
+              <div className="relative -mx-[6%] h-[0.9rem] sm:h-[1.1rem] rounded-b-[40%_100%] bg-gradient-to-b from-zinc-600 to-zinc-800 shadow-xl">
+                <span className="absolute left-1/2 top-0 h-[40%] w-[16%] -translate-x-1/2 rounded-b-md bg-zinc-900/70" />
+              </div>
+            </div>
           </div>
         </div>
 
