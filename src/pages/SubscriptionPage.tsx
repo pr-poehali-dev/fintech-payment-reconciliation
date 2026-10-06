@@ -160,7 +160,7 @@ const SubscriptionPage = ({ highlightModule }: SubscriptionPageProps) => {
   return (
     <div className="max-w-5xl space-y-6 animate-fade-in">
       <div>
-        <h2 className="mb-2 text-3xl font-display font-bold text-foreground">Подписка</h2>
+        <h2 className="mb-2 text-2xl sm:text-3xl font-display font-bold text-foreground">Подписка</h2>
         <p className="text-muted-foreground">
           {currentCompany ? `Тариф, оплата и история платежей компании «${currentCompany.name}»` : 'Компания не выбрана'}
         </p>

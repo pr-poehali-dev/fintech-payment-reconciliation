@@ -119,7 +119,7 @@ const TochkaAuthMethodPicker = ({
     <div className="space-y-3">
       <div>
         <Label>Способ авторизации</Label>
-        <div className="grid grid-cols-2 gap-2 mt-1.5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-1.5">
           <button
             type="button"
             onClick={() => onConfigChange({ ...config, auth_method: 'jwt' })}

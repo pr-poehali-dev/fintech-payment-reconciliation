@@ -228,12 +228,12 @@ const AutomationPage = ({ prefillSourceId, onPrefillUsed }: AutomationPageProps 
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h2 className="text-3xl font-display font-bold text-foreground mb-2">Автоматизация</h2>
+          <h2 className="text-2xl sm:text-3xl font-display font-bold text-foreground mb-2">Автоматизация</h2>
           <p className="text-muted-foreground">Сценарии: событие в интеграции — документ в кассе</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Button variant="outline" className="gap-2" onClick={() => setJournalOpen(true)}>
             <Icon name="ScrollText" size={16} />
             Журнал
@@ -278,7 +278,7 @@ const AutomationPage = ({ prefillSourceId, onPrefillUsed }: AutomationPageProps 
             const active = s.status === 'active';
             return (
               <Card key={s.id} className={`transition-colors ${active ? 'border-primary/40' : ''}`}>
-                <CardContent className="flex items-center gap-4 p-5">
+                <CardContent className="flex flex-wrap items-start gap-3 sm:flex-nowrap sm:items-center sm:gap-4 p-4 sm:p-5">
                   <Switch
                     checked={active}
                     disabled={togglingId === s.id}
@@ -286,8 +286,8 @@ const AutomationPage = ({ prefillSourceId, onPrefillUsed }: AutomationPageProps 
                     aria-label={active ? 'Остановить' : 'Запустить'}
                   />
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="truncate font-semibold">{s.name}</span>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="min-w-0 break-words font-semibold">{s.name}</span>
                       <Badge variant="outline" className={active ? 'bg-success/15 text-success border-success/30' : 'text-muted-foreground'}>
                         {active ? 'Запущен' : 'Остановлен'}
                       </Badge>
@@ -310,7 +310,7 @@ const AutomationPage = ({ prefillSourceId, onPrefillUsed }: AutomationPageProps 
                       {s.jobs_errors > 0 && <span className="text-warning"> · с ошибкой: {s.jobs_errors}</span>}
                     </div>
                   </div>
-                  <div className="flex items-center gap-1">
+                  <div className="flex w-full justify-end items-center gap-1 sm:w-auto">
                     <Button size="icon" variant="ghost" title="Копировать" onClick={() => setToCopy(s)}>
                       <Icon name="Copy" size={16} />
                     </Button>

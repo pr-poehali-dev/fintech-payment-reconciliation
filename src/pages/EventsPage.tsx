@@ -125,9 +125,9 @@ const EventsPage = () => {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h2 className="text-3xl font-display font-bold text-foreground mb-2">События</h2>
+          <h2 className="text-2xl sm:text-3xl font-display font-bold text-foreground mb-2">События</h2>
           <p className="text-muted-foreground">
             Все входящие вебхуки и операции по интеграциям компании
           </p>
@@ -140,7 +140,7 @@ const EventsPage = () => {
 
       <Card>
         <CardHeader>
-          <CardTitle>Лента событий</CardTitle>
+          <CardTitle className="text-xl sm:text-2xl leading-tight">Лента событий</CardTitle>
           <CardDescription>
             Нажмите на событие, чтобы посмотреть его детали
           </CardDescription>

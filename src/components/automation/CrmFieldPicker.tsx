@@ -28,7 +28,7 @@ const CrmFieldPicker = ({ value, onChange, fields, entities, placeholder = 'Не
           <Icon name="ChevronsUpDown" size={14} className="shrink-0 text-muted-foreground" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[var(--radix-popover-trigger-width)] min-w-[420px] p-0" align="end">
+      <PopoverContent className="w-[var(--radix-popover-trigger-width)] sm:min-w-[420px] max-w-[calc(100vw-1.5rem)] p-0" align="end">
         <Command>
           <CommandInput placeholder="Поиск поля..." />
           <CommandList className="max-h-80 overflow-y-auto overscroll-contain" onWheel={(e) => e.stopPropagation()} onTouchMove={(e) => e.stopPropagation()}>

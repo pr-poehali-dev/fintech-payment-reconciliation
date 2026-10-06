@@ -147,9 +147,9 @@ const ReconciliationPage = ({ onOpenTransactions }: ReconciliationPageProps) => 
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div className="flex items-center justify-between flex-wrap gap-4">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h2 className="text-3xl font-display font-bold text-foreground mb-2">Сверка</h2>
+          <h2 className="text-2xl sm:text-3xl font-display font-bold text-foreground mb-2">Сверка</h2>
           <p className="text-muted-foreground">
             Автоматическая сверка платежей, чеков и поступлений на расчётный счёт
           </p>

@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import Icon from '@/components/ui/icon';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 export interface DateFilter {
   from: Date;
@@ -28,6 +29,7 @@ const formatLabel = (f: DateFilter) => {
 // Черновик выбора: календарь открывается пустым, 1-й клик - начало,
 // 2-й клик (в т.ч. на тот же день) - конец, тогда фильтр применяется.
 const DateRangeFilter = ({ value, onChange, onReset }: DateRangeFilterProps) => {
+  const isMobile = useIsMobile();
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<DateRange | undefined>(undefined);
 
@@ -62,7 +64,7 @@ const DateRangeFilter = ({ value, onChange, onReset }: DateRangeFilterProps) => 
             mode="range"
             selected={draft}
             onSelect={handleSelect}
-            numberOfMonths={2}
+            numberOfMonths={isMobile ? 1 : 2}
             defaultMonth={value?.from ?? new Date()}
             locale={ru}
           />

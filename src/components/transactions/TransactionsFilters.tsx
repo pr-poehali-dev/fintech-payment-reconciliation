@@ -31,12 +31,12 @@ const TransactionsFilters = ({
     // и "Только без связи" - фиксированной ширины (shrink-0). Input из shadcn
     // по умолчанию w-full - поэтому ширину задаём явно, иначе он выталкивает
     // остальные элементы на новую строку.
-    <div className="flex items-center gap-3 flex-1 min-w-0">
+    <div className="flex flex-wrap items-center gap-3 flex-1 min-w-0">
       <Input
         placeholder="Сумма (2500 или 2 500,00), номер или описание"
         value={searchQuery}
         onChange={(e) => setSearchQuery(e.target.value)}
-        className="flex-1 min-w-[180px] max-w-md w-auto"
+        className="w-full sm:w-auto sm:flex-1 sm:min-w-[180px] sm:max-w-md"
       />
 
       {typeFilterSlot}

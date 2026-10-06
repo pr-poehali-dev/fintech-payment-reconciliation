@@ -42,7 +42,7 @@ const PendingInvitesTable = ({ invites, onCancel, onResend, resendingId }: Pendi
   if (invites.length === 0) return null;
 
   return (
-    <Table>
+    <Table className="min-w-[560px]">
       <TableHeader>
         <TableRow>
           <TableHead>Кандидат</TableHead>

@@ -64,7 +64,7 @@ const EventDetailsDialog = ({ open, onOpenChange, event }: EventDetailsDialogPro
         </DialogHeader>
 
         <div className="space-y-6">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1">
               <p className="text-sm text-muted-foreground">Номер события</p>
               <p className="text-lg font-semibold font-mono">{event.event_number || '—'}</p>
@@ -84,7 +84,7 @@ const EventDetailsDialog = ({ open, onOpenChange, event }: EventDetailsDialogPro
               <Icon name="Info" size={18} />
               Информация о событии
             </h3>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <p className="text-sm text-muted-foreground">Тип</p>
                 <Badge variant="outline" className={`gap-1.5 ${(transactionTypeConfig[event.transaction_type] || transactionTypeConfig.payment).className}`}>

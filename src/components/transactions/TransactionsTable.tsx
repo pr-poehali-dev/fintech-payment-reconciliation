@@ -31,7 +31,7 @@ const TransactionsTable = ({ groups, onRowClick, selectedKeys, onToggleSelect, o
 
   return (
     <div className="border rounded-lg overflow-hidden">
-      <Table>
+      <Table className="min-w-[720px]">
         <TableHeader>
           <TableRow>
             <TableHead className="w-10" />

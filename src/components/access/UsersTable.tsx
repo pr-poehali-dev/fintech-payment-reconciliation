@@ -49,7 +49,7 @@ const UsersTable = ({ users, roles, modules, onToggleStatus, onDeleteUser }: Use
   };
 
   return (
-    <Table>
+    <Table className="min-w-[560px]">
       <TableHeader>
         <TableRow>
           <TableHead>ФИО</TableHead>

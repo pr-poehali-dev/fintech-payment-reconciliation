@@ -52,7 +52,7 @@ const CheckoutPanel = ({
           {isRenewal ? ' — добавится к текущему сроку' : ' — с сегодняшнего дня'}
         </div>
       </div>
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <Button variant="ghost" onClick={onCancel} disabled={paying}>
           Отмена
         </Button>

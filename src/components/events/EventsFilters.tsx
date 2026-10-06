@@ -25,13 +25,13 @@ const EventsFilters = ({
   setErrorsOnly
 }: EventsFiltersProps) => {
   return (
-    <div className="flex items-center gap-3 overflow-x-auto pl-0.5 pr-2 pt-2 pb-0.5">
-      <div className="flex items-center gap-3 flex-1 min-w-0">
+    <div className="flex items-center gap-3 pl-0.5 pr-2 pt-2 pb-0.5">
+      <div className="flex flex-wrap items-center gap-3 flex-1 min-w-0">
         <Input
           placeholder="Номер события, сумма или данные вебхука"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          className="flex-1 min-w-[180px] max-w-md w-auto"
+          className="w-full sm:w-auto sm:flex-1 sm:min-w-[180px] sm:max-w-md"
         />
         <MultiSelectFilterButton
           title="Источники"

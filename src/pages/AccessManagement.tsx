@@ -387,9 +387,9 @@ const AccessManagement = () => {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h2 className="text-3xl font-display font-bold text-foreground mb-2">Управление доступом</h2>
+          <h2 className="text-2xl sm:text-3xl font-display font-bold text-foreground mb-2">Управление доступом</h2>
           <p className="text-muted-foreground">
             Роли, пользователи и права доступа компании «{currentCompany?.name}»
             {typeof maxUsers === 'number' && (
@@ -398,7 +398,7 @@ const AccessManagement = () => {
           </p>
         </div>
         
-        <div className="flex gap-3">
+        <div className="flex flex-wrap gap-3">
           <InviteUserDialog
             open={showInviteDialog}
             onOpenChange={setShowInviteDialog}

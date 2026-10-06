@@ -74,9 +74,9 @@ const IntegrationCard = ({
       onClick={() => onEdit(integration)}
       className="cursor-pointer transition-colors hover:border-primary/40"
     >
-      <CardContent className="flex items-center gap-4 p-5">
+      <CardContent className="flex items-center gap-3 sm:gap-4 p-4 sm:p-5">
         <div
-          className="flex shrink-0 items-center self-stretch border-r border-border pr-4"
+          className="flex shrink-0 items-center self-stretch border-r border-border pr-3 sm:pr-4"
           title={isActive ? 'Включено — выключить' : 'Выключено — включить'}
           onClick={(e) => e.stopPropagation()}
         >

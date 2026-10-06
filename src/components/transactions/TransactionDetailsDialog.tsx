@@ -62,7 +62,7 @@ const TransactionDetailsDialog = ({ transaction, relatedItems, open, onOpenChang
         </DialogHeader>
 
         <div className="space-y-6 pr-4">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <div className="text-sm text-muted-foreground mb-1">Тип</div>
               <Badge variant="outline" className={config.className}>{config.label}</Badge>

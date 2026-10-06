@@ -52,7 +52,7 @@ const SettingsPlaceholder = () => {
   return (
     <div className="animate-fade-in space-y-6">
       <div>
-        <h2 className="text-3xl font-display font-bold text-foreground mb-2">Настройки</h2>
+        <h2 className="text-2xl sm:text-3xl font-display font-bold text-foreground mb-2">Настройки</h2>
         <p className="text-muted-foreground">Конфигурация системы и параметры</p>
       </div>
 

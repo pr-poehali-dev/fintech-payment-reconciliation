@@ -241,7 +241,7 @@ const CrmMappingBlock = ({ companyId, integrationId, mapping, onChange, agentRec
 
       <div className="space-y-3 rounded-lg border border-border p-3">
         <div className="text-sm font-medium">Состав чека</div>
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
           {ITEMS_MODES.map((m) => (
             <button
               key={m.value}

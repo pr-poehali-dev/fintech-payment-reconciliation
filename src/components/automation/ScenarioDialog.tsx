@@ -202,7 +202,7 @@ const ScenarioDialog = ({ open, onOpenChange, scenario, prefill, integrations, t
           </div>
 
           <Step n={step++} title="Источник">
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
               {(Object.keys(TRIGGERS) as TriggerType[]).map((key) => (
                 <button
                   key={key}
@@ -273,7 +273,7 @@ const ScenarioDialog = ({ open, onOpenChange, scenario, prefill, integrations, t
           )}
 
           <Step n={step++} title="Действие">
-            <div className={`grid gap-2 ${actionKeys.length > 1 ? 'grid-cols-2' : 'grid-cols-1'}`}>
+            <div className={`grid gap-2 ${actionKeys.length > 1 ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1'}`}>
               {actionKeys.map((key) => (
                 <button
                   key={key}

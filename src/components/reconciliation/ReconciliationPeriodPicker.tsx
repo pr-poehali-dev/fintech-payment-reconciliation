@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import Icon from '@/components/ui/icon';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 interface ReconciliationPeriodPickerProps {
   dateFrom: Date;
@@ -51,6 +52,7 @@ const PRESETS = [
 ];
 
 const ReconciliationPeriodPicker = ({ dateFrom, dateTo, onChange }: ReconciliationPeriodPickerProps) => {
+  const isMobile = useIsMobile();
   const [open, setOpen] = useState(false);
   const maxDate = yesterday();
 
@@ -110,7 +112,7 @@ const ReconciliationPeriodPicker = ({ dateFrom, dateTo, onChange }: Reconciliati
             selected={draft}
             onSelect={handleSelect}
             disabled={{ after: maxDate }}
-            numberOfMonths={2}
+            numberOfMonths={isMobile ? 1 : 2}
             defaultMonth={dateFrom}
             locale={ru}
           />

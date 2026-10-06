@@ -7,6 +7,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Label } from '@/components/ui/label';
 import Icon from '@/components/ui/icon';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 interface BackfillPeriodPickerProps {
   dateRange: DateRange;
@@ -18,6 +19,7 @@ interface BackfillPeriodPickerProps {
 }
 
 const BackfillPeriodPicker = ({ dateRange, dateFrom, dateTo, maxDate, disabled, onChange }: BackfillPeriodPickerProps) => {
+  const isMobile = useIsMobile();
   const [calendarOpen, setCalendarOpen] = useState(false);
 
   return (
@@ -44,7 +46,7 @@ const BackfillPeriodPicker = ({ dateRange, dateFrom, dateTo, maxDate, disabled, 
               if (range.to) setCalendarOpen(false);
             }}
             disabled={{ after: maxDate }}
-            numberOfMonths={2}
+            numberOfMonths={isMobile ? 1 : 2}
             defaultMonth={dateFrom}
             locale={ru}
           />

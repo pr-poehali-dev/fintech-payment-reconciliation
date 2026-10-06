@@ -163,7 +163,7 @@ const InviteUserDialog = ({
 
           <div className="space-y-2">
             <Label>Отправить приглашение через</Label>
-            <div className="grid grid-cols-4 gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               {channels.map((channel) => (
                 <button
                   key={channel.id}

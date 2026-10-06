@@ -47,7 +47,7 @@ const ReconciliationStatus = ({ summary, isLoading, onOpenUnmatched }: Reconcili
   return (
     <Card className="border-border bg-card">
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
+        <CardTitle className="flex items-start gap-2 text-xl sm:text-2xl leading-tight">
           <Icon name="PieChart" size={20} />
           Статус сверки
         </CardTitle>
