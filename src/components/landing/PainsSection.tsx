@@ -63,8 +63,9 @@ const PainsSection = () => {
         </div>
 
         <p className="text-center text-lg text-foreground mt-12">
-          Сверка закрывает все три проблемы —{' '}
-          <span className="text-primary font-semibold">автоматически и каждый день.</span>
+          Сверка закрывает эти проблемы —{' '}
+          <span className="text-primary font-semibold">автоматически и каждый день.</span>{' '}
+          Заменит бухгалтера и кассира, минимизирует риск штрафа, покажет, с какой суммы платить налоги без доначислений.
         </p>
       </div>
     </section>
