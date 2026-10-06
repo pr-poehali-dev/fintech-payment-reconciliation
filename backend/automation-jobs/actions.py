@@ -380,6 +380,9 @@ def create_receipt(cur, job: Dict[str, Any], scenario: Dict[str, Any], data: Dic
     if not items:
         return 'error', {}, 'Нет корзины товаров - чек не пробит. Проверьте платёж и пробейте чек вручную'
     items = apply_template(items, template)
+    if data.get('item_payment_method') in ('prepayment', 'advance') and template.get('payment_method') in ('full_prepayment', 'prepayment'):
+        # Абонемент «Мой Класс» оплачен не полностью - это частичная предоплата, а не 100%.
+        items = [{**i, 'payment_method': data['item_payment_method']} for i in items]
     total = round(sum(float(i.get('sum') or 0) for i in items), 2)
 
     source_company = dict(data.get('source_company') or {})

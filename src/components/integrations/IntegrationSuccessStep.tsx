@@ -2,10 +2,11 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import Icon from '@/components/ui/icon';
-import { Provider, acceptsIncomingWebhook, suggestsReceiptScenario } from './providerFieldsConfig';
+import { Provider, acceptsIncomingWebhook, suggestsReceiptScenario, MOYKLASS_STAGE_HINTS } from './providerFieldsConfig';
 
 interface IntegrationSuccessStepProps {
   selectedProvider: Provider;
+  stage?: string;
   webhookUrl: string;
   onCopyWebhookUrl: () => void;
   onFinish: () => void;
@@ -14,6 +15,7 @@ interface IntegrationSuccessStepProps {
 
 const IntegrationSuccessStep = ({
   selectedProvider,
+  stage,
   webhookUrl,
   onCopyWebhookUrl,
   onFinish,
@@ -50,7 +52,14 @@ const IntegrationSuccessStep = ({
                 <p className="font-semibold text-foreground mb-2">
                   Инструкция по настройке:
                 </p>
-                {selectedProvider.slug === 'tochka_acquiring' ? (
+                {selectedProvider.slug === 'moyklass' ? (
+                  <ol className="list-decimal list-inside space-y-1 text-muted-foreground">
+                    <li>«Мой Класс» → Настройки → API и webhooks → вкладка «Webhooks» → «+ Webhook»: вставьте этот URL и сохраните</li>
+                    <li>Настройки → Сценарии → сценарий по событию «{MOYKLASS_STAGE_HINTS[stage || 'payment_new']?.event}» → действие «Отправить вебхук» с этим вебхуком</li>
+                    <li>Этот адрес принимает только этап «{MOYKLASS_STAGE_HINTS[stage || 'payment_new']?.title}». Другие события сюда не отправляйте — для них подключите отдельную интеграцию</li>
+                    <li>Чек: предоплата за услугу, название — вид абонемента, контакт — телефон или почта ученика</li>
+                  </ol>
+                ) : selectedProvider.slug === 'tochka_acquiring' ? (
                   <ol className="list-decimal list-inside space-y-1 text-muted-foreground">
                     <li>Вебхук в Точке создаётся через API (метод Create Webhook) с этим URL</li>
                     <li>Событие — acquiringInternetPayment (оплаты по платёжным ссылкам)</li>

@@ -8,6 +8,7 @@ import EcomkassaStorePicker from './EcomkassaStorePicker';
 import OfdKktPicker from './OfdKktPicker';
 import EcomkassaPaymentTypesPicker from './EcomkassaPaymentTypesPicker';
 import TochkaAuthMethodPicker from './TochkaAuthMethodPicker';
+import MoyklassPaymentTypesPicker from './MoyklassPaymentTypesPicker';
 import {
   ConfigState,
   FieldConfig,
@@ -24,6 +25,7 @@ interface IntegrationConfigStepProps {
   selectedProvider: Provider;
   isEditing: boolean;
   companyId: number;
+  integrationId?: number;
   integrationName: string;
   onIntegrationNameChange: (value: string) => void;
   config: ConfigState;
@@ -44,6 +46,7 @@ const IntegrationConfigStep = ({
   selectedProvider,
   isEditing,
   companyId,
+  integrationId,
   integrationName,
   onIntegrationNameChange,
   config,
@@ -272,6 +275,15 @@ const IntegrationConfigStep = ({
       )}
 
       {currentFields.map(renderField)}
+
+      {selectedProvider.slug === 'moyklass' && (
+        <MoyklassPaymentTypesPicker
+          companyId={companyId}
+          integrationId={integrationId}
+          config={config}
+          onConfigChange={onConfigChange}
+        />
+      )}
 
       {['tbank', 'alfabank', 'tochka_acquiring', 'ecomkassa_gateway'].includes(selectedProvider.slug) && (
         <div className="space-y-2">

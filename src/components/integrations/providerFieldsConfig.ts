@@ -160,6 +160,14 @@ export const TOCHKA_ACQUIRING_NOTIFY_OPTIONS = [
   { key: 'notify_on_confirmed', label: 'Оплачен — картой, по СБП, Долями' }
 ];
 
+export const MOYKLASS_STAGE_OPTIONS: FieldOption[] = [
+  { value: 'payment_new', label: 'Принят платёж → чек предоплаты' }
+];
+
+export const MOYKLASS_STAGE_HINTS: Record<string, { event: string; title: string }> = {
+  payment_new: { event: 'Принят платеж', title: 'Принят платёж' }
+};
+
 export const PROVIDER_FIELDS: Record<string, FieldConfig[]> = {
   tochka_acquiring: [
     { key: 'api_token', label: 'JWT-токен Точки', type: 'password', placeholder: 'eyJhbGciOi…', hint: 'Интернет-банк Точки → Интеграции и API → Подключить → токен с разрешением «Интернет-эквайринг». Проверим его у банка при сохранении' },
@@ -234,12 +242,53 @@ export const PROVIDER_FIELDS: Record<string, FieldConfig[]> = {
   // прямого доступа к банку, шлюз лишь присылает статус платежа по callback_url.
   // Чек по UUID платежа он находит сам в активной кассе "Екомкасса" той же
   // компании - отдельно указывать магазин здесь не нужно.
-  ecomkassa_gateway: []
+  ecomkassa_gateway: [],
+  // Одна интеграция «Мой Класс» = один этап (событие вебхука). Зачёт аванса по списаниям -
+  // отдельной интеграцией со своим адресом вебхука, чтобы события не смешивались.
+  moyklass: [
+    {
+      key: 'api_key',
+      label: 'Ключ API «Мой Класс»',
+      type: 'password',
+      hint: '«Мой Класс» → Настройки → API → создать ключ'
+    },
+    {
+      key: 'stage',
+      label: 'Этап (событие), который обрабатывает интеграция',
+      type: 'select',
+      default: 'payment_new',
+      options: MOYKLASS_STAGE_OPTIONS,
+      hint: 'Вебхуки других событий на адрес этой интеграции не обрабатываются. Для другого этапа подключите ещё одну интеграцию «Мой Класс»'
+    },
+    {
+      key: 'vat',
+      label: 'НДС в чеке',
+      type: 'select',
+      default: 'none',
+      options: [
+        { value: 'none', label: 'Без НДС' },
+        { value: 'vat0', label: 'НДС 0%' },
+        { value: 'vat5', label: 'НДС 5%' },
+        { value: 'vat7', label: 'НДС 7%' },
+        { value: 'vat10', label: 'НДС 10%' },
+        { value: 'vat20', label: 'НДС 20%' },
+        { value: 'vat22', label: 'НДС 22%' }
+      ]
+    },
+    {
+      key: 'default_item_name',
+      label: 'Название позиции, если платёж без абонемента',
+      type: 'text',
+      default: 'Оплата обучения',
+      required: false,
+      hint: 'При оплате абонемента в чек попадёт его вид, например «Абонемент «8 занятий»»'
+    }
+  ]
 };
 
 // Провайдеры, для которых наш сервис принимает входящие вебхуки.
 // Только для них имеет смысл показывать URL для вебхука и переадресацию.
-const PROVIDERS_WITH_INCOMING_WEBHOOK = ['tbank', 'alfabank', 'tochka_acquiring', 'ecomkassa_gateway'];
+const PROVIDERS_WITH_INCOMING_WEBHOOK = ['tbank', 'alfabank', 'tochka_acquiring', 'ecomkassa_gateway', 'moyklass'];
 
 export const buildDefaultConfig = (slug: string): ConfigState => {
   const fields = PROVIDER_FIELDS[slug] || [];
@@ -252,7 +301,7 @@ export const buildDefaultConfig = (slug: string): ConfigState => {
 
 // Платёжки, по которым чек делаем сами из корзины: после подключения предлагаем сценарий чеков.
 // Шлюз Екомкассы сюда не входит - чек по нему пробивает сама Екомкасса.
-const PROVIDERS_WITH_RECEIPT_SCENARIO = ['tbank', 'alfabank', 'tochka_acquiring'];
+const PROVIDERS_WITH_RECEIPT_SCENARIO = ['tbank', 'alfabank', 'tochka_acquiring', 'moyklass'];
 export const suggestsReceiptScenario = (slug?: string) => !!slug && PROVIDERS_WITH_RECEIPT_SCENARIO.includes(slug);
 
 export const acceptsIncomingWebhook = (slug?: string) => !!slug && PROVIDERS_WITH_INCOMING_WEBHOOK.includes(slug);

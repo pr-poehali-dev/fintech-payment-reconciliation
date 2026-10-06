@@ -219,12 +219,15 @@ const AutomationPage = ({ prefillSourceId, onPrefillUsed }: AutomationPageProps 
         trigger_type: 'new_payment',
         source_integration_id: source.id,
         action_type: 'create_receipt',
+        ...(source.providerSlug === 'moyklass' && templates.some((t) => t.code === 'prepayment_service')
+          ? { action_template: 'prepayment_service' }
+          : {}),
         target_integration_id: kassas.length === 1 ? kassas[0].id : null
       });
       setDialogOpen(true);
     }
     onPrefillUsed?.();
-  }, [prefillSourceId, isLoading, integrations, onPrefillUsed]);
+  }, [prefillSourceId, isLoading, integrations, templates, onPrefillUsed]);
 
   return (
     <div className="space-y-6 animate-fade-in">

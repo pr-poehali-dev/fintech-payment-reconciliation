@@ -47,7 +47,7 @@ export interface IntegrationOption {
 
 // sourceCategories: категории интеграций для выбора источника (null - внутренний источник)
 export const TRIGGERS: Record<TriggerType, { label: string; icon: string; description: string; sourceCategories: string[] | null; needsMapping: boolean; actions?: ActionType[] }> = {
-  new_payment: { label: 'Новый платёж', icon: 'CreditCard', description: 'Пришёл вебхук об оплате от эквайринга', sourceCategories: ['payments'], needsMapping: false },
+  new_payment: { label: 'Новый платёж', icon: 'CreditCard', description: 'Пришёл вебхук об оплате от эквайринга или платёж из «Мой Класс»', sourceCategories: ['payments', 'moyklass'], needsMapping: false },
   crm_order: { label: 'Заказ в CRM', icon: 'Users', description: 'Сделка или заказ в CRM перешли в нужную стадию', sourceCategories: ['crm'], needsMapping: true },
   discrepancy: { label: 'Расхождение', icon: 'TriangleAlert', description: 'Оплаченный платёж так и не получил чек — пробиваем чек (обычно коррекции) по его корзине', sourceCategories: null, needsMapping: false, actions: ['create_receipt'] }
 };

@@ -186,11 +186,32 @@ def check_bitrix24(config: Dict[str, Any]) -> Result:
     return True, None
 
 
+def check_moyklass(config: Dict[str, Any]) -> Result:
+    '''«Мой Класс»: ключ API меняем на токен. 401 - неверный ключ, недоступность - предупреждение.'''
+    key = str(config.get('api_key') or '').strip()
+    if not key:
+        return False, 'Укажите ключ API «Мой Класс»'
+    req = urllib.request.Request('https://api.moyklass.com/v1/company/auth/getToken',
+                                 data=json.dumps({'apiKey': key}).encode('utf-8'),
+                                 headers={'Content-Type': 'application/json'}, method='POST')
+    try:
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            data = json.loads(resp.read().decode('utf-8') or '{}')
+        return (True, None) if data.get('accessToken') else (False, '«Мой Класс» не выдал токен по этому ключу')
+    except urllib.error.HTTPError as e:
+        if e.code in (400, 401, 403):
+            return False, 'Неверный ключ API «Мой Класс» - проверьте его в «Настройки → API»'
+        return _unavailable('«Мой Класс»', f'ошибка {e.code}')
+    except Exception as e:
+        return _unavailable('«Мой Класс»', str(e)[:100])
+
+
 CHECKERS: Dict[str, Callable[[Dict[str, Any]], Result]] = {
     'tbank': check_tbank,
     'alfabank': check_alfabank,
     'tochka_acquiring': check_tochka_acquiring,
     'bitrix24': check_bitrix24,
+    'moyklass': check_moyklass,
 }
 
 

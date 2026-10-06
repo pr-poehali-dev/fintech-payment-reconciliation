@@ -59,6 +59,8 @@ ERROR_STATUSES = {'failed', 'rejected', 'fail', 'error'}
 
 
 def _is_error(status: Any, error_message: Any) -> bool:
+    if str(status or '').strip().lower() == 'skipped':
+        return False
     return bool(error_message) or str(status or '').strip().lower() in ERROR_STATUSES
 
 

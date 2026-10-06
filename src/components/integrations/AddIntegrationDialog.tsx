@@ -253,6 +253,7 @@ const AddIntegrationDialog = ({
             selectedProvider={selectedProvider}
             isEditing={!!editingIntegration}
             companyId={companyId}
+            integrationId={editingIntegration?.id}
             integrationName={integrationName}
             onIntegrationNameChange={setIntegrationName}
             config={config}
@@ -273,6 +274,7 @@ const AddIntegrationDialog = ({
         {step === 3 && selectedProvider && (
           <IntegrationSuccessStep
             selectedProvider={selectedProvider}
+            stage={String(config.stage || 'payment_new')}
             webhookUrl={webhookUrl}
             onCopyWebhookUrl={copyToClipboard}
             onFinish={handleFinish}

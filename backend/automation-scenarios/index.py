@@ -18,7 +18,7 @@ CORS_HEADERS = {
 # Источник -> категории интеграций, которые можно выбрать как источник
 # (None - источник внутренний, без интеграции).
 TRIGGERS = {
-    'new_payment': ['payments'],
+    'new_payment': ['payments', 'moyklass'],
     'crm_order': ['crm'],
     'discrepancy': None,
 }
@@ -43,13 +43,16 @@ def integration_category(cur, company_id: int, integration_id: Optional[int]) ->
     if not integration_id:
         return None
     cur.execute(f'''
-        SELECT c.slug FROM {SCHEMA}.user_integrations ui
+        SELECT c.slug, p.slug FROM {SCHEMA}.user_integrations ui
         JOIN {SCHEMA}.integration_providers p ON p.id = ui.provider_id
         JOIN {SCHEMA}.integration_categories c ON c.id = p.category_id
         WHERE ui.id = %s AND ui.company_id = %s
     ''', (integration_id, company_id))
     row = cur.fetchone()
-    return row[0] if row else None
+    if not row:
+        return None
+    # «Мой Класс» - CRM, но платежи учеников приходят как оплаты: источник сценария «Новый платёж».
+    return 'moyklass' if row[1] == 'moyklass' else row[0]
 
 
 def validate(cur, company_id: int, body: Dict[str, Any]) -> Optional[str]:

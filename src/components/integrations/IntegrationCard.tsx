@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import Icon from '@/components/ui/icon';
 import { UserIntegration } from './integrationsPageTypes';
-import { suggestsReceiptScenario } from './providerFieldsConfig';
+import { suggestsReceiptScenario, MOYKLASS_STAGE_HINTS } from './providerFieldsConfig';
 
 interface IntegrationCardProps {
   integration: UserIntegration;
@@ -184,9 +184,19 @@ const IntegrationCard = ({
               ) : null}
             </>
           )}
+          {integration.provider_slug === 'moyklass' && (
+            <>
+              <Chip tone="primary">Этап: {MOYKLASS_STAGE_HINTS[String(cfg.stage || 'payment_new')]?.title || String(cfg.stage)}</Chip>
+              <Chip>
+                {Array.isArray(cfg.payment_type_ids) && cfg.payment_type_ids.length
+                  ? `Способов оплаты: ${cfg.payment_type_ids.length}`
+                  : 'Все способы оплаты'}
+              </Chip>
+            </>
+          )}
           {usesWebhook && (
             <>
-              {isCrm && <Chip>По вебхуку от CRM</Chip>}
+              {isCrm && integration.provider_slug !== 'moyklass' && <Chip>По вебхуку от CRM</Chip>}
               <Chip>Последний вебхук: {formatDate(integration.last_webhook_at)}</Chip>
               <Chip>Вебхуков: {integration.webhook_count}</Chip>
               {integration.forward_url && <Chip tone="primary">Переадресация</Chip>}

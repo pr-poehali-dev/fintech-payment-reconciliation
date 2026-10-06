@@ -16,6 +16,7 @@ import crm_link
 from ecomkassa_token import ensure_valid_token as ensure_kassa_token
 import amocrm_handler
 import ecomkassa_gateway_handler
+import moyklass_handler
 import automation
 from auth_guard import guard
 
@@ -173,6 +174,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         # Шаг 1: событие сразу попадает в inbox как есть, до какой-либо обработки -
         # это гарантирует, что даже при сбое обработчика сырые данные не потеряются.
         event_type = EVENT_TYPE_BY_PROVIDER.get(provider_slug, 'unknown')
+        if provider_slug == 'moyklass':
+            event_type = moyklass_handler.event_type(webhook_data)
         # Источник для ленты «События»: хук или подтянуто кроном вместо потерянного хука.
         source = webhook_data.get('source') if isinstance(webhook_data, dict) else None
         origin = {'cron_recovery': 'recovery', 'cron_candidate': 'candidate'}.get(source, 'webhook')
@@ -185,6 +188,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         webhook_payment_id = None
         external_deal_id = None
         handler_error = None
+        skip_note = None
 
         if provider_slug == 'tbank':
             signature_valid, webhook_payment_id, handler_error = tbank_handler.process(
@@ -234,6 +238,10 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             _, external_deal_id, handler_error = bitrix24_handler.process(cur, integration_id, company_id, config, webhook_data)
         elif provider_slug == 'amocrm':
             _, external_deal_id, handler_error = amocrm_handler.process(cur, integration_id, company_id, config, webhook_data)
+        elif provider_slug == 'moyklass':
+            webhook_payment_id, handler_error, skip_note = moyklass_handler.process(
+                cur, integration_id, company_id, config, webhook_data
+            )
         elif provider_slug == 'ecomkassa_gateway':
             _, webhook_payment_id, handler_error = ecomkassa_gateway_handler.process(
                 cur, integration_id, company_id, config, webhook_settings, webhook_data
@@ -246,7 +254,10 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 WHERE id = %s
             ''', (external_deal_id, event_id))
 
-        mark_processed(cur, event_id, 'failed' if handler_error else 'processed', handler_error)
+        if skip_note and not handler_error:
+            mark_processed(cur, event_id, 'skipped', skip_note)
+        else:
+            mark_processed(cur, event_id, 'failed' if handler_error else 'processed', handler_error)
 
         # Автоматизация: задание в журнал на каждый запущенный сценарий.
         # Только запись в таблицу - сбор данных делает отдельный обработчик.

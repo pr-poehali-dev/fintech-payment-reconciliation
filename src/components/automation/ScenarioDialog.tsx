@@ -98,7 +98,7 @@ const ScenarioDialog = ({ open, onOpenChange, scenario, prefill, integrations, t
 
   const trigger = TRIGGERS[form.trigger_type];
   const sourceOptions = trigger.sourceCategories
-    ? integrations.filter((i) => trigger.sourceCategories?.includes(i.category))
+    ? integrations.filter((i) => trigger.sourceCategories?.includes(i.category) || (!!i.providerSlug && trigger.sourceCategories?.includes(i.providerSlug)))
     : [];
   const targetOptions = integrations.filter((i) => TARGET_CATEGORIES.includes(i.category));
   const templates = allTemplates.filter((t) => t.action_type === form.action_type);

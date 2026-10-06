@@ -5,6 +5,7 @@ from ecomkassa_client import company_cash_register, get_receipt_atol
 import bitrix_crm
 import alfabank_api
 import tochka_acquiring_api
+import moyklass_api
 
 SCHEMA = 't_p83864310_fintech_payment_reco'
 
@@ -16,7 +17,7 @@ RETRY_DELAYS = [1, 5, 15]
 def _payment(cur, payment_id: str) -> Optional[Dict[str, Any]]:
     cur.execute(f'''
         SELECT wp.id, wp.payment_id, wp.order_id, wp.amount, wp.status, wp.customer_email, wp.customer_phone,
-               wp.payment_provider, wp.receipt_id, wp.created_at, wp.integration_id, p.slug
+               wp.payment_provider, wp.receipt_id, wp.created_at, wp.integration_id, p.slug, wp.raw_data
         FROM {SCHEMA}.webhook_payments wp
         JOIN {SCHEMA}.user_integrations ui ON ui.id = wp.integration_id
         JOIN {SCHEMA}.integration_providers p ON p.id = ui.provider_id
@@ -29,7 +30,8 @@ def _payment(cur, payment_id: str) -> Optional[Dict[str, Any]]:
         'id': r[0], 'payment_id': r[1], 'order_id': r[2], 'amount': float(r[3] or 0),
         'status': r[4], 'customer_email': r[5], 'customer_phone': r[6],
         'payment_provider': r[7], 'receipt_id': r[8], 'created_at': r[9].isoformat() if r[9] else None,
-        'integration_id': r[10], 'provider_slug': r[11]
+        'integration_id': r[10], 'provider_slug': r[11],
+        'raw': (r[12] if isinstance(r[12], dict) else json.loads(r[12] or '{}')) if r[11] == 'moyklass' else None
     }
 
 
@@ -161,6 +163,9 @@ def prepare(cur, job: Dict[str, Any], scenario: Dict[str, Any]) -> Tuple[str, Di
             f"(платёж #{payment['payment_id']}{note})"
         )
 
+    if payment['provider_slug'] == 'moyklass':
+        return prepare_moyklass(cur, payment, data, scenario)
+
     if payment['provider_slug'] == 'ecomkassa_gateway':
         # Платёж через шлюз Екомкассы (Точка и др.): идентификатор платежа = номер
         # документа в Екомкассе, корзину читаем оттуда же в формате АТОЛ Онлайн.
@@ -194,6 +199,77 @@ def prepare(cur, job: Dict[str, Any], scenario: Dict[str, Any]) -> Tuple[str, Di
         )
 
     return 'ready', data, f"Собраны данные платежа #{payment['payment_id']} на {payment['amount']:.2f} ₽"
+
+
+def _integration_config(cur, integration_id: int) -> Dict[str, Any]:
+    cur.execute(f'SELECT config FROM {SCHEMA}.user_integrations WHERE id = %s', (integration_id,))
+    row = cur.fetchone()
+    config = row[0] if row else {}
+    return json.loads(config) if isinstance(config, str) else (config or {})
+
+
+def prepare_moyklass(cur, payment: Dict[str, Any], data: Dict[str, Any],
+                     scenario: Dict[str, Any]) -> Tuple[str, Dict[str, Any], str]:
+    '''
+    Платёж «Мой Класс»: в вебхуке только ученик, сумма, абонемент и способ оплаты.
+    Дозапрашиваем ученика (телефон/почта/имя) и абонемент (вид абонемента - название позиции).
+    Позиция одна, на сумму платежа. Признак расчёта ставит шаблон действия (предоплата, услуга);
+    если абонемент после платежа оплачен не полностью - частичная предоплата.
+    '''
+    raw = payment.get('raw') or {}
+    obj = raw.get('object') if isinstance(raw.get('object'), dict) else {}
+    config = _integration_config(cur, payment['integration_id'])
+    allowed = [str(v) for v in (config.get('payment_type_ids') or []) if str(v).strip()]
+    type_id = obj.get('paymentTypeId')
+    if allowed and str(type_id) not in allowed:
+        return 'skipped', data, f'Способ оплаты #{type_id} не выбран в интеграции «Мой Класс» - чек не создаётся'
+
+    token, err = moyklass_api.get_token(str(config.get('api_key') or '').strip())
+    if not token:
+        return 'error', data, err
+
+    user, err = moyklass_api.get_user(token, obj.get('userId')) if obj.get('userId') else (None, 'В платеже нет ученика')
+    if not user:
+        return 'error', data, f'Не удалось получить ученика #{obj.get("userId")}: {err}'
+
+    item_name = str(config.get('default_item_name') or '').strip() or 'Оплата обучения'
+    payment_method = None
+    note = ''
+    sub_id = obj.get('userSubscriptionId')
+    if sub_id:
+        user_sub, err = moyklass_api.get_user_subscription(token, sub_id)
+        if user_sub:
+            sub, _ = moyklass_api.get_subscription(token, user_sub.get('subscriptionId')) if user_sub.get('subscriptionId') else (None, None)
+            if sub and sub.get('name'):
+                item_name = f"Абонемент «{sub['name']}»"
+            price = float(user_sub.get('price') or 0)
+            payed = float(user_sub.get('payed') or 0)
+            if price > 0 and payed + 0.01 < price:
+                payment_method = 'prepayment'
+                note = f', абонемент оплачен частично ({payed:.2f} из {price:.2f} ₽) - частичная предоплата'
+        else:
+            note = f', абонемент #{sub_id} не получен ({err}) - позиция «{item_name}»'
+
+    amount = payment['amount']
+    item = {
+        'name': item_name[:128], 'price': amount, 'quantity': 1, 'sum': amount,
+        'measurement_unit': 'шт', 'payment_method': 'full_prepayment',
+        'payment_object': 'service', 'vat': {'type': str(config.get('vat') or 'none')}
+    }
+    data['items'] = [item]
+    data['items_format'] = 'atol'
+    data['items_source'] = 'Мой Класс'
+    data['item_payment_method'] = payment_method
+    data['customer'] = {
+        'email': (user.get('email') or '').strip() or None,
+        'phone': moyklass_api.normalize_phone(user.get('phone')),
+        'name': user.get('name')
+    }
+    contact = data['customer']['phone'] or data['customer']['email'] or 'нет контакта'
+    return 'ready', data, (
+        f"Платёж «Мой Класс» #{payment['payment_id']}: «{item['name']}» на {amount:.2f} ₽, "
+        f"ученик {user.get('name') or obj.get('userId')} ({contact}){note}"
+    )
 
 
 def _crm_webhook_url(cur, scenario_id: int) -> str:
