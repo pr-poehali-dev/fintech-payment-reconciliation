@@ -12,6 +12,7 @@ import HowItWorksSection from '@/components/landing/HowItWorksSection';
 import { LandingCase, casesApi } from '@/components/cases/caseTypes';
 import CasesSection from '@/components/landing/CasesSection';
 import PricingSection from '@/components/landing/PricingSection';
+import FaqSection from '@/components/landing/FaqSection';
 import CtaSection from '@/components/landing/CtaSection';
 import LandingFooter from '@/components/landing/LandingFooter';
 
@@ -71,6 +72,7 @@ const Landing = () => {
       <CasesSection cases={cases} />
       <PricingSection onCtaClick={handleTariffClick} trialDays={trialDays} tariffs={tariffs} />
       <CtaSection onCtaClick={handleCtaClick} trialDays={trialDays} />
+      <FaqSection />
       <LandingFooter />
     </div>
   );
