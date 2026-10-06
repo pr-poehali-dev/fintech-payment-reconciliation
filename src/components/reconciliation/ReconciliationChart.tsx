@@ -37,6 +37,14 @@ const formatDay = (value: string) => {
   return d.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' });
 };
 
+const formatAxis = (value: number) => {
+  if (Math.abs(value) >= 1_000_000) return `${+(value / 1_000_000).toFixed(1)}м`;
+  if (Math.abs(value) >= 1000) return `${+(value / 1000).toFixed(1)}к`;
+  return String(value);
+};
+
+const formatMoney = (value: number) => `${Number(value || 0).toLocaleString('ru-RU')} ₽`;
+
 const ReconciliationChart = ({ daily, onDayClick }: ReconciliationChartProps) => {
   // Выручка дня - реально полученные на счёт деньги ДО вычета комиссии банка
   // (поле bank уже включает комиссию обратно, нетто с учётом возвратов).
@@ -45,8 +53,8 @@ const ReconciliationChart = ({ daily, onDayClick }: ReconciliationChartProps) =>
   return (
     <Card className="lg:col-span-2 border-border bg-card">
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Icon name="BarChart3" size={20} />
+        <CardTitle className="flex items-start gap-2 text-xl sm:text-2xl leading-tight">
+          <Icon name="BarChart3" size={20} className="shrink-0 mt-1" />
           Динамика по дням
         </CardTitle>
         <CardDescription>
@@ -54,9 +62,11 @@ const ReconciliationChart = ({ daily, onDayClick }: ReconciliationChartProps) =>
           {onDayClick && ' · нажмите на день, чтобы открыть его транзакции'}
         </CardDescription>
       </CardHeader>
-      <CardContent>
-        <ResponsiveContainer width="100%" height={300}>
+      <CardContent className="px-2 sm:px-6">
+        <ResponsiveContainer width="100%" height={320}>
           <ComposedChart
+            margin={{ top: 5, right: 5, left: 0, bottom: 0 }}
+            barCategoryGap="15%"
             data={chartData}
             className={onDayClick ? 'cursor-pointer' : undefined}
             onClick={(state) => {
@@ -66,10 +76,10 @@ const ReconciliationChart = ({ daily, onDayClick }: ReconciliationChartProps) =>
             }}
           >
             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-            <XAxis dataKey="dayLabel" stroke="hsl(var(--muted-foreground))" />
-            <YAxis stroke="hsl(var(--muted-foreground))" />
-            <Tooltip contentStyle={chartTooltipStyle} cursor={{ fill: 'hsl(var(--muted))', opacity: 0.4 }} />
-            <Legend />
+            <XAxis dataKey="dayLabel" stroke="hsl(var(--muted-foreground))" tick={{ fontSize: 11 }} interval="preserveStartEnd" minTickGap={8} />
+            <YAxis stroke="hsl(var(--muted-foreground))" tick={{ fontSize: 11 }} tickFormatter={formatAxis} width={40} />
+            <Tooltip contentStyle={chartTooltipStyle} cursor={{ fill: 'hsl(var(--muted))', opacity: 0.4 }} formatter={(v: number) => formatMoney(v)} />
+            <Legend iconSize={10} wrapperStyle={{ fontSize: 12, paddingTop: 8 }} />
             <Bar dataKey="payments" name="Платежи" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
             <Bar dataKey="receipts" name="Чеки касса" fill="hsl(var(--info))" radius={[4, 4, 0, 0]} />
             <Bar dataKey="receipts_ofd" name="Чеки ОФД" fill="#a78bfa" radius={[4, 4, 0, 0]} />
