@@ -34,7 +34,7 @@ const LandingFooter = ({ showCases = false }: { showCases?: boolean }) => {
               <Icon name="Zap" size={20} className="text-primary" />
               <span className="font-display font-bold text-foreground">Сверка</span>
             </a>
-            <p className="text-sm text-muted-foreground max-w-xs">Платформа контроля 54-ФЗ</p>
+            <p className="text-sm text-muted-foreground max-w-xs">Сверка - платформа, которая помогает бизнесам не получать штрафы по 54-ФЗ и контролировать процесс создания правильных чеков без внимания предпринимателя и руководителей</p>
           </div>
 
           <div>
