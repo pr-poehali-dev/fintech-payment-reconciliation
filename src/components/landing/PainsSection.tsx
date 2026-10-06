@@ -34,7 +34,7 @@ const PainsSection = () => {
             <span className="text-xs font-medium text-destructive">Знакомо?</span>
           </div>
           <h2 className="text-3xl sm:text-4xl font-display font-bold text-foreground mb-4">
-            Почему пропущенные чеки — головная боль бизнеса
+            Три причины, почему бизнес теряет деньги на чеках, и как это прекратить
           </h2>
           <p className="text-lg text-muted-foreground">
             За каждый не пробитый правильно чек бизнес платит штраф от 30 000 ₽.
