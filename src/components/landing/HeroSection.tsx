@@ -20,7 +20,7 @@ const HeroSection = ({ onCtaClick, trialDays }: { onCtaClick: () => void; trialD
           <div className="animate-fade-in">
             <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 border border-primary/20 mb-6">
               <Icon name="ShieldCheck" size={14} className="text-primary" />
-              <span className="text-xs font-medium text-primary">Платформа сверки по 54-ФЗ</span>
+              <span className="text-xs font-medium text-primary">Платформа контроля 54-ФЗ</span>
             </div>
 
             <h1 className="text-4xl sm:text-5xl lg:text-6xl font-display font-bold text-foreground leading-tight mb-6">

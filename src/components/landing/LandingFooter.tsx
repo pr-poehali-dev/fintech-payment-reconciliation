@@ -14,7 +14,7 @@ const LandingFooter = () => {
             <a href="/legal" className="text-muted-foreground hover:text-foreground">Политика обработки персональных данных</a>
           </div>
           <p className="text-sm text-muted-foreground">
-            © {new Date().getFullYear()} Сверка. Платформа сверки по 54-ФЗ.
+            © {new Date().getFullYear()} Сверка. Платформа контроля 54-ФЗ.
           </p>
         </div>
       </div>
