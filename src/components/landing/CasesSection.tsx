@@ -1,7 +1,6 @@
-import { useEffect, useState } from 'react';
 import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from '@/components/ui/carousel';
 import Icon from '@/components/ui/icon';
-import { LandingCase, casesApi } from '@/components/cases/caseTypes';
+import { LandingCase } from '@/components/cases/caseTypes';
 
 const CaseCard = ({ item }: { item: LandingCase }) => (
   <div className="h-full flex flex-col rounded-2xl border border-border bg-card p-6 sm:p-8">
@@ -35,20 +34,11 @@ const CaseCard = ({ item }: { item: LandingCase }) => (
   </div>
 );
 
-const CasesSection = () => {
-  const [cases, setCases] = useState<LandingCase[]>([]);
-
-  useEffect(() => {
-    fetch(`${casesApi}?public=1`)
-      .then((res) => res.json())
-      .then((data) => setCases(data.cases || []))
-      .catch(() => {});
-  }, []);
-
+const CasesSection = ({ cases }: { cases: LandingCase[] }) => {
   if (!cases.length) return null;
 
   return (
-    <section id="cases" className="py-20 sm:py-28">
+    <section id="cases" className="py-20 sm:py-28 scroll-mt-16">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center max-w-2xl mx-auto mb-12">
           <h2 className="text-3xl sm:text-4xl font-display font-bold text-foreground mb-4">

@@ -11,8 +11,17 @@ const NAV_LINKS = [
   { href: '#pricing', label: 'Тарифы' }
 ];
 
-const LandingHeader = ({ onCtaClick, trialDays }: { onCtaClick: () => void; trialDays: number }) => {
+const CASES_LINK = { href: '#cases', label: 'Кейсы' };
+
+interface LandingHeaderProps {
+  onCtaClick: () => void;
+  trialDays: number;
+  showCases?: boolean;
+}
+
+const LandingHeader = ({ onCtaClick, trialDays, showCases = false }: LandingHeaderProps) => {
   const navigate = useNavigate();
+  const navLinks = showCases ? [...NAV_LINKS.slice(0, 2), CASES_LINK, ...NAV_LINKS.slice(2)] : NAV_LINKS;
   const { user } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -25,7 +34,7 @@ const LandingHeader = ({ onCtaClick, trialDays }: { onCtaClick: () => void; tria
         </a>
 
         <nav className="hidden md:flex items-center">
-          {NAV_LINKS.map((link) => (
+          {navLinks.map((link) => (
             <a
               key={link.href}
               href={link.href}
@@ -66,7 +75,7 @@ const LandingHeader = ({ onCtaClick, trialDays }: { onCtaClick: () => void; tria
 
       {menuOpen && (
         <div className="md:hidden border-t border-border bg-background px-4 py-4 space-y-4 animate-fade-in">
-          {NAV_LINKS.map((link) => (
+          {navLinks.map((link) => (
             <a
               key={link.href}
               href={link.href}

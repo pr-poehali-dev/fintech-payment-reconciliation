@@ -9,6 +9,7 @@ import HeroSection from '@/components/landing/HeroSection';
 import PainsSection from '@/components/landing/PainsSection';
 import FeaturesSection from '@/components/landing/FeaturesSection';
 import HowItWorksSection from '@/components/landing/HowItWorksSection';
+import { LandingCase, casesApi } from '@/components/cases/caseTypes';
 import CasesSection from '@/components/landing/CasesSection';
 import PricingSection from '@/components/landing/PricingSection';
 import CtaSection from '@/components/landing/CtaSection';
@@ -28,6 +29,15 @@ const Landing = () => {
       .catch(() => {});
   }, []);
 
+  const [cases, setCases] = useState<LandingCase[]>([]);
+
+  useEffect(() => {
+    fetch(`${casesApi}?public=1`)
+      .then((res) => res.json())
+      .then((data) => setCases(data.cases || []))
+      .catch(() => {});
+  }, []);
+
   const { hash } = useLocation();
 
   // Переход по ссылке вида /#pricing (например, «Сменить тариф») - прокручиваем к блоку.
@@ -35,7 +45,7 @@ const Landing = () => {
     if (!hash) return;
     const timer = setTimeout(() => document.querySelector(hash)?.scrollIntoView({ behavior: 'smooth' }), 100);
     return () => clearTimeout(timer);
-  }, [hash, tariffs]);
+  }, [hash, tariffs, cases]);
 
   const trialTariff = tariffs?.find((t) => t.slug === 'trial');
   const trialDays = trialTariff?.trial_days || trialTariff?.period_days || DEFAULT_TRIAL_DAYS;
@@ -53,12 +63,12 @@ const Landing = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      <LandingHeader onCtaClick={handleCtaClick} trialDays={trialDays} />
+      <LandingHeader onCtaClick={handleCtaClick} trialDays={trialDays} showCases={cases.length > 0} />
       <HeroSection onCtaClick={handleCtaClick} trialDays={trialDays} />
       <PainsSection />
       <FeaturesSection />
       <HowItWorksSection />
-      <CasesSection />
+      <CasesSection cases={cases} />
       <PricingSection onCtaClick={handleTariffClick} trialDays={trialDays} tariffs={tariffs} />
       <CtaSection onCtaClick={handleCtaClick} trialDays={trialDays} />
       <LandingFooter />
