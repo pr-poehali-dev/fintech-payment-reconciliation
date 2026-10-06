@@ -8,7 +8,8 @@ import { useAuth } from '@/contexts/AuthContext';
 const NAV_LINKS = [
   { href: '#features', label: 'Возможности' },
   { href: '#how-it-works', label: 'Как это работает' },
-  { href: '#pricing', label: 'Тарифы' }
+  { href: '#pricing', label: 'Тарифы' },
+  { href: '#faq', label: 'FAQ' }
 ];
 
 const CASES_LINK = { href: '#cases', label: 'Кейсы' };
