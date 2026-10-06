@@ -1,19 +1,20 @@
-import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from '@/components/ui/carousel';
+import { useEffect, useState } from 'react';
+import { Carousel, CarouselApi, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from '@/components/ui/carousel';
 import Icon from '@/components/ui/icon';
 import { LandingCase } from '@/components/cases/caseTypes';
 
 const CaseCard = ({ item }: { item: LandingCase }) => (
-  <div className="h-full flex flex-col rounded-2xl border border-border bg-card p-6 sm:p-8">
-    <div className="flex items-center gap-4 mb-6">
+  <div className="h-full flex flex-col rounded-2xl border border-border bg-card p-5 sm:p-8">
+    <div className="flex items-center gap-3 sm:gap-4 mb-6">
       {item.logo_url ? (
-        <img src={item.logo_url} alt={item.company_name} className="w-14 h-14 rounded-xl object-contain bg-background border border-border p-1 shrink-0" />
+        <img src={item.logo_url} alt={item.company_name} className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl object-contain bg-background border border-border p-1 shrink-0" />
       ) : (
-        <div className="w-14 h-14 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+        <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
           <Icon name="Building2" size={26} className="text-primary" />
         </div>
       )}
       <div className="min-w-0">
-        <div className="font-display font-semibold text-lg text-foreground truncate">{item.company_name}</div>
+        <div className="font-display font-semibold text-base sm:text-lg text-foreground break-words">{item.company_name}</div>
         <div className="text-sm text-muted-foreground">{item.niche}</div>
       </div>
     </div>
@@ -35,6 +36,25 @@ const CaseCard = ({ item }: { item: LandingCase }) => (
 );
 
 const CasesSection = ({ cases }: { cases: LandingCase[] }) => {
+  const [api, setApi] = useState<CarouselApi>();
+  const [current, setCurrent] = useState(0);
+  const [snaps, setSnaps] = useState(0);
+
+  useEffect(() => {
+    if (!api) return;
+    const update = () => {
+      setSnaps(api.scrollSnapList().length);
+      setCurrent(api.selectedScrollSnap());
+    };
+    update();
+    api.on('select', update);
+    api.on('reInit', update);
+    return () => {
+      api.off('select', update);
+      api.off('reInit', update);
+    };
+  }, [api]);
+
   if (!cases.length) return null;
 
   return (
@@ -49,16 +69,31 @@ const CasesSection = ({ cases }: { cases: LandingCase[] }) => {
           </p>
         </div>
 
-        <Carousel opts={{ align: 'start', loop: cases.length > 2 }} className="px-12">
-          <CarouselContent>
+        <Carousel setApi={setApi} opts={{ align: 'start', loop: cases.length > 2 }}>
+          <CarouselContent className="-ml-4">
             {cases.map((item) => (
-              <CarouselItem key={item.id} className="basis-1/2">
+              <CarouselItem key={item.id} className="pl-4 basis-[88%] sm:basis-[70%] md:basis-1/2">
                 <CaseCard item={item} />
               </CarouselItem>
             ))}
           </CarouselContent>
-          <CarouselPrevious className="left-0" />
-          <CarouselNext className="right-0" />
+          {snaps > 1 && (
+            <div className="flex items-center justify-center gap-4 mt-8">
+              <CarouselPrevious className="static translate-y-0" />
+              <div className="flex items-center gap-2">
+                {Array.from({ length: snaps }).map((_, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    aria-label={`Кейс ${i + 1}`}
+                    onClick={() => api?.scrollTo(i)}
+                    className={`h-2 rounded-full transition-all ${i === current ? 'w-6 bg-primary' : 'w-2 bg-muted-foreground/40'}`}
+                  />
+                ))}
+              </div>
+              <CarouselNext className="static translate-y-0" />
+            </div>
+          )}
         </Carousel>
       </div>
     </section>
