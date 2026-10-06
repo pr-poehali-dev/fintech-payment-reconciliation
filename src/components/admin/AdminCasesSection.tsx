@@ -28,6 +28,7 @@ const AdminCasesSection = () => {
   const [logo, setLogo] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [dragId, setDragId] = useState<number | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -98,6 +99,35 @@ const AdminCasesSection = () => {
     }
   };
 
+  const saveOrder = async (next: LandingCase[]) => {
+    const prev = cases;
+    setCases(next);
+    try {
+      await post({ action: 'reorder', ids: next.map((c) => c.id) });
+    } catch (e) {
+      setCases(prev);
+      toast({ title: 'Ошибка', description: e instanceof Error ? e.message : 'Не удалось сохранить порядок', variant: 'destructive' });
+    }
+  };
+
+  const moveTo = (fromId: number, toId: number) => {
+    if (fromId === toId) return;
+    const next = [...cases];
+    const from = next.findIndex((c) => c.id === fromId);
+    const to = next.findIndex((c) => c.id === toId);
+    const [moved] = next.splice(from, 1);
+    next.splice(to, 0, moved);
+    setCases(next);
+  };
+
+  const shift = (index: number, delta: number) => {
+    const target = index + delta;
+    if (target < 0 || target >= cases.length) return;
+    const next = [...cases];
+    [next[index], next[target]] = [next[target], next[index]];
+    saveOrder(next);
+  };
+
   const remove = async (item: LandingCase) => {
     if (!window.confirm(`Удалить кейс «${item.company_name}»?`)) return;
     setDeletingId(item.id);
@@ -122,7 +152,7 @@ const AdminCasesSection = () => {
         <h2 className="text-3xl font-display font-bold mb-2">Кейсы</h2>
         <p className="text-muted-foreground">
           Кейсы клиентов на главной странице, блок между «Как это работает» и тарифами. Пока нет ни одного кейса — блок скрыт.
-          Новые кейсы показываются первыми.
+          Новые кейсы добавляются первыми. Порядок в слайдере меняйте перетаскиванием за ручку слева или стрелками.
         </p>
       </div>
 
@@ -181,9 +211,26 @@ const AdminCasesSection = () => {
 
       <div className="space-y-3">
         {cases.length === 0 && <p className="text-sm text-muted-foreground">Кейсов пока нет.</p>}
-        {cases.map((item) => (
-          <Card key={item.id}>
+        {cases.map((item, index) => (
+          <Card
+            key={item.id}
+            draggable
+            onDragStart={(e) => { setDragId(item.id); e.dataTransfer.effectAllowed = 'move'; }}
+            onDragOver={(e) => { e.preventDefault(); if (dragId !== null) moveTo(dragId, item.id); }}
+            onDrop={(e) => e.preventDefault()}
+            onDragEnd={() => { setDragId(null); saveOrder(cases); }}
+            className={dragId === item.id ? 'opacity-50 border-primary' : undefined}
+          >
             <CardContent className="p-5 flex gap-4">
+              <div className="flex flex-col items-center gap-1 shrink-0 -ml-1">
+                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => shift(index, -1)} disabled={index === 0}>
+                  <Icon name="ChevronUp" size={14} />
+                </Button>
+                <Icon name="GripVertical" size={18} className="text-muted-foreground cursor-grab" />
+                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => shift(index, 1)} disabled={index === cases.length - 1}>
+                  <Icon name="ChevronDown" size={14} />
+                </Button>
+              </div>
               {item.logo_url ? (
                 <img src={item.logo_url} alt="" className="w-12 h-12 rounded-lg object-contain border border-border p-1 shrink-0" />
               ) : (

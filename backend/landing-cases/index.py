@@ -43,7 +43,7 @@ def is_admin(cur, user_id) -> bool:
 def list_cases(cur):
     cur.execute(f'''
         SELECT id, task, company_name, logo_url, niche, solution, created_at
-        FROM {SCHEMA}.landing_cases ORDER BY created_at DESC, id DESC
+        FROM {SCHEMA}.landing_cases ORDER BY sort_order, created_at DESC, id DESC
     ''')
     return [{'id': r[0], 'task': r[1], 'company_name': r[2], 'logo_url': r[3], 'niche': r[4],
              'solution': r[5], 'created_at': r[6].isoformat()} for r in cur.fetchall()]
@@ -74,6 +74,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     POST {action: "create", requester_user_id, task, company_name, niche, solution, logo?: data-url base64}
     POST {action: "update", requester_user_id, id, task, company_name, niche, solution,
           logo?: новый data-url, remove_logo?: true} - без logo и remove_logo логотип не меняется
+    POST {action: "reorder", requester_user_id, ids: [...]} - порядок кейсов в слайдере
     POST {action: "delete", requester_user_id, id}
     '''
     denied = guard(event, public_query=('public',), check_company=False)
@@ -123,9 +124,16 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 conn.commit()
                 return respond(200, {'success': True, 'cases': list_cases(cur)})
             cur.execute(f'''
-                INSERT INTO {SCHEMA}.landing_cases (task, company_name, logo_url, niche, solution)
-                VALUES (%s, %s, %s, %s, %s)
+                INSERT INTO {SCHEMA}.landing_cases (task, company_name, logo_url, niche, solution, sort_order)
+                VALUES (%s, %s, %s, %s, %s, (SELECT COALESCE(MIN(sort_order), 1) - 1 FROM {SCHEMA}.landing_cases))
             ''', (fields['task'][:5000], fields['company_name'][:200], logo_url, fields['niche'][:200], fields['solution'][:5000]))
+            conn.commit()
+            return respond(200, {'success': True, 'cases': list_cases(cur)})
+
+        if action == 'reorder':
+            ids = [int(i) for i in (body.get('ids') or [])]
+            for pos, case_id in enumerate(ids):
+                cur.execute(f'UPDATE {SCHEMA}.landing_cases SET sort_order = %s WHERE id = %s', (pos, case_id))
             conn.commit()
             return respond(200, {'success': True, 'cases': list_cases(cur)})
 
