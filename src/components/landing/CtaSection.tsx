@@ -9,7 +9,7 @@ const CtaSection = ({ onCtaClick, trialDays }: { onCtaClick: () => void; trialDa
         <div className="bg-gradient-to-br from-primary/10 to-transparent border border-primary/20 rounded-3xl p-10 sm:p-16">
           <Icon name="ShieldCheck" size={40} className="text-primary mx-auto mb-6" />
           <h2 className="text-3xl sm:text-4xl font-display font-bold text-foreground mb-4">
-            Перестаньте терять деньги на чеках уже сегодня
+            Перестаньте терять деньги и время на чеках уже сегодня
           </h2>
           <p className="text-lg text-muted-foreground mb-8 max-w-xl mx-auto">
             Подключите компанию за пару минут, и Сверка сама найдёт пропущенные чеки раньше налоговой.
