@@ -261,21 +261,6 @@ export const PROVIDER_FIELDS: Record<string, FieldConfig[]> = {
       default: 'payment_new',
       options: MOYKLASS_STAGE_OPTIONS,
       hint: 'Оплата абонемента — это аванс (чек предоплаты). Когда занятие проведено, «Мой Класс» списывает его стоимость — по этому списанию пробивается чек полного расчёта с зачётом аванса. Для каждого этапа — своя интеграция со своим адресом вебхука'
-    },
-    {
-      key: 'vat',
-      label: 'НДС в чеке',
-      type: 'select',
-      default: 'none',
-      options: [
-        { value: 'none', label: 'Без НДС' },
-        { value: 'vat0', label: 'НДС 0%' },
-        { value: 'vat5', label: 'НДС 5%' },
-        { value: 'vat7', label: 'НДС 7%' },
-        { value: 'vat10', label: 'НДС 10%' },
-        { value: 'vat20', label: 'НДС 20%' },
-        { value: 'vat22', label: 'НДС 22%' }
-      ]
     }
   ]
 };

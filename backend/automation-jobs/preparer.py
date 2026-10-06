@@ -261,7 +261,7 @@ def prepare_moyklass(cur, payment: Dict[str, Any], data: Dict[str, Any],
     item = {
         'name': item_name[:128], 'price': amount, 'quantity': 1, 'sum': amount,
         'measurement_unit': 'шт', 'payment_method': 'full_payment' if is_offset else 'full_prepayment',
-        'payment_object': 'service', 'vat': {'type': str(config.get('vat') or 'none')}
+        'payment_object': 'service', 'vat': {'type': 'none'}
     }
     data['items'] = [item]
     data['items_format'] = 'atol'
