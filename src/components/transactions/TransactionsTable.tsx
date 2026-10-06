@@ -5,6 +5,7 @@ import { TransactionGroup } from '@/lib/transactionGrouping';
 import { useAuth } from '@/contexts/AuthContext';
 import { DEFAULT_TIMEZONE } from '@/lib/formatDate';
 import TransactionGroupRow from './table/TransactionGroupRow';
+import TransactionsMobileList from './table/TransactionsMobileList';
 
 interface TransactionsTableProps {
   groups: TransactionGroup[];
@@ -30,7 +31,19 @@ const TransactionsTable = ({ groups, onRowClick, selectedKeys, onToggleSelect, o
   };
 
   return (
-    <div className="border rounded-lg overflow-hidden">
+    <>
+    <div className="md:hidden">
+      <TransactionsMobileList
+        groups={groups}
+        timezone={timezone}
+        selectedKeys={selectedKeys}
+        onRowClick={onRowClick}
+        onToggleSelect={onToggleSelect}
+        onDetach={onDetach}
+        detachingKey={detachingKey}
+      />
+    </div>
+    <div className="hidden border rounded-lg overflow-x-auto md:block">
       <Table className="min-w-[720px]">
         <TableHeader>
           <TableRow>
@@ -70,6 +83,7 @@ const TransactionsTable = ({ groups, onRowClick, selectedKeys, onToggleSelect, o
         </TableBody>
       </Table>
     </div>
+    </>
   );
 };
 

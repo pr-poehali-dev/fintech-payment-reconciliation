@@ -76,13 +76,13 @@ const TransactionsRegistryCard = ({
 
   return (
     <Card>
-      <CardHeader>
+      <CardHeader className="p-4 sm:p-6">
         <CardTitle className="text-xl sm:text-2xl leading-tight">Реестр транзакций</CardTitle>
         <CardDescription>
           Каждая строка — уже готовая для сверки запись: платёж, чек или банковская операция
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-4 p-3 pt-0 sm:p-6 sm:pt-0">
         <div className="flex flex-wrap items-center gap-3 pl-0.5 pr-2 pt-2 pb-0.5">
           <TransactionsFilters
             searchQuery={searchQuery}
@@ -98,7 +98,7 @@ const TransactionsRegistryCard = ({
             }}
           />
           {selectedTxByKey.size > 0 && (
-            <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
+            <div className="sticky top-2 z-10 flex w-full flex-wrap items-center gap-2 rounded-lg border border-border bg-background/95 p-2 backdrop-blur sm:static sm:ml-auto sm:w-auto sm:border-0 sm:bg-transparent sm:p-0">
               <span className="text-sm text-muted-foreground whitespace-nowrap">Выбрано: {selectedTxByKey.size}</span>
               {selectedTxByKey.size >= 2 && (
                 <Button size="sm" variant="outline" className="gap-1.5" onClick={onLink} disabled={isLinking}>

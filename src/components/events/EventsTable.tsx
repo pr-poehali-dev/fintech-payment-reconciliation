@@ -97,8 +97,90 @@ const EventsTable = ({ events, onRowClick }: EventsTableProps) => {
     });
   };
 
+  const sortedHistory = (history: EventWebhookHistoryItem[]) =>
+    history.slice().sort((a, b) => new Date(a.created_at || '').getTime() - new Date(b.created_at || '').getTime());
+
+  const mobileList = (
+    <div className="space-y-2 md:hidden">
+      {events.length === 0 ? (
+        <div className="rounded-lg border py-8 text-center text-sm text-muted-foreground">События не найдены</div>
+      ) : (
+        events.map((event) => {
+          const history = event.webhook_history || [];
+          const hasHistory = history.length > 1;
+          const isExpanded = expandedRows.has(event.id);
+          const config = transactionTypeConfig[event.transaction_type] || transactionTypeConfig.payment;
+          const st = event.status ? getStatusDisplay(event) : null;
+          return (
+            <div key={event.id} className="overflow-hidden rounded-lg border border-border">
+              <div
+                className="cursor-pointer p-3 transition-colors active:bg-muted/50"
+                onClick={(e) => (hasHistory ? toggleRowExpand(event.id, e) : onRowClick(event))}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                    <Badge variant="outline" className={`gap-1.5 ${config.className}`}>
+                      <Icon name={config.icon as any} size={12} />
+                      {config.label}
+                    </Badge>
+                    {st && <Badge className={`${st.color} text-white`}>{st.label}</Badge>}
+                  </div>
+                  {hasHistory ? (
+                    <span className="inline-flex shrink-0 items-center gap-0.5 text-xs text-muted-foreground">
+                      {history.length}
+                      <Icon name={isExpanded ? 'ChevronUp' : 'ChevronDown'} size={14} />
+                    </span>
+                  ) : (
+                    <Icon name="ChevronRight" size={16} className="shrink-0 text-muted-foreground" />
+                  )}
+                </div>
+                <div className="mt-1.5 break-words text-sm font-medium [overflow-wrap:anywhere]">{event.integration_name}</div>
+                {event.summary && (
+                  <div className="break-words text-xs text-muted-foreground [overflow-wrap:anywhere]">{event.summary}</div>
+                )}
+                <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                  <span>{formatDate(event.created_at)}</span>
+                  {event.event_number && <span className="font-mono">№ {event.event_number}</span>}
+                  {event.payment_provider && <Badge variant="secondary" className="text-[11px]">{event.payment_provider}</Badge>}
+                </div>
+              </div>
+              {hasHistory && isExpanded && (
+                <div className="space-y-2 border-t border-border bg-muted/30 p-2">
+                  {sortedHistory(history).map((item, idx) => (
+                    <button
+                      type="button"
+                      key={item.id}
+                      onClick={() => handleHistoryItemClick(event, item)}
+                      className="flex w-full items-start gap-2 rounded-md border border-border bg-background p-2.5 text-left active:bg-muted/50"
+                    >
+                      <Badge variant="outline" className="shrink-0">{idx + 1}</Badge>
+                      <div className="min-w-0 flex-1 space-y-1">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          {item.status && (
+                            <Badge className={`${getStatusColor(item.status)} text-white`}>{transactionStatusLabel(item.status)}</Badge>
+                          )}
+                          <span className="text-xs text-muted-foreground">{formatDate(item.created_at)}</span>
+                        </div>
+                        {item.error_message && (
+                          <div className="break-words text-xs text-destructive [overflow-wrap:anywhere]">{item.error_message}</div>
+                        )}
+                      </div>
+                      <Icon name="ChevronRight" size={14} className="mt-1 shrink-0 text-muted-foreground" />
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })
+      )}
+    </div>
+  );
+
   return (
-    <div className="border rounded-lg overflow-hidden">
+    <>
+    {mobileList}
+    <div className="hidden border rounded-lg overflow-x-auto md:block">
       <Table className="min-w-[720px]">
         <TableHeader>
           <TableRow>
@@ -143,7 +225,7 @@ const EventsTable = ({ events, onRowClick }: EventsTableProps) => {
                     </TableCell>
                     <TableCell>
                       <div className="text-sm font-medium">{event.integration_name}</div>
-                      <div className="text-xs text-muted-foreground">{event.summary}</div>
+                      <div className="max-w-md break-words text-xs text-muted-foreground">{event.summary}</div>
                     </TableCell>
                     <TableCell>
                       {(() => {
@@ -246,6 +328,7 @@ const EventsTable = ({ events, onRowClick }: EventsTableProps) => {
         </TableBody>
       </Table>
     </div>
+    </>
   );
 };
 

@@ -243,9 +243,9 @@ const AutomationPage = ({ prefillSourceId, onPrefillUsed }: AutomationPageProps 
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h2 className="text-2xl sm:text-3xl font-display font-bold text-foreground mb-2">Автоматизация</h2>
-          <p className="text-muted-foreground">Сценарии: событие в интеграции — документ в кассе</p>
+          <p className="text-sm text-muted-foreground sm:text-base">Сценарии: событие в интеграции — документ в кассе</p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center">
           <Button variant="outline" className="gap-2" onClick={() => setJournalOpen(true)}>
             <Icon name="ScrollText" size={16} />
             Журнал
@@ -290,8 +290,9 @@ const AutomationPage = ({ prefillSourceId, onPrefillUsed }: AutomationPageProps 
             const active = s.status === 'active';
             return (
               <Card key={s.id} className={`transition-colors ${active ? 'border-primary/40' : ''}`}>
-                <CardContent className="flex flex-wrap items-start gap-3 sm:flex-nowrap sm:items-center sm:gap-4 p-4 sm:p-5">
+                <CardContent className="flex flex-wrap items-start gap-3 p-3 sm:flex-nowrap sm:items-center sm:gap-4 sm:p-5">
                   <Switch
+                    className="mt-0.5 sm:mt-0"
                     checked={active}
                     disabled={togglingId === s.id}
                     onCheckedChange={() => handleToggle(s)}
@@ -304,15 +305,15 @@ const AutomationPage = ({ prefillSourceId, onPrefillUsed }: AutomationPageProps 
                         {active ? 'Запущен' : 'Остановлен'}
                       </Badge>
                     </div>
-                    <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
-                      <span className="inline-flex items-center gap-1.5 rounded-md bg-muted px-2 py-1">
-                        <Icon name={trigger.icon} size={14} className="text-primary" />
+                    <div className="mt-2 flex flex-col items-start gap-1.5 text-xs sm:flex-row sm:flex-wrap sm:items-center sm:gap-2 sm:text-sm">
+                      <span className="inline-flex max-w-full items-center gap-1.5 break-words rounded-md bg-muted px-2 py-1">
+                        <Icon name={trigger.icon} size={14} className="shrink-0 text-primary" />
                         {trigger.label}
                         {s.source_integration_name && <span className="text-muted-foreground">· {s.source_integration_name}</span>}
                       </span>
-                      <Icon name="ArrowRight" size={14} className="text-muted-foreground" />
-                      <span className="inline-flex items-center gap-1.5 rounded-md bg-muted px-2 py-1">
-                        <Icon name={action.icon} size={14} className="text-primary" />
+                      <Icon name="ArrowRight" size={14} className="ml-2 rotate-90 text-muted-foreground sm:ml-0 sm:rotate-0" />
+                      <span className="inline-flex max-w-full items-center gap-1.5 break-words rounded-md bg-muted px-2 py-1">
+                        <Icon name={action.icon} size={14} className="shrink-0 text-primary" />
                         {s.action_template_name || s.action_template}
                         {s.target_integration_name && <span className="text-muted-foreground">· {s.target_integration_name}</span>}
                       </span>
@@ -322,7 +323,7 @@ const AutomationPage = ({ prefillSourceId, onPrefillUsed }: AutomationPageProps 
                       {s.jobs_errors > 0 && <span className="text-warning"> · с ошибкой: {s.jobs_errors}</span>}
                     </div>
                   </div>
-                  <div className="flex w-full justify-end items-center gap-1 sm:w-auto">
+                  <div className="-mb-1 -mr-1 flex w-full items-center justify-end gap-1 border-t border-border pt-1 sm:m-0 sm:w-auto sm:border-0 sm:pt-0">
                     <Button size="icon" variant="ghost" title="Копировать" onClick={() => setToCopy(s)}>
                       <Icon name="Copy" size={16} />
                     </Button>

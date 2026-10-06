@@ -141,7 +141,7 @@ const EventsPage = () => {
               <Icon name="RefreshCw" size={16} className={isRefreshing ? 'animate-spin' : ''} />
             </Button>
           </div>
-          <p className="text-muted-foreground">
+          <p className="text-sm text-muted-foreground sm:text-base">
             Все входящие вебхуки и операции по интеграциям компании
           </p>
         </div>
@@ -152,13 +152,13 @@ const EventsPage = () => {
       </div>
 
       <Card>
-        <CardHeader>
+        <CardHeader className="p-4 sm:p-6">
           <CardTitle className="text-xl sm:text-2xl leading-tight">Лента событий</CardTitle>
           <CardDescription>
             Нажмите на событие, чтобы посмотреть его детали
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-4 p-3 pt-0 sm:p-6 sm:pt-0">
           <EventsFilters
             searchQuery={searchQuery}
             setSearchQuery={setSearchQuery}

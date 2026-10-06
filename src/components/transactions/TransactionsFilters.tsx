@@ -47,7 +47,7 @@ const TransactionsFilters = ({
         variant={showUnmatchedOnly ? 'default' : 'outline'}
         size="sm"
         onClick={() => setShowUnmatchedOnly(!showUnmatchedOnly)}
-        className="gap-2 shrink-0"
+        className="gap-2 shrink-0 h-9"
       >
         <Icon name="Unlink" size={14} />
         Только без связи
