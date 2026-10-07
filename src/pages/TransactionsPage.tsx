@@ -77,8 +77,16 @@ const TransactionsPage = ({ initialDateFilter = null, initialTypeFilter = null, 
         dateFilter
       });
       toast({ title: 'Файл готов', description: `Выгружено записей: ${all.length}` });
-    } catch {
-      toast({ title: 'Не удалось выгрузить', description: 'Попробуйте ещё раз', variant: 'destructive' });
+    } catch (e) {
+      console.error('Выгрузка транзакций:', e);
+      const message = e instanceof Error ? e.message : String(e);
+      // После обновления сайта браузер может держать старую версию страницы - модуль выгрузки не загружается.
+      const staleBuild = /dynamically imported module|Importing a module script failed|Loading chunk/i.test(message);
+      toast({
+        title: 'Не удалось выгрузить',
+        description: staleBuild ? 'Сайт обновился - обновите страницу (F5) и повторите' : `Попробуйте ещё раз. Причина: ${message}`,
+        variant: 'destructive'
+      });
     } finally {
       setIsExporting(false);
     }
