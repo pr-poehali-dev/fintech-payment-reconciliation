@@ -84,10 +84,14 @@ def _field_list(entity: str, raw: Dict[str, Any]) -> List[Dict[str, Any]]:
         if not isinstance(f, dict):
             continue
         title = f.get('formLabel') or f.get('listLabel') or f.get('title') or code
-        fields.append({
+        item = {
             'ref': f'{entity}.{code}', 'code': code, 'title': title, 'type': f.get('type'),
             'multiple': bool(f.get('isMultiple')), 'custom': code.startswith('UF_'),
-        })
+        }
+        if isinstance(f.get('items'), list) and f['items']:
+            item['items'] = [{'value': str(i.get('ID')), 'label': str(i.get('VALUE') or i.get('ID'))}
+                             for i in f['items'] if isinstance(i, dict) and i.get('ID') is not None]
+        fields.append(item)
     fields.sort(key=lambda x: (x['custom'], x['title'].lower()))
     return fields
 
@@ -427,3 +431,52 @@ def stage_matches(mapping: Dict[str, Any], entity: str, record_main: Dict[str, A
     '''
     pipeline = str(mapping.get('pipeline') or '').strip()
     return not (entity == 'deal' and pipeline and str(record_main.get('CATEGORY_ID') or '0') != pipeline)
+
+
+def raw_values(record: Dict[str, Any], entity: str, ref: Optional[str]) -> List[str]:
+    '''Все значения поля как строки (список, мультиполе, ID элементов списка) без пустых.'''
+    if not ref:
+        return []
+    source, _, code = ref.partition('.') if '.' in ref else (entity, '', ref)
+    data = record.get(source)
+    value = data.get(code) if isinstance(data, dict) else None
+    raw = value if isinstance(value, list) else [value]
+    out = []
+    for v in raw:
+        if isinstance(v, dict):
+            v = v.get('VALUE')
+        if v in (None, '', False):
+            continue
+        out.append(str(v).strip())
+    return [v for v in out if v]
+
+
+def _norm(value: str) -> str:
+    return ' '.join(str(value).lower().replace('ё', 'е').split())
+
+
+def condition_check(mapping: Dict[str, Any], entity: str, record: Dict[str, Any]) -> Tuple[bool, str]:
+    '''
+    Условие запуска: поле сделки/лида и допустимые значения (любое из них).
+    Поле не выбрано - условия нет. Поле пустое в сделке - пропуск.
+    Значения не выбраны - подходит любое заполненное значение.
+    Возвращает (подходит, текущее значение для журнала).
+    '''
+    ref = str(mapping.get('condition_field') or '').strip()
+    if not ref:
+        return True, ''
+    wanted = mapping.get('condition_values') or []
+    if isinstance(wanted, str):
+        wanted = [wanted]
+    wanted = {_norm(w) for w in wanted if str(w).strip()}
+    actual = raw_values(record, entity, ref)
+    if not actual:
+        return False, ''
+    labels = {str(k): _norm(v) for k, v in (mapping.get('condition_labels') or {}).items()} if isinstance(mapping.get('condition_labels'), dict) else {}
+    shown = ', '.join(actual)
+    if not wanted:
+        return True, shown
+    for a in actual:
+        if _norm(a) in wanted or labels.get(a) in wanted:
+            return True, shown
+    return False, shown

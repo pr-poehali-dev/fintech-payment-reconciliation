@@ -6,6 +6,7 @@ import Icon from '@/components/ui/icon';
 import functionUrls from '../../../backend/func2url.json';
 import CrmFieldPicker from './CrmFieldPicker';
 import CrmTemplateInput from './CrmTemplateInput';
+import CrmConditionBlock from './CrmConditionBlock';
 import {
   CrmEntity,
   CrmMeta,
@@ -36,6 +37,8 @@ interface TestResult {
   title?: string;
   stage?: string;
   stage_matches?: boolean;
+  condition_matches?: boolean;
+  condition_value?: string | null;
   has_contact?: boolean;
   has_company?: boolean;
   values?: Record<string, string | null>;
@@ -92,7 +95,10 @@ const CrmMappingBlock = ({ companyId, integrationId, mapping, onChange, agentRec
 
   const setEntity = (value: CrmEntity) => {
     const swap = (ref: unknown) => (typeof ref === 'string' && ref.startsWith(`${entity}.`) ? ref.replace(`${entity}.`, `${value}.`) : ref);
-    const next: Record<string, unknown> = { ...mapping, entity: value, pipeline: '', stage: '' };
+    const next: Record<string, unknown> = {
+      ...mapping, entity: value, pipeline: '', stage: '',
+      condition_field: '', condition_field_title: '', condition_values: [], condition_labels: {}, condition_values_text: ''
+    };
     [...MAPPING_FIELDS, ...AGENT_MAPPING_FIELDS].forEach((f) => { next[f.key] = swap(mapping[f.key]); });
     if (value === 'lead' && next.order_id === 'lead.ID') next.single_item_name = 'Оплата по заявке №{ID}';
     onChange(next);
@@ -201,6 +207,8 @@ const CrmMappingBlock = ({ companyId, integrationId, mapping, onChange, agentRec
             ? 'Документ создаётся по каждому хуку Битрикс24 по сделке из этой воронки — на любой стадии, один раз на сделку'
             : 'Документ создаётся по каждому хуку Битрикс24 по лиду — один раз на лид'}
         </p>
+
+        <CrmConditionBlock mapping={mapping} set={set} fields={meta.fields} entity={entity} />
       </div>
 
       <div className="space-y-2 rounded-lg border border-border p-3">
@@ -342,6 +350,13 @@ const CrmMappingBlock = ({ companyId, integrationId, mapping, onChange, agentRec
             <div className={`text-xs ${test.stage_matches ? 'text-success' : 'text-warning'}`}>
               Стадия {test.stage} — {test.stage_matches ? 'документ будет создан' : 'сделка из другой воронки'}
             </div>
+            {Boolean(mapping.condition_field) && (
+              <div className={`break-words text-xs ${test.condition_matches ? 'text-success' : 'text-warning'}`}>
+                Условие «{String(mapping.condition_field_title || mapping.condition_field)}»:{' '}
+                {test.condition_value ? `«${test.condition_value}»` : 'не заполнено'} —{' '}
+                {test.condition_matches ? 'подходит' : 'не подходит, сценарий пропустит'}
+              </div>
+            )}
             <div className="space-y-1 rounded-md bg-background/60 p-2 text-xs">
               {MAPPING_FIELDS.map((f) => (
                 <div key={f.key} className="grid grid-cols-[minmax(0,2fr)_minmax(0,3fr)] gap-3">

@@ -196,6 +196,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         values = {k: bitrix_crm.resolve(record, entity, ref) for k, ref in refs.items()}
         values['agent_supplier_phones'] = ', '.join(bitrix_crm.resolve_all(record, entity, mapping.get('agent_supplier_phones'))) or None
         main = record[entity]
+        condition_ok, condition_value = bitrix_crm.condition_check(mapping, entity, record)
         data, build_error, note = bitrix_crm.build_data(record, entity, mapping)
         full_names = bitrix_crm.full_item_names(record, entity, mapping)
         return respond(200, {
@@ -203,6 +204,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             'title': main.get('TITLE'),
             'stage': main.get(bitrix_crm.STAGE_FIELD[entity]),
             'stage_matches': bitrix_crm.stage_matches(mapping, entity, main),
+            'condition_matches': condition_ok,
+            'condition_value': condition_value or None,
             'has_contact': bool(record.get('contact')),
             'has_company': bool(record.get('company')),
             'products_count': len(record.get('products') or []),

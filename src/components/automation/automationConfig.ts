@@ -213,6 +213,7 @@ export interface CrmField {
   type: string;
   multiple: boolean;
   custom: boolean;
+  items?: { value: string; label: string }[];
 }
 
 export interface CrmStage {

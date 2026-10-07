@@ -304,6 +304,14 @@ def prepare_crm(cur, job: Dict[str, Any], scenario: Dict[str, Any]) -> Tuple[str
             f"{noun} #{job['source_id']} в воронке {main.get('CATEGORY_ID', '-')}, а сценарий настроен на воронку "
             f"{mapping.get('pipeline')} - документ не создаётся"
         )
+    ok, actual = bitrix_crm.condition_check(mapping, entity, record)
+    if not ok:
+        field = mapping.get('condition_field_title') or mapping.get('condition_field')
+        wanted = mapping.get('condition_values_text') or ', '.join(mapping.get('condition_values') or []) or 'любое заполненное'
+        return 'skipped', {'crm': {'entity': entity, 'id': job['source_id']}}, (
+            f"{noun} #{job['source_id']}: поле «{field}» "
+            f"{'не заполнено' if not actual else f'= «{actual}»'}, а сценарий запускается при «{wanted}» - документ не создаётся"
+        )
     data, err, note = bitrix_crm.build_data(record, entity, mapping)
     if err:
         return 'error', {}, err
