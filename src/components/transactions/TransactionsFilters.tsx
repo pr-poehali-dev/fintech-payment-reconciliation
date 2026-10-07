@@ -31,7 +31,7 @@ const TransactionsFilters = ({
     // и "Только без связи" - фиксированной ширины (shrink-0). Input из shadcn
     // по умолчанию w-full - поэтому ширину задаём явно, иначе он выталкивает
     // остальные элементы на новую строку.
-    <div className="flex flex-wrap items-center gap-3 flex-1 min-w-0">
+    <div className="flex flex-wrap items-center gap-2 sm:gap-3 flex-1 min-w-0">
       <Input
         placeholder="Сумма (2500 или 2 500,00), номер или описание"
         value={searchQuery}
@@ -47,10 +47,11 @@ const TransactionsFilters = ({
         variant={showUnmatchedOnly ? 'default' : 'outline'}
         size="sm"
         onClick={() => setShowUnmatchedOnly(!showUnmatchedOnly)}
-        className="gap-2 shrink-0 h-9"
+        className="gap-1.5 shrink-0 h-9 px-2.5 sm:gap-2 sm:px-3"
       >
         <Icon name="Unlink" size={14} />
-        Только без связи
+        <span className="sm:hidden">Без связи</span>
+        <span className="hidden sm:inline">Только без связи</span>
       </Button>
     </div>
   );
