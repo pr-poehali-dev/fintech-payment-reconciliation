@@ -6,13 +6,14 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import Icon from '@/components/ui/icon';
 import { useAuth } from '@/contexts/AuthContext';
-import CrmMappingBlock from './CrmMappingBlock';
 import MoyklassMappingBlock from './MoyklassMappingBlock';
 import ScenarioAgentBlock, { agentProblems } from './ScenarioAgentBlock';
 import ScenarioStep from './ScenarioStep';
 import ScenarioSourceSelect from './ScenarioSourceSelect';
 import ScenarioTemplateFields from './ScenarioTemplateFields';
 import ScenarioCorrectionFields from './ScenarioCorrectionFields';
+import ScenarioTargetSelect from './ScenarioTargetSelect';
+import ScenarioCrmMapping from './ScenarioCrmMapping';
 import {
   ACTIONS,
   AGENT_MAPPING_FIELDS,
@@ -333,21 +334,11 @@ const ScenarioDialog = ({ open, onOpenChange, scenario, prefill, integrations, t
           )}
 
           <ScenarioStep n={step++} title="Касса">
-            <Select
-              value={form.target_integration_id ? String(form.target_integration_id) : ''}
-              onValueChange={(v) => setForm({ ...form, target_integration_id: Number(v) })}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder={targetOptions.length ? 'Где создать документ' : 'Сначала подключите кассу'} />
-              </SelectTrigger>
-              <SelectContent>
-                {targetOptions.map((i) => (
-                  <SelectItem key={i.id} value={String(i.id)}>
-                    {i.name} · <span className="text-muted-foreground">{i.providerName}</span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <ScenarioTargetSelect
+              value={form.target_integration_id}
+              onChange={(id) => setForm({ ...form, target_integration_id: id })}
+              targetOptions={targetOptions}
+            />
           </ScenarioStep>
 
           {isMoyklass && form.source_integration_id && currentCompany && (
@@ -366,25 +357,17 @@ const ScenarioDialog = ({ open, onOpenChange, scenario, prefill, integrations, t
 
           {trigger.needsMapping && (
             <ScenarioStep n={step++} title="Сопоставление полей">
-              {!form.source_integration_id ? (
-                <p className="text-xs text-muted-foreground">Выберите интеграцию-источник — подгрузим её поля</p>
-              ) : isBitrix && currentCompany ? (
-                <>
-                  <p className="text-xs text-muted-foreground">Поля загружены из вашего {isAmo ? 'AmoCRM' : 'Битрикс24'}, включая пользовательские</p>
-                  <CrmMappingBlock
-                    provider={isAmo ? 'amocrm' : 'bitrix24'}
-                    companyId={currentCompany.id}
-                    integrationId={form.source_integration_id}
-                    mapping={form.field_mapping}
-                    onChange={(m) => setForm({ ...form, field_mapping: m })}
-                    agentReceipt={isAgent}
-                    agentTemplate={currentTemplate?.agent_settings || {}}
-                    agentScenario={cs.agent || {}}
-                  />
-                </>
-              ) : (
-                <p className="text-xs text-muted-foreground">Загрузка полей доступна для Битрикс24 и AmoCRM</p>
-              )}
+              <ScenarioCrmMapping
+                sourceIntegrationId={form.source_integration_id}
+                companyId={currentCompany?.id}
+                isBitrix={isBitrix}
+                isAmo={isAmo}
+                isAgent={isAgent}
+                mapping={form.field_mapping}
+                onChange={(m) => setForm({ ...form, field_mapping: m })}
+                currentTemplate={currentTemplate}
+                cs={cs}
+              />
             </ScenarioStep>
           )}
         </div>
