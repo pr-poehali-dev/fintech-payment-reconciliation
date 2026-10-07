@@ -206,7 +206,7 @@ const CrmMappingBlock = ({ companyId, integrationId, mapping, onChange, agentRec
       <div className="space-y-2 rounded-lg border border-border p-3">
         <div className="text-sm font-medium">Поля чека</div>
         {MAPPING_FIELDS.map((f) => (
-          <div key={f.key} className="grid grid-cols-[1fr_1.4fr] items-center gap-3">
+          <div key={f.key} className="grid grid-cols-1 items-center gap-1 sm:grid-cols-[1fr_1.4fr] sm:gap-3">
             <span className="text-sm">
               {f.label}
               {f.required && <span className="text-destructive"> *</span>}
@@ -226,7 +226,7 @@ const CrmMappingBlock = ({ companyId, integrationId, mapping, onChange, agentRec
           <div className="text-sm font-medium">Агентский чек: поставщик</div>
           <p className="text-xs text-muted-foreground">Если поле не выбрано или пустое в сделке — возьмём значение из шаблона или блока «Агентский чек»</p>
           {AGENT_MAPPING_FIELDS.map((f) => (
-            <div key={f.key} className="grid grid-cols-[1fr_1.4fr] items-center gap-3">
+            <div key={f.key} className="grid grid-cols-1 items-center gap-1 sm:grid-cols-[1fr_1.4fr] sm:gap-3">
               <span className="text-sm">{f.label}</span>
               <CrmFieldPicker
                 value={String(mapping[f.key] || '')}
@@ -241,7 +241,7 @@ const CrmMappingBlock = ({ companyId, integrationId, mapping, onChange, agentRec
 
       <div className="space-y-3 rounded-lg border border-border p-3">
         <div className="text-sm font-medium">Состав чека</div>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+        <div className="grid grid-cols-3 gap-2">
           {ITEMS_MODES.map((m) => (
             <button
               key={m.value}
@@ -260,8 +260,8 @@ const CrmMappingBlock = ({ companyId, integrationId, mapping, onChange, agentRec
         {itemsMode === 'fixed' && (
           <div className="space-y-2">
             {fixedItems.map((it, i) => (
-              <div key={i} className="grid grid-cols-[1fr_90px_60px_32px] gap-2">
-                <Input className="h-9" placeholder="Название" value={it.name} onChange={(e) => setFixed(i, { name: e.target.value })} />
+              <div key={i} className="grid grid-cols-[1fr_72px_32px] gap-2 rounded-md border border-border p-2 sm:grid-cols-[1fr_90px_60px_32px] sm:border-0 sm:p-0">
+                <Input className="col-span-3 h-9 sm:col-span-1" placeholder="Название" value={it.name} onChange={(e) => setFixed(i, { name: e.target.value })} />
                 <Input className="h-9" placeholder="Цена" inputMode="decimal" value={it.price} onChange={(e) => setFixed(i, { price: e.target.value.replace(/[^\d.,]/g, '') })} />
                 <Input className="h-9" placeholder="Кол." inputMode="decimal" value={it.quantity} onChange={(e) => setFixed(i, { quantity: e.target.value.replace(/[^\d.,]/g, '') })} />
                 <Button size="icon" variant="ghost" className="h-9 w-8" onClick={() => set({ fixed_items: fixedItems.filter((_, j) => j !== i) })}>
@@ -289,7 +289,7 @@ const CrmMappingBlock = ({ companyId, integrationId, mapping, onChange, agentRec
           </div>
         )}
 
-        <div className="grid grid-cols-[1fr_1.4fr] items-center gap-3">
+        <div className="grid grid-cols-1 items-center gap-1 sm:grid-cols-[1fr_1.4fr] sm:gap-3">
           <span className="text-sm">НДС</span>
           <Select value={String(mapping.vat || 'auto')} onValueChange={(v) => set({ vat: v })}>
             <SelectTrigger className="h-9">
@@ -323,7 +323,7 @@ const CrmMappingBlock = ({ companyId, integrationId, mapping, onChange, agentRec
         <div className="text-sm font-medium">Проверить на реальной {entity === 'deal' ? 'сделке' : 'заявке'}</div>
         <div className="flex gap-2">
           <Input
-            className="h-9"
+            className="h-9 min-w-0 flex-1"
             inputMode="numeric"
             placeholder={`Номер ${entity === 'deal' ? 'сделки' : 'лида'} в Битрикс24`}
             value={testId}
@@ -331,7 +331,7 @@ const CrmMappingBlock = ({ companyId, integrationId, mapping, onChange, agentRec
           />
           <Button size="sm" className="h-9 gap-1" disabled={!testId || testing} onClick={runTest}>
             <Icon name={testing ? 'Loader2' : 'Play'} size={14} className={testing ? 'animate-spin' : ''} />
-            Проверить
+            <span className="hidden min-[400px]:inline">Проверить</span>
           </Button>
         </div>
 

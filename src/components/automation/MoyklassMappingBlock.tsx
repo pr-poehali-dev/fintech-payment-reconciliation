@@ -283,7 +283,7 @@ const MoyklassMappingBlock = ({ companyId, integrationId, offset, provider = 'mo
         </div>
         <div className="flex gap-2">
           <Input
-            className="h-9"
+            className="h-9 min-w-0 flex-1"
             inputMode="numeric"
             placeholder={isRk ? 'ID платежа (пусто — последний полученный)' : `ID ${offset ? 'списания' : 'платежа'} в «Мой Класс»`}
             value={testId}

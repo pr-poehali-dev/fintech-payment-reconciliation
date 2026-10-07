@@ -201,8 +201,8 @@ const ScenarioDialog = ({ open, onOpenChange, scenario, prefill, integrations, t
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] overflow-y-auto overflow-x-hidden sm:max-w-3xl [&>*]:min-w-0">
-        <DialogHeader>
+      <DialogContent className="h-[100dvh] max-h-[100dvh] w-screen max-w-none content-start overflow-y-auto overflow-x-hidden rounded-none border-0 p-4 sm:h-auto sm:max-h-[90vh] sm:w-[calc(100vw-1.5rem)] sm:max-w-3xl sm:rounded-lg sm:border sm:p-6 [&>*]:min-w-0">
+        <DialogHeader className="pr-8 text-left">
           <DialogTitle>{scenario ? 'Сценарий' : 'Новый сценарий'}</DialogTitle>
           <DialogDescription>Что должно произойти — и какой документ создать в кассе</DialogDescription>
         </DialogHeader>
@@ -218,13 +218,13 @@ const ScenarioDialog = ({ open, onOpenChange, scenario, prefill, integrations, t
           </div>
 
           <Step n={step++} title="Источник">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <div className="grid grid-cols-3 gap-2">
               {(Object.keys(TRIGGERS) as TriggerType[]).map((key) => (
                 <button
                   key={key}
                   type="button"
                   onClick={() => setTrigger(key)}
-                  className={`flex flex-col items-center gap-2 rounded-lg border-2 p-3 text-center transition-all ${
+                  className={`flex flex-col items-center gap-1.5 rounded-lg border-2 p-2 text-center transition-all sm:gap-2 sm:p-3 ${
                     form.trigger_type === key ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50'
                   }`}
                 >
@@ -469,11 +469,13 @@ const ScenarioDialog = ({ open, onOpenChange, scenario, prefill, integrations, t
           )}
         </div>
 
+        <div className="sticky -bottom-4 -mx-4 space-y-2 border-t border-border bg-background/95 px-4 pb-4 pt-3 backdrop-blur sm:static sm:mx-0 sm:border-0 sm:bg-transparent sm:p-0">
         <Button className="w-full gap-2" disabled={!canSave} onClick={() => onSave(form)}>
           <Icon name={isSaving ? 'Loader2' : 'Check'} size={16} className={isSaving ? 'animate-spin' : ''} />
           {scenario ? 'Сохранить' : 'Создать сценарий'}
         </Button>
         {!scenario && <p className="text-center text-xs text-muted-foreground">Сценарий создаётся остановленным — запустите его, когда будете готовы</p>}
+        </div>
       </DialogContent>
     </Dialog>
   );

@@ -50,19 +50,19 @@ const TransactionDetailsDialog = ({ transaction, relatedItems, open, onOpenChang
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="text-2xl flex items-center gap-2">
-            <Icon name={config.icon} size={22} />
-            {transaction.title}
+      <DialogContent className="h-[100dvh] max-h-[100dvh] w-screen max-w-none content-start overflow-y-auto overflow-x-hidden rounded-none border-0 p-4 sm:h-auto sm:max-h-[90vh] sm:w-[calc(100vw-1.5rem)] sm:max-w-3xl sm:rounded-lg sm:border sm:p-6 [&>*]:min-w-0">
+        <DialogHeader className="pr-8 text-left">
+          <DialogTitle className="flex items-start gap-2 break-words text-lg leading-snug [overflow-wrap:anywhere] sm:text-2xl">
+            <Icon name={config.icon} size={22} className="mt-0.5 shrink-0" />
+            <span className="min-w-0">{transaction.title}</span>
           </DialogTitle>
           <DialogDescription>
             Подробная информация о транзакции, собранной для сверки
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-6 pr-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="space-y-5 sm:space-y-6 sm:pr-4">
+          <div className="grid grid-cols-2 gap-x-3 gap-y-4 sm:gap-4">
             <div>
               <div className="text-sm text-muted-foreground mb-1">Тип</div>
               <Badge variant="outline" className={config.className}>{config.label}</Badge>
@@ -77,17 +77,17 @@ const TransactionDetailsDialog = ({ transaction, relatedItems, open, onOpenChang
 
             <div>
               <div className="text-sm text-muted-foreground mb-1">Интеграция</div>
-              <div className="font-medium">{transaction.integration_name || '—'}</div>
+              <div className="break-words font-medium">{transaction.integration_name || '—'}</div>
             </div>
 
             <div>
               <div className="text-sm text-muted-foreground mb-1">Источник / провайдер</div>
-              <div className="font-medium">{transaction.subtitle || '—'}</div>
+              <div className="break-words font-medium [overflow-wrap:anywhere]">{transaction.subtitle || '—'}</div>
             </div>
 
             <div>
               <div className="text-sm text-muted-foreground mb-1">Референс / номер заказа</div>
-              <div className="font-mono text-sm">{transaction.reference || '—'}</div>
+              <div className="break-all font-mono text-sm">{transaction.reference || '—'}</div>
             </div>
 
             <div>
@@ -132,7 +132,7 @@ const TransactionDetailsDialog = ({ transaction, relatedItems, open, onOpenChang
                 </div>
                 <div className="space-y-1.5">
                   {transaction.webhook_history.map((h, i) => (
-                    <div key={i} className="flex items-center justify-between text-sm bg-muted/30 rounded-md px-3 py-1.5">
+                    <div key={i} className="flex flex-wrap items-center justify-between gap-x-3 text-sm bg-muted/30 rounded-md px-3 py-1.5">
                       <span className="font-medium">{transactionStatusLabel(h.status)}</span>
                       <span className="text-muted-foreground text-xs">{formatDateTimeTz(h.occurred_at, timezone, true)}</span>
                     </div>
@@ -154,12 +154,12 @@ const TransactionDetailsDialog = ({ transaction, relatedItems, open, onOpenChang
                   return (
                     <div
                       key={`${item.type}-${item.source}-${item.id}`}
-                      className="flex items-center gap-3 bg-success/10 border border-success/30 rounded-lg p-4"
+                      className="flex flex-wrap items-start gap-3 bg-success/10 border border-success/30 rounded-lg p-3 sm:flex-nowrap sm:items-center sm:p-4"
                     >
                       <Icon name={itemConfig.icon} size={20} className="text-success shrink-0" />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-medium">{item.title}</span>
+                          <span className="min-w-0 break-words font-medium [overflow-wrap:anywhere]">{item.title}</span>
                           <Badge variant="outline" className={`gap-1 ${linkReasonClassName[reason.kind]}`}>
                             <Icon name={reason.icon} size={12} />
                             {reason.label}
@@ -167,11 +167,13 @@ const TransactionDetailsDialog = ({ transaction, relatedItems, open, onOpenChang
                         </div>
                         <div className="text-sm text-muted-foreground">{reason.description}</div>
                       </div>
+                      <div className="flex w-full justify-end sm:w-auto">
                       <DetachButton
                         onClick={() => onDetach(item)}
                         isLoading={detachingKey === nodeKey(item)}
                         withLabel
                       />
+                      </div>
                     </div>
                   );
                 })}
@@ -190,8 +192,8 @@ const TransactionDetailsDialog = ({ transaction, relatedItems, open, onOpenChang
 
           <div>
             <div className="text-lg font-semibold mb-3">Исходные данные</div>
-            <div className="bg-muted/50 rounded-lg p-4 font-mono text-xs overflow-x-auto">
-              <pre className="whitespace-pre-wrap break-words">
+            <div className="bg-muted/50 rounded-lg p-3 font-mono text-[11px] overflow-x-auto sm:p-4 sm:text-xs">
+              <pre className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
                 {JSON.stringify(transaction.raw_data, null, 2)}
               </pre>
             </div>
