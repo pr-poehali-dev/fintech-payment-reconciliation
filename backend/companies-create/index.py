@@ -155,6 +155,16 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             (company_id, user_id, role_id, 'active')
         )
 
+        # Владельцу сразу включены все уведомления: канал - как в других его компаниях, иначе почта.
+        cur.execute(
+            '''INSERT INTO notification_preferences (company_id, user_id, channel, kinds)
+               VALUES (%s, %s, COALESCE((SELECT channel FROM notification_preferences
+                                         WHERE user_id = %s AND channel IS NOT NULL
+                                         ORDER BY updated_at DESC LIMIT 1), 'email'), %s)
+               ON CONFLICT (company_id, user_id) DO NOTHING''',
+            (company_id, user_id, user_id, json.dumps(['automation_failed', 'receipt_failed', 'missing_receipts']))
+        )
+
         # Тариф, выбранный на главной: если у него есть пробный период - стартуем на нём,
         # иначе (тариф без пробного или не выбран) - на тарифе «Пробный».
         tariff_row = None
