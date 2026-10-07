@@ -95,6 +95,42 @@ def find_gateway_integration(cur, company_id: int) -> Optional[int]:
     return row[0] if row else None
 
 
+def log_fiscal_result(cur, schema: str, doc_rows, status: str, data: Dict[str, Any], via: str) -> None:
+    '''
+    Строка в журнал задания сценария, когда касса окончательно пробила чек (или отказала):
+    номер ФД, ФП и сумма - по уведомлению кассы или по подгрузке из Екомкассы.
+    '''
+    if status not in ('done', 'fail'):
+        return
+    payload = data.get('payload') if isinstance(data.get('payload'), dict) else {}
+    if status == 'done':
+        parts = []
+        if payload.get('fiscal_document_number'):
+            parts.append(f"ФД {payload['fiscal_document_number']}")
+        if payload.get('fiscal_document_attribute'):
+            parts.append(f"ФП {payload['fiscal_document_attribute']}")
+        if payload.get('total') is not None:
+            try:
+                parts.append(f"{float(payload['total']):.2f} ₽")
+            except (TypeError, ValueError):
+                pass
+        message = f"Чек пробит кассой{': ' + ', '.join(parts) if parts else ''} ({via})"
+        level = 'info'
+    else:
+        err = data.get('error')
+        text = err.get('text') if isinstance(err, dict) else err
+        message = f"Касса не пробила чек{': ' + str(text) if text else ''} ({via})"
+        level = 'error'
+    details = json.dumps({'uuid': data.get('uuid'), 'external_id': data.get('external_id'),
+                          'permalink': data.get('permalink'), 'payload': payload or None}, ensure_ascii=False)
+    for job_id, old_status in doc_rows:
+        if job_id and old_status != status:
+            cur.execute(f'''
+                INSERT INTO {schema}.automation_job_log (job_id, level, message, details)
+                VALUES (%s, %s, %s, %s)
+            ''', (job_id, level, message, details))
+
+
 def save_receipt(cur, integration_id: int, company_id: int, order_id: Any,
                   legacy_no: Any, order_type: Optional[str], report_data: Dict[str, Any],
                   is_sale: Optional[bool] = None, is_correction: Optional[bool] = None) -> Tuple[Optional[int], Optional[float]]:
@@ -145,12 +181,19 @@ def save_receipt(cur, integration_id: int, company_id: int, order_id: Any,
     if receipt_id:
         # Документ отправлен нашим сценарием (чек, коррекция, заказ) - довязываем его к платежу
         # по UUID кассы или нашему номеру документа, даже если уведомление кассы не пришло.
+        doc_external_id = str(report_data.get('external_id') or legacy_no or order_id)
+        cur.execute(f'''
+            SELECT job_id, status FROM {SCHEMA}.automation_documents
+            WHERE kassa_integration_id = %s AND (ecom_uuid = %s OR external_id = %s)
+        ''', (integration_id, str(order_id), doc_external_id))
+        before = cur.fetchall()
         cur.execute(f'''
             UPDATE {SCHEMA}.automation_documents
             SET ecom_uuid = COALESCE(ecom_uuid, %s), receipt_id = %s, status = %s, updated_at = NOW()
             WHERE kassa_integration_id = %s AND (ecom_uuid = %s OR external_id = %s)
-        ''', (str(order_id), receipt_id, status, integration_id, str(order_id),
-              str(report_data.get('external_id') or legacy_no or order_id)))
+        ''', (str(order_id), receipt_id, status, integration_id, str(order_id), doc_external_id))
+        log_fiscal_result(cur, SCHEMA, before, status, {**report_data, 'uuid': report_data.get('uuid') or str(order_id)},
+                          'найден подгрузкой из Екомкассы')
     return receipt_id, float(total_sum) if total_sum else None
 
 

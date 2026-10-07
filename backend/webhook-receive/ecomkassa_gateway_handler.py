@@ -180,6 +180,42 @@ def save_receipt_from_report(cur, integration_id: int, company_id: int, uid: str
     return receipt_id, float(total_sum) if total_sum else 0.0, payment_provider
 
 
+def log_fiscal_result(cur, schema: str, doc_rows, status: str, data: Dict[str, Any], via: str) -> None:
+    '''
+    Строка в журнал задания сценария, когда касса окончательно пробила чек (или отказала):
+    номер ФД, ФП и сумма - по уведомлению кассы или по подгрузке из Екомкассы.
+    '''
+    if status not in ('done', 'fail'):
+        return
+    payload = data.get('payload') if isinstance(data.get('payload'), dict) else {}
+    if status == 'done':
+        parts = []
+        if payload.get('fiscal_document_number'):
+            parts.append(f"ФД {payload['fiscal_document_number']}")
+        if payload.get('fiscal_document_attribute'):
+            parts.append(f"ФП {payload['fiscal_document_attribute']}")
+        if payload.get('total') is not None:
+            try:
+                parts.append(f"{float(payload['total']):.2f} ₽")
+            except (TypeError, ValueError):
+                pass
+        message = f"Чек пробит кассой{': ' + ', '.join(parts) if parts else ''} ({via})"
+        level = 'info'
+    else:
+        err = data.get('error')
+        text = err.get('text') if isinstance(err, dict) else err
+        message = f"Касса не пробила чек{': ' + str(text) if text else ''} ({via})"
+        level = 'error'
+    details = json.dumps({'uuid': data.get('uuid'), 'external_id': data.get('external_id'),
+                          'permalink': data.get('permalink'), 'payload': payload or None}, ensure_ascii=False)
+    for job_id, old_status in doc_rows:
+        if job_id and old_status != status:
+            cur.execute(f'''
+                INSERT INTO {schema}.automation_job_log (job_id, level, message, details)
+                VALUES (%s, %s, %s, %s)
+            ''', (job_id, level, message, details))
+
+
 def link_automation_document(cur, cash_integration_id: int, uid: str, data: Dict[str, Any],
                              receipt_row_id: Optional[int], status: str) -> None:
     '''
@@ -188,6 +224,11 @@ def link_automation_document(cur, cash_integration_id: int, uid: str, data: Dict
     '''
     external_id = data.get('external_id')
     cur.execute('''
+        SELECT job_id, status FROM t_p83864310_fintech_payment_reco.automation_documents
+        WHERE kassa_integration_id = %s AND (ecom_uuid = %s OR external_id = %s)
+    ''', (cash_integration_id, str(uid), str(external_id or uid)))
+    before = cur.fetchall()
+    cur.execute('''
         UPDATE t_p83864310_fintech_payment_reco.automation_documents
         SET ecom_uuid = COALESCE(ecom_uuid, %s),
             receipt_id = COALESCE(%s, receipt_id),
@@ -195,6 +236,7 @@ def link_automation_document(cur, cash_integration_id: int, uid: str, data: Dict
             updated_at = NOW()
         WHERE kassa_integration_id = %s AND (ecom_uuid = %s OR external_id = %s)
     ''', (str(uid), receipt_row_id, status, cash_integration_id, str(uid), str(external_id or uid)))
+    log_fiscal_result(cur, 't_p83864310_fintech_payment_reco', before, status, data, 'уведомление кассы')
 
 
 def save_pending_order(cur, integration_id: int, company_id: int, uid: str,
