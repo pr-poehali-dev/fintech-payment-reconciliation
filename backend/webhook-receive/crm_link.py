@@ -1,6 +1,7 @@
 import json
 from datetime import timedelta
 import re
+import time
 import urllib.parse
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
@@ -108,8 +109,8 @@ RECOVER_LOOKBACK_HOURS = 48
 def recover_missed_deals(cur, company_id: int) -> int:
     '''
     Страховка от потерянных хуков Битрикса и AmoCRM: оплаченный счёт Екомкассы есть, а сделки с его
-    ссылкой на оплату у нас нет - ищем сделку в CRM по ссылке (в AmoCRM - поиском по всем полям,
-    этап «Успешно реализовано») и прогоняем её через
+    ссылкой на оплату у нас нет - ищем сделку в CRM по ссылке (в AmoCRM - по полю
+    «Ссылка на оплату Ecom», точное совпадение) и прогоняем её через
     обычный приём хука (событие, сделка, связь с чеком, сценарии автоматизации).
     Берётся сделка в успешной стадии; интеграция - та, где уже есть сделки этой воронки.
     '''
@@ -158,20 +159,39 @@ def recover_missed_deals(cur, company_id: int) -> int:
         return None
 
     amo = _amo_accounts(cur, company_id)
+    # Поле «Ссылка на оплату Ecom» в каждом аккаунте AmoCRM и недавние сделки с заполненной ссылкой.
+    amo_ctx = []
+    for base, token, integrations in amo:
+        field_id = _amo_pay_link_field(base, token)
+        amo_ctx.append((base, token, integrations, field_id, _amo_recent_by_link(base, token, field_id)))
+
+    def pick(leads: List[Dict[str, Any]], integrations: List[Any]):
+        # Точное совпадение ссылки: берём успешную сделку, иначе любую не проигранную.
+        leads = [l for l in leads if l.get('status_id') != AMO_LOST_STATUS_ID]
+        leads.sort(key=lambda l: (l.get('status_id') != AMO_WON_STATUS_ID, l.get('created_at') or 0))
+        if not leads:
+            return None
+        pipeline = str(leads[0].get('pipeline_id') or '')
+        target = next((i for i in integrations if pipeline in i[2]), integrations[0])
+        return target, str(leads[0]['id'])
 
     def lookup_any(link: str):
         hit = lookup(link) if portals else None
         if hit:
             return hit
-        for base, token, integrations in amo:
+        for base, token, integrations, field_id, recent in amo_ctx:
+            if not field_id:
+                continue
+            hit = pick(recent.get(link) or [], integrations)
+            if hit:
+                return hit
             found = _get_json(f'{base}/api/v4/leads?' + urllib.parse.urlencode({'query': link, 'limit': 10}),
                               {'Authorization': f'Bearer {token}'}, timeout=2.5)
             leads = [l for l in (((found or {}).get('_embedded') or {}).get('leads') or [])
-                     if l.get('status_id') == AMO_WON_STATUS_ID]
-            if leads:
-                pipeline = str(leads[0].get('pipeline_id') or '')
-                target = next((i for i in integrations if pipeline in i[2]), integrations[0])
-                return target, str(leads[0]['id'])
+                     if _amo_field_value(l, field_id) == link]
+            hit = pick(leads, integrations)
+            if hit:
+                return hit
         return None
 
     with ThreadPoolExecutor(max_workers=len(links)) as pool:
@@ -280,6 +300,51 @@ def _bitrix_portals(cur, company_id: int) -> Dict[str, List[Any]]:
 
 
 AMO_WON_STATUS_ID = 142
+AMO_LOST_STATUS_ID = 143
+# Поле сделки AmoCRM, куда приложение Екомкассы пишет ссылку на оплату.
+AMO_PAY_LINK_FIELD_NAME = 'ссылка на оплату ecom'
+AMO_RECENT_PAGES = 2
+
+
+def _amo_pay_link_field(base: str, token: str) -> Optional[int]:
+    '''ID поля «Ссылка на оплату Ecom» в сделках аккаунта AmoCRM (по названию, без учёта регистра).'''
+    for page in (1, 2):
+        res = _get_json(f'{base}/api/v4/leads/custom_fields?limit=250&page={page}',
+                        {'Authorization': f'Bearer {token}'}, timeout=2.5)
+        fields = ((res or {}).get('_embedded') or {}).get('custom_fields') or []
+        for f in fields:
+            if ' '.join(str(f.get('name') or '').lower().split()) == AMO_PAY_LINK_FIELD_NAME:
+                return f.get('id')
+        if len(fields) < 250:
+            break
+    return None
+
+
+def _amo_field_value(lead: Dict[str, Any], field_id: Optional[int]) -> Optional[str]:
+    for f in lead.get('custom_fields_values') or []:
+        if f.get('field_id') == field_id:
+            values = [str(v.get('value') or '').strip() for v in f.get('values') or []]
+            return next((v for v in values if v), None)
+    return None
+
+
+def _amo_recent_by_link(base: str, token: str, field_id: Optional[int]) -> Dict[str, List[Dict[str, Any]]]:
+    '''Сделки, изменённые за последние 48 часов, сгруппированные по ссылке на оплату.'''
+    out: Dict[str, List[Dict[str, Any]]] = {}
+    if not field_id:
+        return out
+    since = int(time.time()) - RECOVER_LOOKBACK_HOURS * 3600
+    for page in range(1, AMO_RECENT_PAGES + 1):
+        query = urllib.parse.urlencode({'filter[updated_at][from]': since, 'limit': 250, 'page': page})
+        res = _get_json(f'{base}/api/v4/leads?{query}', {'Authorization': f'Bearer {token}'}, timeout=3.0)
+        leads = ((res or {}).get('_embedded') or {}).get('leads') or []
+        for l in leads:
+            link = _amo_field_value(l, field_id)
+            if link:
+                out.setdefault(link, []).append(l)
+        if len(leads) < 250:
+            break
+    return out
 
 
 def _amo_base(subdomain: str) -> str:
