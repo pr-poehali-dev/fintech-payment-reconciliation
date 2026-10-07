@@ -285,7 +285,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 WHERE integration_id = %s AND external_deal_id = %s AND linked_receipt_id IS NULL
             ''', (webhook_data.get('receipt_id'), integration_id, str(external_deal_id)))
             conn.commit()
-        if provider_slug == 'bitrix24' and not handler_error and external_deal_id and not is_candidate:
+        if provider_slug in ('bitrix24', 'amocrm') and not handler_error and external_deal_id and not is_candidate:
             # Сразу по хуку CRM ищем чек и платёж этой сделки (почта + сумма + ±5 минут от хука),
             # чтобы в реестре сделка встала в одну группу с ними без ожидания крона.
             try:

@@ -451,7 +451,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             latest = history[-1]
             p_slug = group['p_slug']
             external_deal_id = group['external_deal_id']
-            noun = 'Сделка' if p_slug == 'bitrix24' else 'Лид'
+            noun = 'Сделка' if p_slug in ('bitrix24', 'amocrm') else 'Лид'
 
             deal_info = deals_info.get((group['integration_id'], external_deal_id)) if external_deal_id else None
 
