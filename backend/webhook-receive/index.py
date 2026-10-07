@@ -37,7 +37,8 @@ EVENT_TYPE_BY_PROVIDER = {
     'tochka_acquiring': 'payment_status_changed',
     'bitrix24': 'deal_updated',
     'amocrm': 'lead_updated',
-    'ecomkassa_gateway': 'payment_status_changed'
+    'ecomkassa_gateway': 'payment_status_changed',
+    'ecomkassa': 'receipt_status_changed'
 }
 
 
@@ -255,7 +256,10 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             booking = (webhook_data.get('data') or {}).get('booking') if isinstance(webhook_data.get('data'), dict) else None
             if isinstance(booking, dict) and booking.get('id'):
                 external_deal_id = str(booking['id'])
-        elif provider_slug == 'ecomkassa_gateway':
+        elif provider_slug == 'ecomkassa' and str(webhook_data.get('status') or '').lower() not in ('done', 'fail', 'wait'):
+            skip_note = 'Касса принимает только уведомления о пробитых чеках'
+        elif provider_slug in ('ecomkassa_gateway', 'ecomkassa'):
+            # Касса без шлюза: на её адрес приходят уведомления о чеках, созданных сценариями.
             _, webhook_payment_id, handler_error = ecomkassa_gateway_handler.process(
                 cur, integration_id, company_id, config, webhook_settings, webhook_data
             )

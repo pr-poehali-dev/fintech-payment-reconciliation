@@ -166,17 +166,17 @@ WEBHOOK_RECEIVE_URL = 'https://functions.poehali.dev/a923b457-57a6-4eb2-b566-9a9
 def callback_url(cur, company_id: Optional[int]) -> Optional[str]:
     '''
     Адрес, куда Екомкасса пришлёт уведомление о пробитом чеке по заказу (формат АТОЛ:
-    status done/fail, uuid, payload с реквизитами). Принимает его интеграция
-    «Екомкасса — платёжный шлюз» компании: она сохраняет чек к кассе компании.
+    status done/fail, uuid, payload с реквизитами). Принимает интеграция «Екомкасса — платёжный шлюз»,
+    а если её нет - сама интеграция кассы: чек в любом случае сохраняется к кассе компании.
     '''
     if cur is None or not company_id:
         return None
     cur.execute(f'''
         SELECT ui.webhook_token FROM {SCHEMA}.user_integrations ui
         JOIN {SCHEMA}.integration_providers p ON p.id = ui.provider_id
-        WHERE ui.company_id = %s AND p.slug = 'ecomkassa_gateway' AND ui.status = 'active'
+        WHERE ui.company_id = %s AND p.slug IN ('ecomkassa_gateway', 'ecomkassa') AND ui.status = 'active'
           AND ui.webhook_token IS NOT NULL
-        ORDER BY ui.id LIMIT 1
+        ORDER BY (p.slug = 'ecomkassa_gateway') DESC, ui.id LIMIT 1
     ''', (company_id,))
     row = cur.fetchone()
     return f'{WEBHOOK_RECEIVE_URL}?token={row[0]}' if row else None
