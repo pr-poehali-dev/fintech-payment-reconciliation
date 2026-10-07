@@ -41,7 +41,7 @@ def enqueue_payment_jobs(cur, company_id: int, integration_id: int, webhook_paym
 
 
 def enqueue_crm_jobs(cur, company_id: int, integration_id: int, entity: Optional[str], item_id: Optional[str],
-                     event_id: Optional[int]) -> int:
+                     event_id: Optional[int], provider_name: str = 'Битрикс24') -> int:
     '''
     Хук CRM (Битрикс24): задание на каждый запущенный сценарий «Заказ в CRM» этой интеграции
     с тем же объектом (сделка/лид). Одна сделка - одно задание на сценарий: повторные хуки
@@ -70,7 +70,7 @@ def enqueue_crm_jobs(cur, company_id: int, integration_id: int, entity: Optional
     for job_id, created in rows:
         cur.execute(
             f'INSERT INTO {SCHEMA}.automation_job_log (job_id, level, message) VALUES (%s, %s, %s)',
-            (job_id, 'info', f'Задание {"создано" if created else "перезапущено"} по хуку Битрикс24 по {noun} #{item_id}')
+            (job_id, 'info', f'Задание {"создано" if created else "перезапущено"} по хуку {provider_name} по {noun} #{item_id}')
         )
     return len(rows)
 

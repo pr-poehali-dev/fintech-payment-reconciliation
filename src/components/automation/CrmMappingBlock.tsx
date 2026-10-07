@@ -19,6 +19,7 @@ import {
 } from './automationConfig';
 
 interface CrmMappingBlockProps {
+  provider?: 'bitrix24' | 'amocrm';
   companyId: number;
   integrationId: number;
   mapping: Record<string, unknown>;
@@ -53,7 +54,7 @@ const api = (functionUrls as Record<string, string>)['crm-fields'];
 // Кеш справочника на время сессии: при повторном открытии диалога Битрикс24 не дёргаем.
 const metaCache: Record<number, CrmMeta> = {};
 
-const CrmMappingBlock = ({ companyId, integrationId, mapping, onChange, agentReceipt, agentTemplate = {}, agentScenario = {} }: CrmMappingBlockProps) => {
+const CrmMappingBlock = ({ provider = 'bitrix24', companyId, integrationId, mapping, onChange, agentReceipt, agentTemplate = {}, agentScenario = {} }: CrmMappingBlockProps) => {
   const [meta, setMeta] = useState<CrmMeta | null>(metaCache[integrationId] || null);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -61,7 +62,9 @@ const CrmMappingBlock = ({ companyId, integrationId, mapping, onChange, agentRec
   const [testing, setTesting] = useState(false);
   const [test, setTest] = useState<TestResult | null>(null);
 
-  const entity = (mapping.entity as CrmEntity) || 'deal';
+  const isAmo = provider === 'amocrm';
+  const crmName = isAmo ? 'AmoCRM' : 'Битрикс24';
+  const entity: CrmEntity = isAmo ? 'deal' : (mapping.entity as CrmEntity) || 'deal';
   const itemsMode = (mapping.items_mode as ItemsMode) || 'products';
   const fixedItems = (mapping.fixed_items as FixedItem[]) || [];
   const stages = (String(mapping.stage || '')).split(',').filter(Boolean);
@@ -131,7 +134,7 @@ const CrmMappingBlock = ({ companyId, integrationId, mapping, onChange, agentRec
         {loading ? (
           <span className="flex items-center gap-2 text-muted-foreground">
             <Icon name="Loader2" size={16} className="animate-spin" />
-            Загружаем поля из Битрикс24...
+            Загружаем поля из {crmName}...
           </span>
         ) : (
           <>
@@ -169,8 +172,8 @@ const CrmMappingBlock = ({ companyId, integrationId, mapping, onChange, agentRec
             Обновить поля
           </Button>
         </div>
-        <div className="grid grid-cols-2 gap-2">
-          {(['deal', 'lead'] as CrmEntity[]).map((e) => (
+        <div className={`grid gap-2 ${isAmo ? 'grid-cols-1' : 'grid-cols-2'}`}>
+          {((isAmo ? ['deal'] : ['deal', 'lead']) as CrmEntity[]).map((e) => (
             <button
               key={e}
               type="button"
@@ -204,8 +207,8 @@ const CrmMappingBlock = ({ companyId, integrationId, mapping, onChange, agentRec
 
         <p className="text-xs text-muted-foreground">
           {entity === 'deal'
-            ? 'Документ создаётся по каждому хуку Битрикс24 по сделке из этой воронки — на любой стадии, один раз на сделку'
-            : 'Документ создаётся по каждому хуку Битрикс24 по лиду — один раз на лид'}
+            ? `Документ создаётся по каждому хуку ${crmName} по сделке из этой воронки — на любом этапе, один раз на сделку`
+            : `Документ создаётся по каждому хуку ${crmName} по лиду — один раз на лид`}
         </p>
 
         <CrmConditionBlock mapping={mapping} set={set} fields={meta.fields} entity={entity} />
@@ -333,7 +336,7 @@ const CrmMappingBlock = ({ companyId, integrationId, mapping, onChange, agentRec
           <Input
             className="h-9 min-w-0 flex-1"
             inputMode="numeric"
-            placeholder={`Номер ${entity === 'deal' ? 'сделки' : 'лида'} в Битрикс24`}
+            placeholder={`Номер ${entity === 'deal' ? 'сделки' : 'лида'} в ${crmName}`}
             value={testId}
             onChange={(e) => setTestId(e.target.value.replace(/\D/g, ''))}
           />

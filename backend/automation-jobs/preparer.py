@@ -2,6 +2,7 @@ import json
 from typing import Any, Dict, Optional, Tuple
 
 from ecomkassa_client import company_cash_register, get_receipt_atol
+import amocrm_crm
 import bitrix_crm
 import alfabank_api
 import tochka_acquiring_api
@@ -275,27 +276,35 @@ def prepare_realtycalendar(payment: Dict[str, Any], data: Dict[str, Any],
     )
 
 
-def _crm_webhook_url(cur, scenario_id: int) -> str:
+def _crm_source(cur, scenario_id: int) -> Tuple[str, Dict[str, Any]]:
+    '''Провайдер (bitrix24 / amocrm) и настройки интеграции-источника сценария.'''
     cur.execute(f'''
-        SELECT ui.config FROM {SCHEMA}.automation_scenarios s
+        SELECT p.slug, ui.config FROM {SCHEMA}.automation_scenarios s
         JOIN {SCHEMA}.user_integrations ui ON ui.id = s.source_integration_id
+        JOIN {SCHEMA}.integration_providers p ON p.id = ui.provider_id
         WHERE s.id = %s
     ''', (scenario_id,))
     row = cur.fetchone()
-    config = row[0] if row else {}
-    config = json.loads(config) if isinstance(config, str) else (config or {})
-    return config.get('webhook_url', '')
+    if not row:
+        return '', {}
+    config = json.loads(row[1]) if isinstance(row[1], str) else (row[1] or {})
+    return row[0], config
 
 
 def prepare_crm(cur, job: Dict[str, Any], scenario: Dict[str, Any]) -> Tuple[str, Dict[str, Any], str]:
     '''
-    Сделка/лид Битрикс24: свежие данные из CRM (сделка + контакт + компания + товары),
+    Сделка/лид Битрикс24 или сделка AmoCRM: свежие данные из CRM (сделка + контакт + компания + товары),
     проверка стадии запуска, сбор позиций и покупателя по сопоставлению полей сценария.
     '''
     entity = 'lead' if job['source_type'] == 'crm_lead' else 'deal'
     noun = 'Сделка' if entity == 'deal' else 'Лид'
     mapping = {**bitrix_crm.DEFAULT_MAPPING, **(scenario.get('field_mapping') or {})}
-    record, err = bitrix_crm.load_record(_crm_webhook_url(cur, scenario['id']), entity, job['source_id'])
+    slug, config = _crm_source(cur, scenario['id'])
+    if slug == 'amocrm':
+        entity = 'deal'
+        record, err = amocrm_crm.load_record(config, job['source_id'])
+    else:
+        record, err = bitrix_crm.load_record(config.get('webhook_url', ''), entity, job['source_id'])
     if err:
         return 'error', {}, err
     main = record[entity]
@@ -312,7 +321,8 @@ def prepare_crm(cur, job: Dict[str, Any], scenario: Dict[str, Any]) -> Tuple[str
             f"{noun} #{job['source_id']}: поле «{field}» "
             f"{'не заполнено' if not actual else f'= «{actual}»'}, а сценарий запускается при «{wanted}» - документ не создаётся"
         )
-    data, err, note = bitrix_crm.build_data(record, entity, mapping)
+    data, err, note = (amocrm_crm.build_data(record, mapping) if slug == 'amocrm'
+                       else bitrix_crm.build_data(record, entity, mapping))
     if err:
         return 'error', {}, err
     total = sum(i['sum'] for i in data['items'])

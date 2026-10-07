@@ -45,7 +45,7 @@ def mark_failed(cur, job: Dict[str, Any], message: str, attempts: int) -> None:
         SELECT j.company_id, 'automation_failed', 'error', 'Сценарий не выполнен',
                'Сценарий «' || COALESCE(s.name, '—') || '», ' ||
                CASE WHEN j.source_type = 'payment' THEN 'платёж #' || COALESCE(wp.payment_id, j.source_id)
-                    WHEN j.source_type = 'crm_deal' THEN 'сделка Битрикс24 #' || j.source_id
+                    WHEN j.source_type = 'crm_deal' THEN 'сделка CRM #' || j.source_id
                     WHEN j.source_type = 'crm_lead' THEN 'лид Битрикс24 #' || j.source_id
                     ELSE j.source_type || ' #' || j.source_id END ||
                ': ' || %s || '. Автоповторы закончились - повторите вручную в журнале автоматизации.',

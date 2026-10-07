@@ -303,6 +303,14 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 conn.rollback()
                 jobs_created = 0
                 print(f'automation crm enqueue failed: {e}')
+        if provider_slug == 'amocrm' and not handler_error and external_deal_id and not is_candidate:
+            try:
+                jobs_created = automation.enqueue_crm_jobs(cur, company_id, integration_id, 'deal', external_deal_id, event_id, 'AmoCRM')
+                conn.commit()
+            except Exception as e:
+                conn.rollback()
+                jobs_created = 0
+                print(f'automation amocrm enqueue failed: {e}')
         if (webhook_payment_id or has_cart) and not handler_error:
             try:
                 jobs_created = automation.enqueue_payment_jobs(cur, company_id, integration_id, webhook_payment_id, event_id)

@@ -4,6 +4,7 @@ from typing import Any, Dict
 
 import psycopg2
 
+import amocrm_crm
 import bitrix_crm
 import moyklass_crm
 import moyklass_api
@@ -174,20 +175,22 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         return moyklass(method, body, config)
     if slug == 'realtycalendar':
         return realtycalendar(method, body, config, int(integration_id), int(company_id))
-    if slug != 'bitrix24':
-        return respond(400, {'error': 'Загрузка полей доступна для Битрикс24 и «Мой Класс»'})
+    if slug not in ('bitrix24', 'amocrm'):
+        return respond(400, {'error': 'Загрузка полей доступна для Битрикс24, AmoCRM и «Мой Класс»'})
+    amo = slug == 'amocrm'
     webhook_url = config.get('webhook_url', '')
 
     if method == 'GET':
-        result, err = bitrix_crm.load_fields(webhook_url)
+        result, err = amocrm_crm.load_fields(config) if amo else bitrix_crm.load_fields(webhook_url)
         if err:
             return respond(502, {'error': err})
         return respond(200, {'success': True, **result})
 
     if method == 'POST':
-        entity = body.get('entity') or 'deal'
+        entity = 'deal' if amo else (body.get('entity') or 'deal')
         mapping = {**bitrix_crm.DEFAULT_MAPPING, **(body.get('mapping') or {}), 'entity': entity}
-        record, err = bitrix_crm.load_record(webhook_url, entity, body.get('entity_id'))
+        record, err = (amocrm_crm.load_record(config, body.get('entity_id')) if amo
+                       else bitrix_crm.load_record(webhook_url, entity, body.get('entity_id')))
         if err:
             return respond(200, {'success': False, 'error': err})
         refs = {k: mapping.get(k) for k in ('order_id', 'amount', 'customer_email', 'customer_phone',

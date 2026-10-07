@@ -132,7 +132,8 @@ const ScenarioDialog = ({ open, onOpenChange, scenario, prefill, integrations, t
       ].filter(Boolean)
     : [];
   const sourceIntegration = integrations.find((i) => i.id === form.source_integration_id);
-  const isBitrix = sourceIntegration?.providerSlug === 'bitrix24';
+  const isAmo = sourceIntegration?.providerSlug === 'amocrm';
+  const isBitrix = sourceIntegration?.providerSlug === 'bitrix24' || isAmo;
   const isRk = sourceIntegration?.providerSlug === 'realtycalendar';
   const isMoyklass = sourceIntegration?.providerSlug === 'moyklass' || isRk;
   const moyklassOffset = isRk ? sourceIntegration?.stage === 'refund' : isMoyklass && sourceIntegration?.stage === 'debit_new';
@@ -242,7 +243,10 @@ const ScenarioDialog = ({ open, onOpenChange, scenario, prefill, integrations, t
                 value={form.source_integration_id ? String(form.source_integration_id) : ''}
                 onValueChange={(v) => {
                   const picked = integrations.find((i) => i.id === Number(v));
-                  const crmDefaults = trigger.needsMapping && picked?.providerSlug === 'bitrix24' && !form.field_mapping.items_mode;
+                  const pickedProvider = picked?.providerSlug;
+                  const prevProvider = sourceIntegration?.providerSlug;
+                  const crmDefaults = trigger.needsMapping && (pickedProvider === 'bitrix24' || pickedProvider === 'amocrm')
+                    && (!form.field_mapping.items_mode || (prevProvider !== pickedProvider && !!prevProvider));
                   const pickedCrm = picked?.providerSlug === 'moyklass' || picked?.providerSlug === 'realtycalendar';
                   const prefix = picked?.providerSlug === 'realtycalendar' ? 'booking.' : 'payment.';
                   const mkDefaults = pickedCrm && !String(form.field_mapping.order_id || '').startsWith(prefix);
@@ -451,8 +455,9 @@ const ScenarioDialog = ({ open, onOpenChange, scenario, prefill, integrations, t
                 <p className="text-xs text-muted-foreground">Выберите интеграцию-источник — подгрузим её поля</p>
               ) : isBitrix && currentCompany ? (
                 <>
-                  <p className="text-xs text-muted-foreground">Поля загружены из вашего Битрикс24, включая пользовательские</p>
+                  <p className="text-xs text-muted-foreground">Поля загружены из вашего {isAmo ? 'AmoCRM' : 'Битрикс24'}, включая пользовательские</p>
                   <CrmMappingBlock
+                    provider={isAmo ? 'amocrm' : 'bitrix24'}
                     companyId={currentCompany.id}
                     integrationId={form.source_integration_id}
                     mapping={form.field_mapping}
@@ -463,7 +468,7 @@ const ScenarioDialog = ({ open, onOpenChange, scenario, prefill, integrations, t
                   />
                 </>
               ) : (
-                <p className="text-xs text-muted-foreground">Загрузка полей пока доступна только для Битрикс24</p>
+                <p className="text-xs text-muted-foreground">Загрузка полей доступна для Битрикс24 и AmoCRM</p>
               )}
             </Step>
           )}
