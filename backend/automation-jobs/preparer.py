@@ -153,6 +153,19 @@ def prepare(cur, job: Dict[str, Any], scenario: Dict[str, Any]) -> Tuple[str, Di
             return 'skipped', {'payment': payment}, (
                 f"По этому платежу сценарий уже создал документ (статус {done[0]}) - второй не нужен")
     is_refund = (scenario.get('template') or {}).get('operation') == 'sell_refund'
+    if is_refund and payment['status'] in ('CANCELED', 'REFUNDED'):
+        # Отмена/возврат: чек возврата нужен, только если по платежу был чек продажи.
+        # Отмена удержания (двухстадийная оплата без списания) чека не требует.
+        cur.execute(f'''
+            SELECT EXISTS (
+                SELECT 1 FROM {SCHEMA}.webhook_payments wp2
+                WHERE wp2.integration_id = %s AND wp2.payment_id = %s AND (
+                    wp2.receipt_id IS NOT NULL OR EXISTS (
+                        SELECT 1 FROM {SCHEMA}.automation_documents d
+                        WHERE d.payment_row_id = wp2.id AND d.operation = 'sell' AND d.status <> 'fail')))
+        ''', (payment['integration_id'], str(payment['payment_id'])))
+        if not cur.fetchone()[0]:
+            return 'skipped', {'payment': payment}, 'По платежу не было чека продажи - чек возврата не нужен'
     if payment['receipt_id'] and scenario['action_template'] == 'regular' and not is_refund:
         return 'skipped', {'payment': payment}, 'По платежу уже есть чек в кассе'
     if (job.get('payload') or {}).get('reason') == 'discrepancy':
