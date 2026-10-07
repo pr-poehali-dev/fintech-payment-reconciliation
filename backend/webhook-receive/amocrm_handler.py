@@ -34,6 +34,9 @@ def _get(config: Dict[str, Any], path: str, timeout: float = 6.0) -> Optional[Di
 
 def extract_lead_id(webhook_data: Dict[str, Any]) -> Optional[str]:
     '''ID сделки из вебхука AmoCRM: leads[status|add|update][0][id].'''
+    direct = str(webhook_data.get('deal_id') or webhook_data.get('lead_id') or '').strip()
+    if direct.isdigit():
+        return direct
     leads = webhook_data.get('leads', {})
     if not isinstance(leads, dict):
         return None

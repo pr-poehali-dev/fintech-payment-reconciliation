@@ -279,7 +279,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         conn.commit()
         jobs_created = 0
         has_cart = provider_slug == 'tbank' and isinstance(webhook_data.get('Receipt'), dict)
-        if provider_slug == 'bitrix24' and not handler_error and external_deal_id and is_candidate:
+        if provider_slug in ('bitrix24', 'amocrm') and not handler_error and external_deal_id and is_candidate:
             cur.execute('''
                 UPDATE t_p83864310_fintech_payment_reco.crm_deals SET candidate_receipt_id = %s
                 WHERE integration_id = %s AND external_deal_id = %s AND linked_receipt_id IS NULL

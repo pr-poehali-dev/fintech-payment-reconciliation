@@ -107,8 +107,9 @@ RECOVER_LOOKBACK_HOURS = 48
 
 def recover_missed_deals(cur, company_id: int) -> int:
     '''
-    Страховка от потерянных хуков Битрикса: оплаченный счёт Екомкассы есть, а сделки с его
-    ссылкой на оплату у нас нет - ищем сделку в Битриксе по ссылке и прогоняем её через
+    Страховка от потерянных хуков Битрикса и AmoCRM: оплаченный счёт Екомкассы есть, а сделки с его
+    ссылкой на оплату у нас нет - ищем сделку в CRM по ссылке (в AmoCRM - поиском по всем полям,
+    этап «Успешно реализовано») и прогоняем её через
     обычный приём хука (событие, сделка, связь с чеком, сценарии автоматизации).
     Берётся сделка в успешной стадии; интеграция - та, где уже есть сделки этой воронки.
     '''
@@ -121,6 +122,9 @@ def recover_missed_deals(cur, company_id: int) -> int:
           AND NOT EXISTS (SELECT 1 FROM {SCHEMA}.crm_deals o WHERE o.linked_receipt_id = r.id)
           AND NOT EXISTS (SELECT 1 FROM {SCHEMA}.crm_deals o WHERE o.company_id = r.company_id
                           AND o.raw_data->>%s = r.raw_data->'invoice_payload'->>'link')
+          AND NOT EXISTS (SELECT 1 FROM {SCHEMA}.crm_deals o, jsonb_each_text(o.raw_data) f
+                          WHERE o.company_id = r.company_id AND o.provider_slug = 'amocrm'
+                            AND f.value = r.raw_data->'invoice_payload'->>'link')
         LIMIT %s
     ''', (company_id, RECOVER_LOOKBACK_HOURS, BITRIX_PAY_LINK_FIELD, RECOVER_PER_RUN))
     links = [r[0] for r in cur.fetchall()]
@@ -153,8 +157,25 @@ def recover_missed_deals(cur, company_id: int) -> int:
                 return target, str(deals[0]['ID'])
         return None
 
+    amo = _amo_accounts(cur, company_id)
+
+    def lookup_any(link: str):
+        hit = lookup(link) if portals else None
+        if hit:
+            return hit
+        for base, token, integrations in amo:
+            found = _get_json(f'{base}/api/v4/leads?' + urllib.parse.urlencode({'query': link, 'limit': 10}),
+                              {'Authorization': f'Bearer {token}'}, timeout=2.5)
+            leads = [l for l in (((found or {}).get('_embedded') or {}).get('leads') or [])
+                     if l.get('status_id') == AMO_WON_STATUS_ID]
+            if leads:
+                pipeline = str(leads[0].get('pipeline_id') or '')
+                target = next((i for i in integrations if pipeline in i[2]), integrations[0])
+                return target, str(leads[0]['id'])
+        return None
+
     with ThreadPoolExecutor(max_workers=len(links)) as pool:
-        hits = [h for h in pool.map(lookup, links) if h]
+        hits = [h for h in pool.map(lookup_any, links) if h]
     if hits:
         with ThreadPoolExecutor(max_workers=len(hits)) as pool:
             list(pool.map(lambda h: _send_hook(h[0][1], h[1]), hits))
@@ -195,7 +216,8 @@ def recover_candidate_deals(cur, company_id: int) -> int:
         UPDATE {SCHEMA}.ecomkassa_receipts SET deal_search_at = NOW() WHERE id = ANY(%s)
     ''', ([r[0] for r in receipts],))
     portals = _bitrix_portals(cur, company_id)
-    if not portals:
+    amo = _amo_accounts(cur, company_id)
+    if not portals and not amo:
         return 0
 
     def lookup(receipt):
@@ -212,6 +234,20 @@ def recover_candidate_deals(cur, company_id: int) -> int:
                 category = str(d.get('CATEGORY_ID') or '0')
                 target = next((i for i in integrations if category in i[2]), integrations[0])
                 found_all.append((target, str(d['ID']), receipt_id))
+        for base, token, integrations in amo:
+            paid_ts = int(paid_at.timestamp())
+            window = CANDIDATE_WINDOW_MIN * 60
+            query = urllib.parse.urlencode([
+                ('filter[price][from]', int(float(total))), ('filter[price][to]', int(float(total)) + 1),
+                ('filter[updated_at][from]', paid_ts - window), ('filter[updated_at][to]', paid_ts + window),
+                ('limit', CANDIDATES_PER_RECEIPT * 3)])
+            found = _get_json(f'{base}/api/v4/leads?{query}', {'Authorization': f'Bearer {token}'}, timeout=2.5)
+            leads = [l for l in (((found or {}).get('_embedded') or {}).get('leads') or [])
+                     if abs(float(l.get('price') or 0) - float(total)) < 0.01][:CANDIDATES_PER_RECEIPT]
+            for l in leads:
+                pipeline = str(l.get('pipeline_id') or '')
+                target = next((i for i in integrations if pipeline in i[2]), integrations[0])
+                found_all.append((target, str(l['id']), receipt_id))
         return found_all
 
     with ThreadPoolExecutor(max_workers=len(receipts)) as pool:
@@ -241,6 +277,33 @@ def _bitrix_portals(cur, company_id: int) -> Dict[str, List[Any]]:
         if url:
             portals.setdefault(url, []).append((ui_id, token, set(c for c in categories if c)))
     return portals
+
+
+AMO_WON_STATUS_ID = 142
+
+
+def _amo_base(subdomain: str) -> str:
+    host = re.sub(r'^https?://', '', str(subdomain or '').strip()).split('/')[0]
+    return f'https://{host if "." in host else host + ".amocrm.ru"}' if host else ''
+
+
+def _amo_accounts(cur, company_id: int) -> List[Any]:
+    '''Аккаунты AmoCRM компании: (адрес API, токен, интеграции (id, токен хука, воронки их сделок)).'''
+    cur.execute(f'''
+        SELECT ui.id, ui.config, ui.webhook_token,
+               ARRAY(SELECT DISTINCT d.raw_data->>'CATEGORY_ID' FROM {SCHEMA}.crm_deals d WHERE d.integration_id = ui.id)
+        FROM {SCHEMA}.user_integrations ui
+        JOIN {SCHEMA}.integration_providers p ON p.id = ui.provider_id
+        WHERE ui.company_id = %s AND p.slug = 'amocrm' AND ui.status = 'active' AND ui.webhook_token IS NOT NULL
+        ORDER BY ui.last_webhook_at DESC NULLS LAST, ui.id
+    ''', (company_id,))
+    accounts: Dict[Any, List[Any]] = {}
+    for ui_id, config, token, categories in cur.fetchall():
+        config = config if isinstance(config, dict) else json.loads(config or '{}')
+        base, api_key = _amo_base(config.get('subdomain', '')), str(config.get('api_key') or '').strip()
+        if base and api_key:
+            accounts.setdefault((base, api_key), []).append((ui_id, token, set(c for c in categories if c)))
+    return [(b, k, i) for (b, k), i in accounts.items()]
 
 
 def _send_hook(webhook_token: str, deal_id: str, source: str = 'cron_recovery', receipt_id: Optional[int] = None) -> None:
