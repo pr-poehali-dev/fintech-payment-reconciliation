@@ -44,6 +44,7 @@ export interface IntegrationOption {
   providerSlug?: string;
   category: string;
   stage?: string;
+  webhookSettings?: Record<string, boolean>;
 }
 
 // sourceCategories: категории интеграций для выбора источника (null - внутренний источник)

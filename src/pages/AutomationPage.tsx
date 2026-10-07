@@ -32,6 +32,7 @@ interface IntegrationRow {
   category_slug: string;
   status: string;
   config?: { stage?: string };
+  webhook_settings?: Record<string, boolean> | null;
 }
 
 interface AutomationPageProps {
@@ -74,7 +75,7 @@ const AutomationPage = ({ prefillSourceId, onPrefillUsed }: AutomationPageProps 
     setIntegrations(
       ((iData.user_integrations || []) as IntegrationRow[])
         .filter((i) => i.status === 'active')
-        .map((i) => ({ id: i.id, name: i.integration_name, providerName: i.provider_name, providerSlug: i.provider_slug, category: i.category_slug, stage: i.config?.stage }))
+        .map((i) => ({ id: i.id, name: i.integration_name, providerName: i.provider_name, providerSlug: i.provider_slug, category: i.category_slug, stage: i.config?.stage, webhookSettings: i.webhook_settings || undefined }))
     );
     setIsLoading(false);
   }, [api, companyId]);

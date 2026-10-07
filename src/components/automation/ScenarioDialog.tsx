@@ -13,6 +13,8 @@ import ScenarioSourceSelect from './ScenarioSourceSelect';
 import ScenarioTemplateFields from './ScenarioTemplateFields';
 import ScenarioCorrectionFields from './ScenarioCorrectionFields';
 import ScenarioTargetSelect from './ScenarioTargetSelect';
+import ScenarioPaymentStatuses from './ScenarioPaymentStatuses';
+import { notifyOptionsFor } from '@/components/integrations/providerFieldsConfig';
 import ScenarioCrmMapping from './ScenarioCrmMapping';
 import {
   ACTIONS,
@@ -244,6 +246,16 @@ const ScenarioDialog = ({ open, onOpenChange, scenario, prefill, integrations, t
                 sourceIntegration={sourceIntegration}
                 trigger={trigger}
                 sourceDefaults={sourceDefaults}
+              />
+            </ScenarioStep>
+          )}
+
+          {form.trigger_type === 'new_payment' && sourceIntegration?.category === 'payments' && notifyOptionsFor(sourceIntegration.providerSlug).length > 0 && (
+            <ScenarioStep n={step++} title="Когда запускать">
+              <ScenarioPaymentStatuses
+                source={sourceIntegration}
+                value={Array.isArray(form.field_mapping.payment_statuses) ? (form.field_mapping.payment_statuses as string[]) : []}
+                onChange={(statuses) => setForm({ ...form, field_mapping: { ...form.field_mapping, payment_statuses: statuses } })}
               />
             </ScenarioStep>
           )}

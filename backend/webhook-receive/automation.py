@@ -10,11 +10,17 @@ SCHEMA = 't_p83864310_fintech_payment_reco'
 AUTOMATION_JOBS_URL = 'https://functions.poehali.dev/22902813-812b-495a-9ea0-8497b880c461'
 
 
+STATUS_NAMES = {'AUTHORIZED': 'средства удержаны', 'CONFIRMED': 'оплачен', 'REJECTED': 'отклонён',
+                'REFUNDED': 'возврат', 'CANCELED': 'отменён', 'OFFSET': 'списание'}
+
+
 def enqueue_payment_jobs(cur, company_id: int, integration_id: int, webhook_payment_id: Optional[int],
                          event_id: Optional[int]) -> int:
     '''
     Ставит в журнал задание на каждый ЗАПУЩЕННЫЙ сценарий «Новый платёж» этой
-    интеграции. Уникальный ключ (сценарий, платёж) - повторный вебхук того же
+    интеграции, если статус платежа входит в выбранные в сценарии (payment_statuses;
+    не выбраны - как раньше: оплачен). Каждый статус платежа - отдельная строка, поэтому
+    продажа и возврат одного платежа запускают каждый свой сценарий. Уникальный ключ (сценарий, платёж) - повторный вебхук того же
     платежа второго задания не создаст.
     '''
     if not webhook_payment_id:
@@ -23,8 +29,13 @@ def enqueue_payment_jobs(cur, company_id: int, integration_id: int, webhook_paym
         INSERT INTO {SCHEMA}.automation_jobs (company_id, scenario_id, source_type, source_id, event_id, payload)
         SELECT s.company_id, s.id, 'payment', %s, %s, %s
         FROM {SCHEMA}.automation_scenarios s
-        JOIN {SCHEMA}.webhook_payments wp ON wp.id = %s AND (wp.status IN ('CONFIRMED', 'OFFSET')
-            OR wp.status = 'REFUNDED' AND wp.payment_provider LIKE 'RealtyCalendar%%')
+        JOIN {SCHEMA}.webhook_payments wp ON wp.id = %s AND (
+            CASE WHEN jsonb_typeof(s.field_mapping->'payment_statuses') = 'array'
+                      AND jsonb_array_length(s.field_mapping->'payment_statuses') > 0
+                 THEN s.field_mapping->'payment_statuses' ? wp.status
+                 ELSE wp.status IN ('CONFIRMED', 'OFFSET')
+                      OR wp.status = 'REFUNDED' AND wp.payment_provider LIKE 'RealtyCalendar%%'
+            END)
         WHERE s.company_id = %s AND s.source_integration_id = %s AND s.trigger_type = 'new_payment'
           AND s.status = 'active' AND s.removed_at IS NULL
         ON CONFLICT (scenario_id, source_type, source_id) DO NOTHING
@@ -32,10 +43,15 @@ def enqueue_payment_jobs(cur, company_id: int, integration_id: int, webhook_paym
     ''', (str(webhook_payment_id), event_id, json.dumps({'webhook_payment_id': webhook_payment_id}),
           webhook_payment_id, company_id, integration_id))
     ids = [r[0] for r in cur.fetchall()]
+    status_name = ''
+    if ids:
+        cur.execute(f'SELECT status FROM {SCHEMA}.webhook_payments WHERE id = %s', (webhook_payment_id,))
+        row = cur.fetchone()
+        status_name = STATUS_NAMES.get(row[0], row[0]) if row else ''
     for job_id in ids:
         cur.execute(
             f'INSERT INTO {SCHEMA}.automation_job_log (job_id, level, message) VALUES (%s, %s, %s)',
-            (job_id, 'info', 'Задание создано по вебхуку платежа')
+            (job_id, 'info', f'Задание создано по вебхуку платежа (статус {status_name})')
         )
     return len(ids)
 

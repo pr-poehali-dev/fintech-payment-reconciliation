@@ -149,6 +149,27 @@ export const ALFABANK_NOTIFY_OPTIONS = [
   { key: 'notify_on_canceled', label: 'Отменён (reversed)' }
 ];
 
+// Варианты «Уведомления о статусах платежей» по провайдеру - и для настроек интеграции, и для запуска сценария.
+export const notifyOptionsFor = (slug?: string) =>
+  slug === 'tbank'
+    ? TBANK_NOTIFY_OPTIONS
+    : slug === 'alfabank'
+      ? ALFABANK_NOTIFY_OPTIONS
+      : slug === 'tochka_acquiring'
+        ? TOCHKA_ACQUIRING_NOTIFY_OPTIONS
+        : slug === 'ecomkassa_gateway'
+          ? ECOMKASSA_GATEWAY_NOTIFY_OPTIONS
+          : [];
+
+// Ключ настройки уведомления -> статус платежа в нашей базе.
+export const NOTIFY_KEY_STATUS: Record<string, string> = {
+  notify_on_authorized: 'AUTHORIZED',
+  notify_on_confirmed: 'CONFIRMED',
+  notify_on_rejected: 'REJECTED',
+  notify_on_refunded: 'REFUNDED',
+  notify_on_canceled: 'CANCELED'
+};
+
 const ALFABANK_ENV_OPTIONS: FieldOption[] = [
   { value: 'prod', label: 'Боевой — payment.alfabank.ru (логин с префиксом r-)' },
   { value: 'prod_pay', label: 'Боевой — pay.alfabank.ru (логин без префикса)' },

@@ -133,9 +133,27 @@ def prepare(cur, job: Dict[str, Any], scenario: Dict[str, Any]) -> Tuple[str, Di
     if not payment:
         return 'error', {}, 'Платёж не найден в базе'
     rk_refund = payment['provider_slug'] == 'realtycalendar' and payment['status'] == 'REFUNDED'
-    if payment['status'] not in ('CONFIRMED', 'AUTHORIZED', 'done', 'OFFSET') and not rk_refund:
+    chosen = (scenario.get('field_mapping') or {}).get('payment_statuses')
+    chosen = [str(x) for x in chosen] if isinstance(chosen, list) else []
+    if chosen and payment['status'] not in chosen:
+        return 'skipped', {'payment': payment}, f"Платёж в статусе {payment['status']} - сценарий настроен на другие статусы"
+    if not chosen and payment['status'] not in ('CONFIRMED', 'AUTHORIZED', 'done', 'OFFSET') and not rk_refund:
         return 'skipped', {'payment': payment}, f"Платёж в статусе {payment['status']} - документ не нужен"
-    if payment['receipt_id'] and scenario['action_template'] == 'regular':
+    if chosen:
+        # Один сценарий - один документ на платёж: «удержан» и «оплачен» одного платежа второй чек не пробьют.
+        cur.execute(f'''
+            SELECT wp2.status FROM {SCHEMA}.automation_documents d
+            JOIN {SCHEMA}.webhook_payments wp2 ON wp2.id = d.payment_row_id
+            WHERE d.scenario_id = %s AND d.job_id <> %s AND d.status <> 'fail'
+              AND wp2.integration_id = %s AND wp2.payment_id = %s
+            LIMIT 1
+        ''', (scenario['id'], job['id'], payment['integration_id'], str(payment['payment_id'])))
+        done = cur.fetchone()
+        if done:
+            return 'skipped', {'payment': payment}, (
+                f"По этому платежу сценарий уже создал документ (статус {done[0]}) - второй не нужен")
+    is_refund = (scenario.get('template') or {}).get('operation') == 'sell_refund'
+    if payment['receipt_id'] and scenario['action_template'] == 'regular' and not is_refund:
         return 'skipped', {'payment': payment}, 'По платежу уже есть чек в кассе'
     if (job.get('payload') or {}).get('reason') == 'discrepancy':
         # Расхождение: пока задание ждало, чек мог прийти - перепроверяем, чтобы не задвоить.
@@ -193,7 +211,7 @@ def prepare(cur, job: Dict[str, Any], scenario: Dict[str, Any]) -> Tuple[str, Di
         note = f', расхождение с платежом {diff:+.2f} ₽' if abs(diff) >= 0.01 else ''
         if cart['fiscalized']:
             data['existing_receipt_id'] = cart['receipt_id']
-            if scenario['action_template'] == 'regular':
+            if scenario['action_template'] == 'regular' and not is_refund:
                 return 'skipped', data, (
                     f"Касса {provider_name} уже пробила чек (ФН {cart['fiscal'].get('FnNumber')}, "
                     f"ФД {cart['fiscal'].get('FiscalDocumentNumber')}) - второй обычный чек не нужен"
