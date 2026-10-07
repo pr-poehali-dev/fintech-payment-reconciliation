@@ -23,6 +23,7 @@ export interface ActionTemplateRow {
   correction_base_number: string | null;
   correction_base_name: string | null;
   payment_address: string | null;
+  vat: string | null;
   auto_deliver: boolean;
   cashier_name: string | null;
   agent_settings: Partial<AgentSettingsRow> | null;
@@ -51,6 +52,7 @@ export interface ActionTemplateForm {
   correction_base_number: string;
   correction_base_name: string;
   payment_address: string;
+  vat: string;
   auto_deliver: boolean;
   cashier_name: string;
   agent_settings: AgentSettings;
@@ -193,6 +195,24 @@ export const MEASURE_OPTIONS: Option[] = [
   { value: 'day', label: 'Сутки', hint: 'v4 сут · v5 70' }
 ];
 
+// Ставка НДС для чека, когда у источника нет корзины (например, заказ Альфа-Банка без товаров).
+export const VAT_IN_SCENARIO = 'scenario';
+export const TEMPLATE_VAT_OPTIONS: Option[] = [
+  { value: VAT_IN_SCENARIO, label: 'Задаётся в сценарии' },
+  { value: 'none', label: 'Без НДС' },
+  { value: 'vat0', label: 'НДС 0%' },
+  { value: 'vat5', label: 'НДС 5%' },
+  { value: 'vat7', label: 'НДС 7%' },
+  { value: 'vat10', label: 'НДС 10%' },
+  { value: 'vat20', label: 'НДС 20%' },
+  { value: 'vat22', label: 'НДС 22%' },
+  { value: 'vat105', label: 'НДС 5/105' },
+  { value: 'vat107', label: 'НДС 7/107' },
+  { value: 'vat110', label: 'НДС 10/110' },
+  { value: 'vat120', label: 'НДС 20/120' },
+  { value: 'vat122', label: 'НДС 22/122' }
+];
+
 export const NO_PAYMENT = 'none';
 
 // payments[].type: пусто — документ без оплаты.
@@ -225,6 +245,7 @@ export const EMPTY_TEMPLATE: ActionTemplateForm = {
   correction_base_number: '',
   correction_base_name: '',
   payment_address: '',
+  vat: VAT_IN_SCENARIO,
   auto_deliver: false,
   cashier_name: '',
   agent_settings: EMPTY_AGENT
@@ -269,6 +290,7 @@ export const templateToForm = (t: ActionTemplateRow): ActionTemplateForm => ({
   correction_base_number: t.correction_base_number || '',
   correction_base_name: t.correction_base_name || '',
   payment_address: t.payment_address || '',
+  vat: t.vat || VAT_IN_SCENARIO,
   auto_deliver: !!t.auto_deliver,
   cashier_name: t.cashier_name || '',
   agent_settings: agentToForm(t.agent_settings)
@@ -289,5 +311,6 @@ export const formToPayload = (f: ActionTemplateForm) => ({
   ...f,
   payment_type: f.payment_type === NO_PAYMENT ? null : Number(f.payment_type),
   default_email: f.default_email.trim() || null,
+  vat: f.vat === VAT_IN_SCENARIO ? null : f.vat,
   agent_settings: f.receipt_type === 'agent' ? f.agent_settings : null
 });

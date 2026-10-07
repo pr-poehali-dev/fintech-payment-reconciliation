@@ -113,7 +113,7 @@ def process_job(cur, job: Dict[str, Any]) -> str:
                t.payment_object, t.measure, t.payment_type, t.default_email,
                t.correction_type, t.correction_date_source, t.correction_base_date, t.correction_base_number,
                t.auto_deliver, t.cashier_name, t.agent_settings, t.correction_base_name, t.payment_address,
-               s.correction_settings
+               s.correction_settings, t.vat
         FROM {SCHEMA}.automation_scenarios s
         LEFT JOIN {SCHEMA}.automation_action_templates t ON t.code = s.action_template
         WHERE s.id = %s
@@ -129,7 +129,8 @@ def process_job(cur, job: Dict[str, Any]) -> str:
                              'correction_date_source': r[19], 'correction_base_date': r[20],
                              'correction_base_number': r[21], 'auto_deliver': bool(r[22]),
                              'cashier_name': r[23], 'agent_settings': r[24],
-                             'correction_base_name': r[25], 'payment_address': r[26]}}
+                             'correction_base_name': r[25], 'payment_address': r[26],
+                             'vat': r[28]}}
     # Заполненное в шаблоне действия важнее; пустые поля шаблона клиент заполняет в сценарии.
     for key, value in (r[27] or {}).items():
         if key == 'agent':

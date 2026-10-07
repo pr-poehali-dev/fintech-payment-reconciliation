@@ -175,6 +175,8 @@ def _match_integration(cur, company_id: int, src: Dict[str, Any]) -> Optional[in
 
 
 CORRECTION_KEYS = ('correction_base_number', 'correction_base_name', 'default_email', 'cashier_name')
+SCENARIO_VATS = {'none', 'vat0', 'vat5', 'vat7', 'vat10', 'vat20', 'vat22',
+                 'vat105', 'vat107', 'vat110', 'vat120', 'vat122'}
 
 
 AGENT_TEXT = {'paying_agent_operation': ('Операция платёжного агента', 24),
@@ -231,6 +233,8 @@ def clean_correction(value: Any) -> Dict[str, Any]:
     if not isinstance(value, dict):
         return {}
     result: Dict[str, Any] = {k: str(value[k]).strip()[:256] for k in CORRECTION_KEYS if str(value.get(k) or '').strip()}
+    if value.get('vat') in SCENARIO_VATS:
+        result['vat'] = value['vat']
     agent, _ = clean_agent(value.get('agent'))
     if agent:
         result['agent'] = agent

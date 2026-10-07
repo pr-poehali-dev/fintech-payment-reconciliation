@@ -61,7 +61,8 @@ def _fetch_alfabank_cart(cur, company_id: int, payment: Dict[str, Any]) -> Optio
     return None
 
 
-def _alfabank_single_item(cur, payment: Dict[str, Any], data: Dict[str, Any]) -> Tuple[str, Dict[str, Any], str]:
+def _alfabank_single_item(cur, payment: Dict[str, Any], data: Dict[str, Any],
+                          scenario: Dict[str, Any]) -> Tuple[str, Dict[str, Any], str]:
     '''
     Заказ Альфа-Банка без корзины: чек одной позицией на сумму платежа,
     название - описание заказа (orderDescription), иначе «Оплата заказа N».
@@ -80,7 +81,8 @@ def _alfabank_single_item(cur, payment: Dict[str, Any], data: Dict[str, Any]) ->
     if amount <= 0:
         return 'error', data, 'У платежа Альфа-Банка нулевая сумма - чек не пробиваем'
     data['items'] = [{'name': name, 'price': amount, 'quantity': 1, 'amount': amount,
-                      'payment_method': 'full_payment', 'payment_object': 'service', 'tax': 'none'}]
+                      'payment_method': 'full_payment', 'payment_object': 'service',
+                      'tax': (scenario.get('template') or {}).get('vat') or 'none'}]
     data['items_source'] = 'Альфа-Банк (описание заказа)'
     source = 'описание заказа' if description else 'описания нет, взят номер заказа'
     return 'ready', data, (
@@ -163,7 +165,7 @@ def prepare(cur, job: Dict[str, Any], scenario: Dict[str, Any]) -> Tuple[str, Di
                 if payment.get('payment_provider') == 'СБП' and not payment.get('order_id'):
                     return 'error', data, ('Оплата по статическому QR-коду СБП - у такого платежа нет корзины. '
                                            'Для чека нужен заказ с корзиной (динамический QR или платёжная страница)')
-                return _alfabank_single_item(cur, payment, data)
+                return _alfabank_single_item(cur, payment, data, scenario)
             return 'error', data, f'{provider_name} прислал уведомление без товаров'
         receipt = cart['receipt']
         data['items'] = cart['items']

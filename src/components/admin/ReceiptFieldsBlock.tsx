@@ -12,7 +12,8 @@ import {
   PAYMENT_OBJECT_OPTIONS,
   PAYMENT_TYPE_OPTIONS,
   PROTOCOL_OPTIONS,
-  RECEIPT_TYPE_OPTIONS
+  RECEIPT_TYPE_OPTIONS,
+  TEMPLATE_VAT_OPTIONS
 } from './actionTemplatesConfig';
 
 interface ReceiptFieldsBlockProps {
@@ -64,6 +65,15 @@ const ReceiptFieldsBlock = ({ form, providers, onChange }: ReceiptFieldsBlockPro
       )}
 
       <ReceiptFieldSelect label="Тип оплаты" value={form.payment_type} options={PAYMENT_TYPE_OPTIONS} onChange={set('payment_type')} />
+
+      {!correctionV4 && (
+        <div className="space-y-2">
+          <ReceiptFieldSelect label="НДС, если у источника нет корзины" value={form.vat} options={TEMPLATE_VAT_OPTIONS} onChange={set('vat')} />
+          <p className="text-xs text-muted-foreground">
+            Для чека одной позицией на сумму платежа (заказ без товаров). Если корзина есть — ставка берётся из неё
+          </p>
+        </div>
+      )}
 
       {correctionV4 && (
         <p className="rounded-md bg-muted/50 p-3 text-xs text-muted-foreground">

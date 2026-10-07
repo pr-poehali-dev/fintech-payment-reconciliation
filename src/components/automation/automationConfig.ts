@@ -71,6 +71,7 @@ export interface ActionTemplateOption {
   correction_date_source?: string | null;
   payment_address?: string | null;
   default_email?: string | null;
+  vat?: string | null;
   auto_deliver?: boolean;
   cashier_name?: string | null;
   agent_settings?: Record<string, string | string[]> | null;
@@ -86,6 +87,7 @@ export interface CorrectionSettings {
   correction_base_name?: string;
   payment_address?: string;
   default_email?: string;
+  vat?: string;
   cashier_name?: string;
   // Агентские поля, не заданные в шаблоне. Телефоны - строкой через запятую (сервер хранит списком).
   agent?: Record<string, string | string[]>;

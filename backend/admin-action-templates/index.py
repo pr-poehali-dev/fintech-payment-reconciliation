@@ -6,7 +6,7 @@ from typing import Dict, Any, Optional
 
 from dictionaries import (PROTOCOLS, RECEIPT_TYPES, OPERATIONS, PAYMENT_METHODS,
                           PAYMENT_OBJECTS_V5, MEASURES, PAYMENT_TYPES, DATE_SOURCES,
-                          AGENT_TYPES, PAYING_AGENT_TYPES, MONEY_TRANSFER_TYPES)
+                          AGENT_TYPES, PAYING_AGENT_TYPES, MONEY_TRANSFER_TYPES, VATS)
 from auth_guard import guard
 
 SCHEMA = 't_p83864310_fintech_payment_reco'
@@ -25,7 +25,7 @@ COLUMNS = ['id', 'code', 'action_type', 'name', 'description', 'operation', 'pai
            'provider_id', 'protocol_version', 'receipt_type', 'payment_method', 'payment_object', 'measure',
            'payment_type', 'default_email', 'correction_type', 'correction_date_source', 'correction_base_date',
            'correction_base_number', 'auto_deliver', 'cashier_name', 'agent_settings', 'correction_base_name',
-           'payment_address']
+           'payment_address', 'vat']
 EDITABLE = COLUMNS[2:]
 
 
@@ -114,6 +114,10 @@ def normalize(cur, body: Dict[str, Any], creating: bool):
     else:
         payment_type = int(payment_type)
 
+    vat = body.get('vat') or None
+    if vat and vat not in VATS:
+        return None, 'Неизвестная ставка НДС'
+
     email = (body.get('default_email') or '').strip() or None
     if email and not EMAIL_RE.match(email):
         return None, 'Почта по умолчанию указана неверно'
@@ -145,6 +149,7 @@ def normalize(cur, body: Dict[str, Any], creating: bool):
         'measure': body['measure'],
         'payment_type': payment_type,
         'default_email': email,
+        'vat': vat,
         **correction,
         **delivery,
         'agent_settings': json.dumps(agent, ensure_ascii=False) if agent else None,

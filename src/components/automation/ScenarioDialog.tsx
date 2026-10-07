@@ -9,6 +9,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import CrmMappingBlock from './CrmMappingBlock';
 import MoyklassMappingBlock from './MoyklassMappingBlock';
 import ScenarioAgentBlock, { agentProblems } from './ScenarioAgentBlock';
+import { TEMPLATE_VAT_OPTIONS, VAT_IN_SCENARIO } from '@/components/admin/actionTemplatesConfig';
 import {
   ACTIONS,
   AGENT_MAPPING_FIELDS,
@@ -116,6 +117,8 @@ const ScenarioDialog = ({ open, onOpenChange, scenario, prefill, integrations, t
   const setCs = (patch: CorrectionSettings) => setForm({ ...form, correction_settings: { ...cs, ...patch } });
   const askEmail = form.action_type === 'create_receipt' && !!currentTemplate && !currentTemplate.default_email;
   const emailInvalid = askEmail && !!cs.default_email?.trim() && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(cs.default_email.trim());
+  const askVat = form.action_type === 'create_receipt' && !!currentTemplate && !currentTemplate.vat &&
+    !(isCorrection && !isV5);
   const askNumber = isCorrection && !currentTemplate?.correction_base_number;
   const askName = isCorrection && !isV5 && !currentTemplate?.correction_base_name;
   const askCashier = form.action_type === 'create_order' && !!currentTemplate?.auto_deliver && !currentTemplate?.cashier_name;
@@ -348,6 +351,26 @@ const ScenarioDialog = ({ open, onOpenChange, scenario, prefill, integrations, t
                     : isCorrection
                       ? 'Подставится в чек как почта компании и покупателя, если их нет'
                       : 'Подставится в чек, если у покупателя нет почты или телефона'}
+                </p>
+              </div>
+            )}
+            {askVat && (
+              <div className="space-y-1 pt-2">
+                <Label>НДС, если в платеже нет товаров</Label>
+                <Select value={cs.vat || 'none'} onValueChange={(v) => setCs({ vat: v })}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {TEMPLATE_VAT_OPTIONS.filter((o) => o.value !== VAT_IN_SCENARIO).map((o) => (
+                      <SelectItem key={o.value} value={o.value}>
+                        {o.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Чек пробьётся одной позицией на сумму платежа с этой ставкой. Если товары есть — ставка берётся из них
                 </p>
               </div>
             )}
