@@ -95,6 +95,45 @@ def find_gateway_integration(cur, company_id: int) -> Optional[int]:
     return row[0] if row else None
 
 
+def notify_receipt_failed(cur, schema: str, job_id: int, message: str, data: Dict[str, Any]) -> None:
+    '''
+    Касса отказала в чеке сценария: уведомление в кабинет компании (одно на задание) и дубли
+    в мессенджер/почту тем, кто подписан на «Касса не пробила чек» в блоке уведомлений.
+    '''
+    cur.execute(f'''
+        INSERT INTO {schema}.notifications (company_id, kind, level, title, message, link_module, entity_type, entity_id, payload)
+        SELECT j.company_id, 'receipt_failed', 'error', 'Касса не пробила чек',
+               'Сценарий «' || COALESCE(s.name, '—') || '», ' ||
+               CASE WHEN j.source_type = 'payment' THEN 'платёж #' || COALESCE(wp.payment_id, j.source_id)
+                    WHEN j.source_type = 'crm_deal' THEN 'сделка CRM #' || j.source_id
+                    WHEN j.source_type = 'crm_lead' THEN 'лид CRM #' || j.source_id
+                    ELSE j.source_type || ' #' || j.source_id END ||
+               '. ' || %s || '. Исправьте причину и повторите задание в журнале автоматизации.',
+               'automation', 'automation_job', j.id::text,
+               jsonb_build_object('job_id', j.id, 'scenario_id', j.scenario_id, 'external_id', %s::text)
+        FROM {schema}.automation_jobs j
+        LEFT JOIN {schema}.automation_scenarios s ON s.id = j.scenario_id
+        LEFT JOIN {schema}.webhook_payments wp ON j.source_type = 'payment' AND wp.id::text = j.source_id
+        WHERE j.id = %s
+          AND NOT EXISTS (SELECT 1 FROM {schema}.notifications n
+                          WHERE n.company_id = j.company_id AND n.kind = 'receipt_failed'
+                            AND n.entity_type = 'automation_job' AND n.entity_id = j.id::text
+                            AND n.created_at > NOW() - INTERVAL '1 hour')
+        RETURNING id, company_id
+    ''', (message, data.get('external_id'), job_id))
+    row = cur.fetchone()
+    if not row:
+        return
+    cur.execute(f'''
+        INSERT INTO {schema}.notification_deliveries (notification_id, user_id, channel)
+        SELECT %s, p.user_id, p.channel
+        FROM {schema}.notification_preferences p
+        JOIN {schema}.company_users cu ON cu.company_id = p.company_id AND cu.user_id = p.user_id AND cu.status = 'active'
+        WHERE p.company_id = %s AND p.channel IS NOT NULL AND p.kinds ? 'receipt_failed'
+        ON CONFLICT (notification_id, user_id) DO NOTHING
+    ''', (row[0], row[1]))
+
+
 def log_fiscal_result(cur, schema: str, doc_rows, status: str, data: Dict[str, Any], via: str) -> None:
     '''
     Строка в журнал задания сценария, когда касса окончательно пробила чек (или отказала):
@@ -129,6 +168,8 @@ def log_fiscal_result(cur, schema: str, doc_rows, status: str, data: Dict[str, A
                 INSERT INTO {schema}.automation_job_log (job_id, level, message, details)
                 VALUES (%s, %s, %s, %s)
             ''', (job_id, level, message, details))
+            if status == 'fail':
+                notify_receipt_failed(cur, schema, job_id, message.rsplit(' (', 1)[0], data)
 
 
 def save_receipt(cur, integration_id: int, company_id: int, order_id: Any,
