@@ -55,22 +55,22 @@ const EventDetailsDialog = ({ open, onOpenChange, event }: EventDetailsDialogPro
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-3">
-            <Icon name="Radio" size={24} />
-            {event.summary}
+      <DialogContent className="h-[100dvh] max-h-[100dvh] w-screen max-w-none content-start overflow-y-auto overflow-x-hidden rounded-none border-0 p-4 sm:h-auto sm:max-h-[90vh] sm:w-[calc(100vw-1.5rem)] sm:max-w-3xl sm:rounded-lg sm:border sm:p-6 [&>*]:min-w-0">
+        <DialogHeader className="pr-8 text-left">
+          <DialogTitle className="flex items-start gap-2 text-lg leading-snug sm:gap-3 sm:text-xl">
+            <Icon name="Radio" size={22} className="mt-0.5 shrink-0" />
+            <span className="min-w-0 break-words [overflow-wrap:anywhere]">{event.summary}</span>
           </DialogTitle>
-          <DialogDescription>
+          <DialogDescription className="break-words">
             Событие из {event.integration_name} ({event.provider_type})
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-6">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="space-y-1">
+        <div className="space-y-5 sm:space-y-6">
+          <div className="grid grid-cols-2 gap-3 sm:gap-4">
+            <div className="min-w-0 space-y-1">
               <p className="text-sm text-muted-foreground">Номер события</p>
-              <p className="text-lg font-semibold font-mono">{event.event_number || '—'}</p>
+              <p className="break-all font-mono text-base font-semibold sm:text-lg">{event.event_number || '—'}</p>
             </div>
             <div className="space-y-1">
               <p className="text-sm text-muted-foreground">Статус</p>
@@ -87,7 +87,7 @@ const EventDetailsDialog = ({ open, onOpenChange, event }: EventDetailsDialogPro
               <Icon name="Info" size={18} />
               Информация о событии
             </h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-x-3 gap-y-4 sm:gap-4 [&>div]:min-w-0">
               <div>
                 <p className="text-sm text-muted-foreground">Тип</p>
                 <Badge variant="outline" className={`gap-1.5 ${(transactionTypeConfig[event.transaction_type] || transactionTypeConfig.payment).className}`}>
@@ -97,11 +97,11 @@ const EventDetailsDialog = ({ open, onOpenChange, event }: EventDetailsDialogPro
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Тип интеграции</p>
-                <p className="text-sm">{event.provider_type}</p>
+                <p className="break-words text-sm">{event.provider_type}</p>
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Интеграция</p>
-                <p className="text-sm">{event.integration_name}</p>
+                <p className="break-words text-sm">{event.integration_name}</p>
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Дата и время</p>
@@ -110,11 +110,11 @@ const EventDetailsDialog = ({ open, onOpenChange, event }: EventDetailsDialogPro
               {event.event_type && (
                 <div>
                   <p className="text-sm text-muted-foreground">Тип события</p>
-                  <p className="text-sm font-mono">{event.event_type}</p>
+                  <p className="break-all font-mono text-sm">{event.event_type}</p>
                 </div>
               )}
               {event.origin && EVENT_ORIGIN_LABELS[event.origin] && (
-                <div>
+                <div className="col-span-2 sm:col-span-1">
                   <p className="text-sm text-muted-foreground">Источник</p>
                   <p className="text-sm flex items-center gap-1.5" title={EVENT_ORIGIN_LABELS[event.origin].hint}>
                     <Icon name={EVENT_ORIGIN_LABELS[event.origin].icon} fallback="Info" size={14} className="text-muted-foreground" />
@@ -129,10 +129,10 @@ const EventDetailsDialog = ({ open, onOpenChange, event }: EventDetailsDialogPro
           {event.error_message && (
             <div className="p-3 bg-destructive/10 rounded-md">
               <div className="flex items-start gap-2">
-                <Icon name="AlertCircle" size={16} className="text-destructive mt-0.5" />
-                <div>
+                <Icon name="AlertCircle" size={16} className="text-destructive mt-0.5 shrink-0" />
+                <div className="min-w-0">
                   <div className="font-medium text-sm text-destructive mb-1">Ошибка обработки</div>
-                  <div className="text-xs text-muted-foreground">{event.error_message}</div>
+                  <div className="break-words text-xs text-muted-foreground [overflow-wrap:anywhere]">{event.error_message}</div>
                 </div>
               </div>
             </div>
@@ -145,8 +145,8 @@ const EventDetailsDialog = ({ open, onOpenChange, event }: EventDetailsDialogPro
               <Icon name="Code" size={18} />
               Данные события (raw JSON)
             </h3>
-            <div className="bg-muted p-4 rounded-lg overflow-x-auto">
-              <pre className="text-xs font-mono whitespace-pre-wrap">
+            <div className="bg-muted p-3 rounded-lg overflow-x-auto sm:p-4">
+              <pre className="text-[11px] font-mono whitespace-pre-wrap break-words [overflow-wrap:anywhere] sm:text-xs">
                 {JSON.stringify(event.raw, null, 2)}
               </pre>
             </div>
