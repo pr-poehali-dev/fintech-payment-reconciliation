@@ -1,8 +1,8 @@
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { TEMPLATE_VAT_OPTIONS, VAT_IN_SCENARIO } from '@/components/admin/actionTemplatesConfig';
-import { ActionTemplate, ActionTemplateOption, CorrectionSettings } from './automationConfig';
+import { ActionTemplate, ActionTemplateOption, CorrectionSettings, TEMPLATE_GROUPS, templateGroup } from './automationConfig';
 
 interface ScenarioTemplateFieldsProps {
   actionTemplate: ActionTemplate;
@@ -37,11 +37,26 @@ const ScenarioTemplateFields = ({
         <SelectValue placeholder={templates.length ? 'Выберите шаблон' : 'Нет доступных шаблонов'} />
       </SelectTrigger>
       <SelectContent>
-        {templates.map((t) => (
-          <SelectItem key={t.code} value={t.code}>
-            {t.name}
-          </SelectItem>
-        ))}
+        {templates.every((t) => t.action_type !== 'create_receipt')
+          ? templates.map((t) => (
+              <SelectItem key={t.code} value={t.code}>
+                {t.name}
+              </SelectItem>
+            ))
+          : TEMPLATE_GROUPS.map((g) => {
+              const items = templates.filter((t) => templateGroup(t) === g.key);
+              if (!items.length) return null;
+              return (
+                <SelectGroup key={g.key}>
+                  <SelectLabel className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{g.label}</SelectLabel>
+                  {items.map((t) => (
+                    <SelectItem key={t.code} value={t.code}>
+                      {t.name}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              );
+            })}
       </SelectContent>
     </Select>
     {currentTemplate?.description && <p className="text-xs text-muted-foreground">{currentTemplate.description}</p>}

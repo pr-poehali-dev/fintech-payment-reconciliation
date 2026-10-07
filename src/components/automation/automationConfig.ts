@@ -79,6 +79,7 @@ export interface ActionTemplateOption {
   agent_settings?: Record<string, string | string[]> | null;
   payment_method?: string;
   payment_type?: number | null;
+  operation?: string;
 }
 
 // Поля чека коррекции, которые задаются в сценарии (АТОЛ Онлайн):
@@ -246,4 +247,25 @@ export const JOB_STATUS: Record<JobStatus, { label: string; className: string }>
   skipped: { label: 'Пропущен', className: 'bg-muted text-muted-foreground border-border' },
   error: { label: 'Ошибка, повтор', className: 'bg-warning/15 text-warning border-warning/30' },
   failed: { label: 'Не удалось', className: 'bg-destructive/15 text-destructive border-destructive/30' }
+};
+
+// Группы шаблонов чеков в выпадающем списке сценария (только для удобства выбора).
+export const TEMPLATE_GROUPS = [
+  { key: 'sale', label: 'Продажа' },
+  { key: 'refund', label: 'Возврат' },
+  { key: 'advance', label: 'Аванс и предоплата' },
+  { key: 'agent', label: 'Агентские' },
+  { key: 'correction', label: 'Коррекция' },
+  { key: 'other', label: 'Другие' }
+] as const;
+
+export const templateGroup = (t: ActionTemplateOption): string => {
+  if (t.action_type !== 'create_receipt') return 'other';
+  if (t.receipt_type === 'correction') return 'correction';
+  if (t.receipt_type === 'agent') return 'agent';
+  const prepay = !!t.payment_method && t.payment_method !== 'full_payment';
+  if (prepay || t.payment_type === 2) return 'advance';
+  if (t.operation === 'sell_refund') return 'refund';
+  if (t.operation === 'sell' || !t.operation) return 'sale';
+  return 'other';
 };
