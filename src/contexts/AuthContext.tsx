@@ -224,7 +224,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const currentCompany = companies.find(c => c.id === currentCompanyId) || null;
   // Админка - только владельцу компании платформы и только когда выбрана эта компания.
-  const isPlatformAdmin = Boolean(user?.is_platform_admin && currentCompany?.platform_admin);
+  // Признак берём из свежего списка компаний: доступ, выданный после входа, появляется без перелогина.
+  const isPlatformAdmin = Boolean(user && currentCompany?.platform_admin);
 
   return (
     <AuthContext.Provider
