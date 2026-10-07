@@ -33,7 +33,7 @@ def _payment(cur, payment_id: str) -> Optional[Dict[str, Any]]:
         'status': r[4], 'customer_email': r[5], 'customer_phone': r[6],
         'payment_provider': r[7], 'receipt_id': r[8], 'created_at': r[9].isoformat() if r[9] else None,
         'integration_id': r[10], 'provider_slug': r[11],
-        'raw': (r[12] if isinstance(r[12], dict) else json.loads(r[12] or '{}')) if r[11] in ('moyklass', 'realtycalendar') else None
+        'raw': (r[12] if isinstance(r[12], dict) else json.loads(r[12] or '{}')) if r[11] in ('moyklass', 'realtycalendar', 'alfabank') else None
     }
 
 
@@ -59,6 +59,34 @@ def _fetch_alfabank_cart(cur, company_id: int, payment: Dict[str, Any]) -> Optio
         return err
     alfabank_api.save_cart(cur, payment['integration_id'], company_id, str(payment['payment_id']), order)
     return None
+
+
+def _alfabank_single_item(cur, payment: Dict[str, Any], data: Dict[str, Any]) -> Tuple[str, Dict[str, Any], str]:
+    '''
+    Заказ Альфа-Банка без корзины: чек одной позицией на сумму платежа,
+    название - описание заказа (orderDescription), иначе «Оплата заказа N».
+    '''
+    raw = payment.get('raw') or {}
+    order = raw.get('order') if isinstance(raw.get('order'), dict) else {}
+    if not order.get('orderDescription'):
+        cur.execute(f'''SELECT raw_data FROM {SCHEMA}.webhook_payments WHERE id = %s''', (payment['id'],))
+        row = cur.fetchone()
+        fresh = (row[0] if row and isinstance(row[0], dict) else json.loads((row or [None])[0] or '{}')) or {}
+        order = fresh.get('order') if isinstance(fresh.get('order'), dict) else order
+    description = ' '.join(str(order.get('orderDescription') or '').split())
+    order_no = payment.get('order_id') or order.get('orderNumber') or payment['payment_id']
+    name = (description or f'Оплата заказа {order_no}')[:128]
+    amount = round(float(payment['amount'] or 0), 2)
+    if amount <= 0:
+        return 'error', data, 'У платежа Альфа-Банка нулевая сумма - чек не пробиваем'
+    data['items'] = [{'name': name, 'price': amount, 'quantity': 1, 'amount': amount,
+                      'payment_method': 'full_payment', 'payment_object': 'service', 'tax': 'none'}]
+    data['items_source'] = 'Альфа-Банк (описание заказа)'
+    source = 'описание заказа' if description else 'описания нет, взят номер заказа'
+    return 'ready', data, (
+        f"Корзины в заказе Альфа-Банка нет - чек одной позицией «{name}» на {amount:.2f} ₽ "
+        f"({source}, платёж #{payment['payment_id']})"
+    )
 
 
 def _fetch_tochka_cart(cur, company_id: int, payment: Dict[str, Any]) -> Optional[str]:
@@ -135,8 +163,7 @@ def prepare(cur, job: Dict[str, Any], scenario: Dict[str, Any]) -> Tuple[str, Di
                 if payment.get('payment_provider') == 'СБП' and not payment.get('order_id'):
                     return 'error', data, ('Оплата по статическому QR-коду СБП - у такого платежа нет корзины. '
                                            'Для чека нужен заказ с корзиной (динамический QR или платёжная страница)')
-                return 'error', data, ('В заказе Альфа-Банка нет корзины товаров (orderBundle) - '
-                                       'магазин должен передавать её при регистрации заказа')
+                return _alfabank_single_item(cur, payment, data)
             return 'error', data, f'{provider_name} прислал уведомление без товаров'
         receipt = cart['receipt']
         data['items'] = cart['items']
