@@ -4,7 +4,7 @@
 const STATUS_LABELS: Record<string, string> = {
   CONFIRMED: 'Оплачено',
   paid: 'Оплачена',
-  done: 'Создан',
+  done: 'Завершен',
   AUTHORIZED: 'Авторизован',
   REJECTED: 'Отклонён',
   fail: 'Ошибка',
