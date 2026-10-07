@@ -192,7 +192,8 @@ export const PROVIDER_FIELDS: Record<string, FieldConfig[]> = {
   alfabank: [
     { key: 'environment', label: 'Сервер банка', type: 'select', options: ALFABANK_ENV_OPTIONS, default: 'prod', required: false, hint: 'Адрес зависит от логина: уточните у поддержки Альфа-Банка, если не уверены' },
     { key: 'user_name', label: 'Логин API-пользователя', type: 'text', placeholder: 'r-shop-api', hint: 'Учётная запись магазина с окончанием -api из письма Альфа-Банка' },
-    { key: 'password', label: 'Пароль API-пользователя', type: 'password', placeholder: '•••••••••', hint: 'Логин и пароль проверим у банка при сохранении' }
+    { key: 'password', label: 'Пароль API-пользователя', type: 'password', placeholder: '•••••••••', hint: 'Логин и пароль проверим у банка при сохранении' },
+    { key: 'callback_secret', label: 'Callback токен (необязательно)', type: 'password', placeholder: '•••••••••', required: false, hint: 'ЛК банка → Callback уведомления → тип подписи «Симметричный» → поле «Callback токен». Если заполнен — проверяем подпись каждого уведомления' }
   ],
   tbank: [
     { key: 'terminal_id', label: 'Terminal ID', type: 'text', placeholder: '1234567890', hint: 'Найдите в ЛК Т-Банк → Настройки → Терминалы' },
