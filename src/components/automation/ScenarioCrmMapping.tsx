@@ -38,6 +38,7 @@ const ScenarioCrmMapping = ({
         agentReceipt={isAgent}
         agentTemplate={currentTemplate?.agent_settings || {}}
         agentScenario={cs.agent || {}}
+        templateVat={currentTemplate?.vat}
       />
     </>
   ) : (

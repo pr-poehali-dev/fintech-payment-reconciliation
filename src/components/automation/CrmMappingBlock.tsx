@@ -15,7 +15,8 @@ import {
   ITEMS_MODES,
   AGENT_MAPPING_FIELDS,
   MAPPING_FIELDS,
-  VAT_OPTIONS
+  VAT_OPTIONS,
+  templateVatLabel
 } from './automationConfig';
 
 interface CrmMappingBlockProps {
@@ -28,6 +29,8 @@ interface CrmMappingBlockProps {
   // Поставщик из шаблона действия и из блока «Агентский чек» сценария - для показа итогового значения.
   agentTemplate?: Record<string, string | string[]>;
   agentScenario?: Record<string, string | string[]>;
+  // Ставка НДС из шаблона действия: для «Одной позицией» и «Фиксированный» подставляется вместо выбора.
+  templateVat?: string | null;
 }
 
 const agentText = (v: string | string[] | undefined) => (Array.isArray(v) ? v.join(', ') : v || '').trim();
@@ -54,7 +57,7 @@ const api = (functionUrls as Record<string, string>)['crm-fields'];
 // Кеш справочника на время сессии: при повторном открытии диалога Битрикс24 не дёргаем.
 const metaCache: Record<number, CrmMeta> = {};
 
-const CrmMappingBlock = ({ provider = 'bitrix24', companyId, integrationId, mapping, onChange, agentReceipt, agentTemplate = {}, agentScenario = {} }: CrmMappingBlockProps) => {
+const CrmMappingBlock = ({ provider = 'bitrix24', companyId, integrationId, mapping, onChange, agentReceipt, agentTemplate = {}, agentScenario = {}, templateVat }: CrmMappingBlockProps) => {
   const [meta, setMeta] = useState<CrmMeta | null>(metaCache[integrationId] || null);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -66,6 +69,7 @@ const CrmMappingBlock = ({ provider = 'bitrix24', companyId, integrationId, mapp
   const crmName = isAmo ? 'AmoCRM' : 'Битрикс24';
   const entity: CrmEntity = isAmo ? 'deal' : (mapping.entity as CrmEntity) || 'deal';
   const itemsMode = (mapping.items_mode as ItemsMode) || 'products';
+  const vatFromTemplate = !!templateVat && itemsMode !== 'products';
   const fixedItems = (mapping.fixed_items as FixedItem[]) || [];
   const stages = (String(mapping.stage || '')).split(',').filter(Boolean);
   const set = (patch: Record<string, unknown>) => onChange({ ...mapping, ...patch });
@@ -115,7 +119,7 @@ const CrmMappingBlock = ({ provider = 'bitrix24', companyId, integrationId, mapp
       const res = await fetch(api, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ company_id: companyId, integration_id: integrationId, entity, entity_id: testId, mapping })
+        body: JSON.stringify({ company_id: companyId, integration_id: integrationId, entity, entity_id: testId, mapping: vatFromTemplate ? { ...mapping, vat: templateVat } : mapping })
       });
       setTest(await res.json());
     } catch {
@@ -302,16 +306,23 @@ const CrmMappingBlock = ({ provider = 'bitrix24', companyId, integrationId, mapp
 
         <div className="grid grid-cols-1 items-center gap-1 sm:grid-cols-[1fr_1.4fr] sm:gap-3">
           <span className="text-sm">НДС</span>
-          <Select value={String(mapping.vat || 'auto')} onValueChange={(v) => set({ vat: v })}>
-            <SelectTrigger className="h-9">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {VAT_OPTIONS.filter((o) => itemsMode === 'products' || o.value !== 'auto').map((o) => (
-                <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          {vatFromTemplate ? (
+            <div className="space-y-0.5">
+              <div className="text-sm font-medium">{templateVatLabel(templateVat)}</div>
+              <p className="text-xs text-muted-foreground">Задано в шаблоне действия</p>
+            </div>
+          ) : (
+            <Select value={String(mapping.vat || 'auto')} onValueChange={(v) => set({ vat: v })}>
+              <SelectTrigger className="h-9">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {VAT_OPTIONS.filter((o) => itemsMode === 'products' || o.value !== 'auto').map((o) => (
+                  <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
         </div>
 
         {itemsMode === 'single' && (

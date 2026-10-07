@@ -91,6 +91,17 @@ def _alfabank_single_item(cur, payment: Dict[str, Any], data: Dict[str, Any],
     )
 
 
+def _template_vat_mapping(mapping: Dict[str, Any], scenario: Dict[str, Any], default_mode: str) -> Dict[str, Any]:
+    '''
+    Ставка НДС из шаблона действия (если задана) - для позиций, у которых нет своей ставки
+    из CRM: «Одной позицией» и «Фиксированный». Режим «Товары из CRM» берёт ставку сценария.
+    '''
+    vat = (scenario.get('template') or {}).get('vat')
+    if vat and (mapping.get('items_mode') or default_mode) != 'products':
+        return {**mapping, 'vat': vat}
+    return mapping
+
+
 def _fetch_tochka_cart(cur, company_id: int, payment: Dict[str, Any]) -> Optional[str]:
     '''Операция с корзиной у Точки (Get Payment Operation Info) и сохранение корзины.'''
     cur.execute(f'SELECT config FROM {SCHEMA}.user_integrations WHERE id = %s', (payment['integration_id'],))
@@ -264,7 +275,8 @@ def prepare_moyklass(cur, payment: Dict[str, Any], data: Dict[str, Any],
     record, err = moyklass_crm.load_record(str(config.get('api_key') or '').strip(), obj)
     if err:
         return 'error', data, err
-    built, err, note = moyklass_crm.build_data(record, scenario.get('field_mapping') or {}, offset)
+    built, err, note = moyklass_crm.build_data(
+        record, _template_vat_mapping(scenario.get('field_mapping') or {}, scenario, 'single'), offset)
     if err:
         return 'error', data, err
     data.update(built)
@@ -289,7 +301,8 @@ def prepare_realtycalendar(payment: Dict[str, Any], data: Dict[str, Any],
     raw = payment.get('raw') or {}
     record = realtycalendar_crm.record_from_raw(raw)
     refund = payment['status'] == 'REFUNDED'
-    built, err, note = realtycalendar_crm.build_data(record, scenario.get('field_mapping') or {}, refund)
+    built, err, note = realtycalendar_crm.build_data(
+        record, _template_vat_mapping(scenario.get('field_mapping') or {}, scenario, 'single'), refund)
     if err:
         return 'error', data, err
     data.update(built)
@@ -327,7 +340,7 @@ def prepare_crm(cur, job: Dict[str, Any], scenario: Dict[str, Any]) -> Tuple[str
     '''
     entity = 'lead' if job['source_type'] == 'crm_lead' else 'deal'
     noun = 'Сделка' if entity == 'deal' else 'Лид'
-    mapping = {**bitrix_crm.DEFAULT_MAPPING, **(scenario.get('field_mapping') or {})}
+    mapping = _template_vat_mapping({**bitrix_crm.DEFAULT_MAPPING, **(scenario.get('field_mapping') or {})}, scenario, 'products')
     slug, config = _crm_source(cur, scenario['id'])
     if slug == 'amocrm':
         entity = 'deal'

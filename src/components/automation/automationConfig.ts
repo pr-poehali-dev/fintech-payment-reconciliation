@@ -208,6 +208,12 @@ export const VAT_OPTIONS = [
   { value: 'vat22', label: 'НДС 22%' }
 ];
 
+const TEMPLATE_VAT_LABELS: Record<string, string> = {
+  none: 'Без НДС', vat0: 'НДС 0%', vat5: 'НДС 5%', vat7: 'НДС 7%', vat10: 'НДС 10%', vat20: 'НДС 20%', vat22: 'НДС 22%',
+  vat105: 'НДС 5/105', vat107: 'НДС 7/107', vat110: 'НДС 10/110', vat120: 'НДС 20/120', vat122: 'НДС 22/122'
+};
+export const templateVatLabel = (vat?: string | null) => (vat ? TEMPLATE_VAT_LABELS[vat] || vat : '');
+
 export interface CrmField {
   ref: string;
   code: string;

@@ -6,7 +6,7 @@ import Icon from '@/components/ui/icon';
 import functionUrls from '../../../backend/func2url.json';
 import CrmFieldPicker from './CrmFieldPicker';
 import CrmTemplateInput from './CrmTemplateInput';
-import { CrmMeta, FixedItem, ItemsMode, MAPPING_FIELDS, MOYKLASS_ENTITIES, MOYKLASS_ITEMS_MODES, RK_ENTITIES, VAT_OPTIONS } from './automationConfig';
+import { CrmMeta, FixedItem, ItemsMode, MAPPING_FIELDS, MOYKLASS_ENTITIES, MOYKLASS_ITEMS_MODES, RK_ENTITIES, VAT_OPTIONS, templateVatLabel } from './automationConfig';
 
 interface MoyklassMappingBlockProps {
   companyId: number;
@@ -16,6 +16,7 @@ interface MoyklassMappingBlockProps {
   mapping: Record<string, unknown>;
   onChange: (mapping: Record<string, unknown>) => void;
   templatePaymentMethod?: string;
+  templateVat?: string | null;
 }
 
 interface TestResult {
@@ -43,7 +44,7 @@ const METHOD_LABELS: Record<string, string> = {
   partial_payment: 'частичный расчёт'
 };
 
-const MoyklassMappingBlock = ({ companyId, integrationId, offset, provider = 'moyklass', mapping, onChange, templatePaymentMethod }: MoyklassMappingBlockProps) => {
+const MoyklassMappingBlock = ({ companyId, integrationId, offset, provider = 'moyklass', mapping, onChange, templatePaymentMethod, templateVat }: MoyklassMappingBlockProps) => {
   const isRk = provider === 'realtycalendar';
   const entities = isRk ? RK_ENTITIES : MOYKLASS_ENTITIES;
   const crmName = isRk ? 'RealtyCalendar' : '«Мой Класс»';
@@ -55,6 +56,7 @@ const MoyklassMappingBlock = ({ companyId, integrationId, offset, provider = 'mo
   const [test, setTest] = useState<TestResult | null>(null);
 
   const itemsMode = (mapping.items_mode as ItemsMode) || 'single';
+  const vatFromTemplate = !!templateVat;
   const fixedItems = (mapping.fixed_items as FixedItem[]) || [];
   const set = (patch: Record<string, unknown>) => onChange({ ...mapping, ...patch });
   const setFixed = (index: number, patch: Partial<FixedItem>) =>
@@ -93,7 +95,7 @@ const MoyklassMappingBlock = ({ companyId, integrationId, offset, provider = 'mo
       const res = await fetch(api, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ company_id: companyId, integration_id: integrationId, entity_id: testId, mapping })
+        body: JSON.stringify({ company_id: companyId, integration_id: integrationId, entity_id: testId, mapping: vatFromTemplate ? { ...mapping, vat: templateVat } : mapping })
       });
       setTest(await res.json());
     } catch {
@@ -264,16 +266,23 @@ const MoyklassMappingBlock = ({ companyId, integrationId, offset, provider = 'mo
 
         <div className="grid grid-cols-1 sm:grid-cols-[1fr_1.4fr] items-center gap-1 sm:gap-3">
           <span className="text-sm">НДС</span>
-          <Select value={String(mapping.vat || 'none')} onValueChange={(v) => set({ vat: v })}>
-            <SelectTrigger className="h-9">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {VAT_OPTIONS.filter((o) => o.value !== 'auto').map((o) => (
-                <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          {vatFromTemplate ? (
+            <div className="space-y-0.5">
+              <div className="text-sm font-medium">{templateVatLabel(templateVat)}</div>
+              <p className="text-xs text-muted-foreground">Задано в шаблоне действия</p>
+            </div>
+          ) : (
+            <Select value={String(mapping.vat || 'none')} onValueChange={(v) => set({ vat: v })}>
+              <SelectTrigger className="h-9">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {VAT_OPTIONS.filter((o) => o.value !== 'auto').map((o) => (
+                  <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
         </div>
       </div>
 

@@ -110,8 +110,6 @@ const ScenarioDialog = ({ open, onOpenChange, scenario, prefill, integrations, t
   const setCs = (patch: CorrectionSettings) => setForm({ ...form, correction_settings: { ...cs, ...patch } });
   const askEmail = form.action_type === 'create_receipt' && !!currentTemplate && !currentTemplate.default_email;
   const emailInvalid = askEmail && !!cs.default_email?.trim() && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(cs.default_email.trim());
-  const askVat = form.action_type === 'create_receipt' && !!currentTemplate && !currentTemplate.vat &&
-    !(isCorrection && !isV5);
   const askNumber = isCorrection && !currentTemplate?.correction_base_number;
   const askName = isCorrection && !isV5 && !currentTemplate?.correction_base_name;
   const askCashier = form.action_type === 'create_order' && !!currentTemplate?.auto_deliver && !currentTemplate?.cashier_name;
@@ -132,6 +130,9 @@ const ScenarioDialog = ({ open, onOpenChange, scenario, prefill, integrations, t
   const isBitrix = sourceIntegration?.providerSlug === 'bitrix24' || isAmo;
   const isRk = sourceIntegration?.providerSlug === 'realtycalendar';
   const isMoyklass = sourceIntegration?.providerSlug === 'moyklass' || isRk;
+  // НДС для чека без корзины - у платёжек; в CRM, «Мой Класс» и RealtyCalendar НДС задаётся в «Состав чека».
+  const askVat = form.action_type === 'create_receipt' && !!currentTemplate && !currentTemplate.vat &&
+    !(isCorrection && !isV5) && !trigger.needsMapping && !isMoyklass;
   const moyklassOffset = isRk ? sourceIntegration?.stage === 'refund' : isMoyklass && sourceIntegration?.stage === 'debit_new';
   const sourceDefaults = (slug?: string, stage?: string) =>
     slug === 'realtycalendar' ? realtycalendarDefaultMapping() : moyklassDefaultMapping(stage === 'debit_new');
@@ -351,6 +352,7 @@ const ScenarioDialog = ({ open, onOpenChange, scenario, prefill, integrations, t
                 mapping={form.field_mapping}
                 onChange={(m) => setForm({ ...form, field_mapping: m })}
                 templatePaymentMethod={currentTemplate?.payment_method}
+                templateVat={currentTemplate?.vat}
               />
             </ScenarioStep>
           )}
