@@ -3,6 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { GOALS, reachGoal } from '@/lib/metrika';
+import { SITE_URL } from '@/config/site';
 import functionUrls from '../../backend/func2url.json';
 import RoleCard from '@/components/access/RoleCard';
 import InviteUserDialog from '@/components/access/InviteUserDialog';
@@ -160,7 +161,7 @@ const AccessManagement = () => {
       }
       reachGoal(GOALS.userInvited, { role: newUser.role });
 
-      const link = `${window.location.origin}/invite/${inviteData.token}`;
+      const link = `${SITE_URL}/invite/${inviteData.token}`;
       setInviteLink(link);
 
       const roleName = roles.find(r => r.slug === newUser.role)?.name;
@@ -248,7 +249,7 @@ const AccessManagement = () => {
         return;
       }
 
-      const link = `${window.location.origin}/invite/${inviteData.token}`;
+      const link = `${SITE_URL}/invite/${inviteData.token}`;
       const messageText = `Привет, ${invite.full_name || ''}! Вас пригласили в команду «${currentCompany?.name}» на портале Сверка.\n\nПерейдите по ссылке, чтобы принять приглашение: ${link}\n\nРоль: ${invite.role_name}\nСсылка действует 7 дней.`;
 
       const recipient = channel === 'email' ? invite.email || '' : invite.phone;
