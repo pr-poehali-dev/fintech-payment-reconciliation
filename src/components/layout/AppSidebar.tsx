@@ -76,7 +76,7 @@ const formatPhone = (phone?: string) => {
   return `+${d[0]} ${d.slice(1, 4)} ${d.slice(4, 7)}-${d.slice(7, 9)}-${d.slice(9, 11)}`;
 };
 
-const UserProfileMenu = ({ onOpenSettings, onOpenSubscription }: { onOpenSettings: () => void; onOpenSubscription: () => void }) => {
+const UserProfileMenu = ({ onOpenSettings, onOpenSubscription, onOpenNotifications }: { onOpenSettings: () => void; onOpenSubscription: () => void; onOpenNotifications: () => void }) => {
   const { user, currentCompany, logout } = useAuth();
   const [profileOpen, setProfileOpen] = useState(false);
   const displayName = user?.full_name || formatPhone(user?.phone) || 'Пользователь';
@@ -127,6 +127,10 @@ const UserProfileMenu = ({ onOpenSettings, onOpenSubscription }: { onOpenSetting
             <DropdownMenuItem className={itemClass} onSelect={onOpenSubscription}>
               <Icon name="CreditCard" size={18} className="text-muted-foreground" />
               Подписка
+            </DropdownMenuItem>
+            <DropdownMenuItem className={itemClass} onSelect={onOpenNotifications}>
+              <Icon name="BellRing" size={18} className="text-muted-foreground" />
+              Уведомления
             </DropdownMenuItem>
             <DropdownMenuItem className={itemClass} onSelect={onOpenSettings}>
               <Icon name="Settings" size={18} className="text-muted-foreground" />
@@ -209,6 +213,7 @@ const AppSidebar = ({ activeModule, onModuleChange, open = false, onClose }: App
       <UserProfileMenu
         onOpenSettings={() => select('settings')}
         onOpenSubscription={() => select('subscription')}
+        onOpenNotifications={() => select('notifications')}
       />
     </aside>
     </>

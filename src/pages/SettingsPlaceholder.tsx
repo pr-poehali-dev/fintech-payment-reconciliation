@@ -7,7 +7,6 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { TIMEZONE_OPTIONS, DEFAULT_TIMEZONE } from '@/lib/formatDate';
 import functionUrls from '../../backend/func2url.json';
-import NotificationPreferences from '@/components/settings/NotificationPreferences';
 import { canOpenModule, effectiveModules } from '@/config/modules';
 
 const SettingsPlaceholder = () => {
@@ -17,7 +16,7 @@ const SettingsPlaceholder = () => {
   const [isSaving, setIsSaving] = useState(false);
 
   // Часовой пояс - настройка компании, доступна ролям с разделом «Настройки».
-  // «Мои уведомления» - личные, видны всем сотрудникам.
+  // Личные уведомления - на отдельной странице «Уведомления» (меню профиля).
   const canEditCompany = canOpenModule(effectiveModules(currentCompany), 'settings');
   const hasChanges = timezone !== (currentCompany?.timezone || DEFAULT_TIMEZONE);
 
@@ -94,7 +93,11 @@ const SettingsPlaceholder = () => {
           </CardContent>
         </Card>
       )}
-      <NotificationPreferences />
+      {!canEditCompany && (
+        <p className="text-sm text-muted-foreground">
+          Настройки компании доступны владельцу. Личные уведомления — в меню профиля, пункт «Уведомления».
+        </p>
+      )}
     </div>
   );
 };

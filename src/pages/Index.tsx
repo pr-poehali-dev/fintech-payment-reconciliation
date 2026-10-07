@@ -10,6 +10,7 @@ import AutomationPage from './AutomationPage';
 import EventsPage from './EventsPage';
 import TransactionsPage from './TransactionsPage';
 import ReconciliationPage from './ReconciliationPage';
+import NotificationsPage from '@/pages/NotificationsPage';
 import SettingsPlaceholder from './SettingsPlaceholder';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAutomationHeartbeat } from '@/hooks/useAutomationHeartbeat';
@@ -69,7 +70,7 @@ const Index = () => {
   const roleModules = effectiveModules(currentCompany);
   // «Настройки» открыты всем: там личные уведомления, а общие настройки компании
   // страница сама скрывает от ролей без этого раздела.
-  const canOpen = (id: string) => id === 'settings' || id === 'subscription' || canOpenModule(roleModules, id);
+  const canOpen = (id: string) => id === 'settings' || id === 'subscription' || id === 'notifications' || canOpenModule(roleModules, id);
   // Раздел, недоступный роли (ссылка из уведомления, смена компании), не открываем -
   // показываем стартовый раздел роли.
   // Раздел есть в роли, но закрыт тарифом - открываем экран с предложением сменить тариф.
@@ -152,6 +153,7 @@ const Index = () => {
         )}
         {!lockedModule && shownModule === 'access' && <AccessManagement />}
         {!lockedModule && shownModule === 'settings' && <SettingsPlaceholder />}
+        {!lockedModule && shownModule === 'notifications' && <NotificationsPage />}
         {!lockedModule && shownModule === 'subscription' && <SubscriptionPage highlightModule={upgradeFor} />}
         {!shownModule && (
           <div className="mx-auto mt-24 max-w-md text-center text-muted-foreground">

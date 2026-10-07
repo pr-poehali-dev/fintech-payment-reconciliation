@@ -15,7 +15,8 @@ export const APP_MODULES: AppModule[] = [
   { id: 'integrations', name: 'Интеграции', icon: 'Plug' },
   { id: 'access', name: 'Доступ', icon: 'Users' },
   { id: 'settings', name: 'Настройки', icon: 'Settings', hidden: true },
-  { id: 'subscription', name: 'Подписка', icon: 'CreditCard', hidden: true, alwaysOpen: true }
+  { id: 'subscription', name: 'Подписка', icon: 'CreditCard', hidden: true, alwaysOpen: true },
+  { id: 'notifications', name: 'Уведомления', icon: 'BellRing', hidden: true, alwaysOpen: true }
 ];
 
 // Разделы, которые включаются в тариф: без служебных страниц («Настройки», «Подписка») - они открыты всегда.
@@ -46,7 +47,7 @@ export const isLockedByTariff = (
   id: string
 ) => {
   const tariff = company?.tariff_modules;
-  if (!tariff || id === 'settings' || id === 'subscription') return false;
+  if (!tariff || id === 'settings' || id === 'subscription' || id === 'notifications') return false;
   const role = company?.role_modules;
   return (!role || role.includes(id)) && !tariff.includes(id);
 };
