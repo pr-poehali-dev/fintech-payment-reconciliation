@@ -109,12 +109,14 @@ export const groupTransactions = (transactions: Transaction[]): TransactionGroup
   // (см. ниже) не просуммировать одну и ту же сделку несколько раз и не
   // потерять вторую сделку, если пользователь вручную соединил, например,
   // продажу с отдельным возвратом.
+  // Отмена/возврат платежа связана с продажей, но это отдельная сделка (деньги ушли обратно) -
+  // в сумме группы считается отдельно: продажа +100, возврат −100 -> 0.
   const autoUF = makeUnionFind();
   transactions.forEach((t) => {
     const a = nodeKey(t);
     autoUF.find(a);
     const b = autoLinkTarget(t);
-    if (b) autoUF.union(a, b);
+    if (b && t.match_method !== 'payment_refund') autoUF.union(a, b);
   });
 
   // Финальный union-find - начинается от тех же авто-связей, затем поверх

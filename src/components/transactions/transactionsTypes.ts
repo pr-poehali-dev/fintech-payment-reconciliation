@@ -28,6 +28,7 @@ export interface Transaction {
   manual_group_id: string | null;
   link_excluded?: boolean;
   webhook_history?: WebhookHistoryItem[];
+  payment_operation?: 'refund';
 }
 
 export interface TransactionTypeTotal {

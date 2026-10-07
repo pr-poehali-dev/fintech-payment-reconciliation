@@ -14,6 +14,7 @@ const autoReasons: Record<string, Omit<LinkReason, 'kind'> & { kind: LinkReasonK
   order_id: { kind: 'order', label: 'По номеру заказа', description: 'Совпал номер заказа / внешний ID платежа и чека', icon: 'Hash' },
   automation: { kind: 'order', label: 'Сценарий автоматизации', description: 'Документ создан сценарием автоматизации по этому платежу (связь по номеру заказа в кассе)', icon: 'Workflow' },
   order_receipt: { kind: 'order', label: 'Закрытие заказа', description: 'Чек пробит кассой при завершении этого заказа', icon: 'Truck' },
+  payment_refund: { kind: 'order', label: 'Отмена/возврат платежа', description: 'Банк прислал отмену или возврат по этому платежу (совпал номер транзакции)', icon: 'Undo2' },
   refund_receipt: { kind: 'order', label: 'Возврат по платежу', description: 'Чек возврата пробит по этому платежу (совпал номер платежа)', icon: 'Undo2' },
   fiscal_triplet: { kind: 'fiscal', label: 'По фискальным данным', description: 'Совпали фискальные реквизиты: ФН + номер ФД + ФПД', icon: 'FileCheck' },
   qr_id: { kind: 'bank', label: 'Банковская операция', description: 'В назначении платежа банка найден тот же QR ID СБП, что у платежа', icon: 'Landmark' },

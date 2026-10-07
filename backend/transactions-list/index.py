@@ -2,7 +2,7 @@ import json
 import os
 
 import psycopg2
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Tuple
 from decimal import Decimal
 from zoneinfo import ZoneInfo
 from datetime import datetime, timedelta
@@ -92,6 +92,9 @@ def receipt_kind_title(title: Optional[str]) -> Optional[str]:
     return f"Чек {'коррекции ' if corr == '1' else ''}{kind} №{number}"
 
 
+REFUND_STATUSES = ('REFUNDED', 'CANCELED')
+
+
 def compute_signed_amount(row: Dict[str, Any]) -> float:
     '''
     Сумма транзакции с учётом знака - именно она используется в суммах для
@@ -129,6 +132,9 @@ def compute_signed_amount(row: Dict[str, Any]) -> float:
 
     if t == 'payment':
         status = row.get('status')
+        if row.get('payment_operation') == 'refund':
+            # Отмена/возврат - отдельная операция группы: деньги вернулись покупателю.
+            return -amount
         if status in ('AUTHORIZED', 'CONFIRMED'):
             return amount
         return 0.0
@@ -728,6 +734,9 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         # после схлопывания не нужна.
         payment_groups: Dict[Any, Dict[str, Any]] = {}
         final_rows = []
+        # Вебхуки одного платежа, схлопнутые в шапку: (source, id) -> id шапки - чтобы связи
+        # чеков с любым статусом платежа (чек продажи пробит по CONFIRMED) вели в группу.
+        payment_alias: Dict[Tuple[str, int], int] = {}
 
         for row in rows:
             tx = {}
@@ -737,15 +746,23 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             group_key = tx.pop('group_key', None)
 
             if tx['type'] == 'payment':
-                gkey = (tx['source'], group_key or f"id:{tx['id']}")
+                # Отмена/возврат - отдельная операция в группе платежа (деньги ушли обратно),
+                # остальные статусы (удержан, оплачен, отклонён) схлопываются в шапку продажи.
+                op = 'refund' if tx.get('status') in REFUND_STATUSES and group_key else 'sale'
+                gkey = (tx['source'], group_key or f"id:{tx['id']}", op)
                 group = payment_groups.get(gkey)
                 if group is None:
                     group = tx
                     group['webhook_history'] = [{'status': tx['status'], 'occurred_at': tx['occurred_at']}]
+                    group['_aliases'] = []
+                    if op == 'refund':
+                        group['payment_operation'] = 'refund'
                     payment_groups[gkey] = group
                     final_rows.append(group)
                 else:
                     group['webhook_history'].append({'status': tx['status'], 'occurred_at': tx['occurred_at']})
+                    group['_aliases'].append(tx['id'])
+                    payment_alias[(tx['source'], tx['id'])] = group['id']
                     if tx.get('linked_id') and not group.get('linked_id'):
                         group['linked_type'] = tx['linked_type']
                         group['linked_source'] = tx['linked_source']
@@ -753,6 +770,30 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                         group['match_method'] = tx['match_method']
             else:
                 final_rows.append(tx)
+
+        for (source, key, op), group in payment_groups.items():
+            if op != 'refund':
+                continue
+            sale = payment_groups.get((source, key, 'sale'))
+            group['title'] = ('Возврат платежа #' if group.get('status') == 'REFUNDED' else 'Отмена платежа #') + \
+                str(group.get('title') or '').replace('Платёж #', '', 1)
+            if not sale:
+                # Отмена без продажи (счёт не оплатили) - деньги не двигались, это не возврат.
+                group.pop('payment_operation', None)
+                group['title'] = 'Платёж #' + str(group['title']).split('#', 1)[-1]
+                continue
+            sale['_refunded'] = True
+            if sale:
+                group['linked_type'] = 'payment'
+                group['linked_source'] = source
+                group['linked_id'] = sale['id']
+                group['match_method'] = 'payment_refund'
+
+        for row in final_rows:
+            if row.get('linked_type') == 'payment' and row.get('linked_id') is not None:
+                head = payment_alias.get((row.get('linked_source'), row['linked_id']))
+                if head is not None:
+                    row['linked_id'] = head
 
         for group in payment_groups.values():
             group['webhook_history'].reverse()
@@ -763,10 +804,14 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             row['title'] = receipt_kind_title(row.get('title'))
             row['signed_amount'] = compute_signed_amount(row)
             row.pop('linked_ofd_status', None)
-            row['manual_group_id'] = manual_links.get((row['type'], row['source'], row['id']))
-            row['link_excluded'] = (row['type'], row['source'], row['id']) in link_exclusions
+            ids = [row['id']] + row.pop('_aliases', [])
+            row['manual_group_id'] = next((manual_links[(row['type'], row['source'], i)] for i in ids
+                                           if (row['type'], row['source'], i) in manual_links), None)
+            row['link_excluded'] = any((row['type'], row['source'], i) in link_exclusions for i in ids)
 
         if not paged:
+            for t in final_rows:
+                t.pop('_refunded', None)
             totals_by_type: Dict[str, Dict[str, Any]] = {}
             for row in final_rows:
                 bucket = totals_by_type.setdefault(row['type'], {'count': 0, 'amount': 0.0, 'matched_count': 0})
@@ -809,7 +854,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             for g in all_groups:
                 has_receipt = any(t['type'] in ('receipt_kassa', 'receipt_ofd') for t in g)
                 has_order = any(t['type'] == 'receipt_order' for t in g)
-                paid = [t for t in g if t['type'] == 'payment' and t.get('status') in ('CONFIRMED', 'AUTHORIZED')]
+                paid = [t for t in g if t['type'] == 'payment' and t.get('status') in ('CONFIRMED', 'AUTHORIZED')
+                        and not t.get('_refunded')]
                 if paid:
                     bucket = 'reconciled' if has_receipt else ('waiting' if has_order else 'no_receipt')
                     for t in paid:
@@ -842,7 +888,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 if any(t['type'] in ('receipt_kassa', 'receipt_ofd') for t in g):
                     continue
                 for t in g:
-                    if t['type'] != 'payment' or t.get('status') not in ('CONFIRMED', 'AUTHORIZED'):
+                    if t['type'] != 'payment' or t.get('status') not in ('CONFIRMED', 'AUTHORIZED') or t.get('_refunded'):
                         continue
                     if day and local_date(t.get('occurred_at'), company_tz) != day:
                         continue
@@ -870,6 +916,9 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         for g in all_groups:
             for t in g:
                 group_of[node_key(t)] = g
+
+        for t in final_rows:
+            t.pop('_refunded', None)
 
         filtered = [
             t for t in final_rows
