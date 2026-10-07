@@ -253,7 +253,10 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             payments_by_status[latest_status] = payments_by_status.get(latest_status, 0) + 1
             # Количество - по числу документов вне зависимости от статуса
             # (возврат тоже был платежом и должен быть виден в счётчике).
-            payments_count += 1
+            # Неоплаченные попытки (отклонён/истёк/отменён до оплаты) - не операции с деньгами,
+            # чека по ним нет: в количество для сверки с чеками не входят.
+            if is_refund or latest_status in ('AUTHORIZED', 'CONFIRMED'):
+                payments_count += 1
 
             amount_f = float(amount) if amount else 0.0
             # Сумма - нетто: вклад в выручку только у реально подтверждённых

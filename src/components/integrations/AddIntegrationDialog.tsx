@@ -59,7 +59,6 @@ const AddIntegrationDialog = ({
   const [webhookUrl, setWebhookUrl] = useState('');
   const [integrationName, setIntegrationName] = useState(editingIntegration?.integration_name || '');
   const [config, setConfig] = useState<ConfigState>(editingIntegration?.config || {});
-  const [webhookSettings, setWebhookSettings] = useState(editingIntegration?.webhook_settings || DEFAULT_WEBHOOK_SETTINGS);
   const [forwardUrl, setForwardUrl] = useState(editingIntegration?.forward_url || '');
   const [visiblePasswords, setVisiblePasswords] = useState<Record<string, boolean>>({});
   const { toast } = useToast();
@@ -74,7 +73,6 @@ const AddIntegrationDialog = ({
       setSelectedCategory(categories.find(c => c.providers.some(p => p.id === editingIntegration.provider_id)) || null);
       setIntegrationName(editingIntegration.integration_name || '');
       setConfig(editingIntegration.config || buildDefaultConfig(prov?.slug || ''));
-      setWebhookSettings(editingIntegration.webhook_settings || DEFAULT_WEBHOOK_SETTINGS);
       setForwardUrl(editingIntegration.forward_url || '');
     } else {
       setStep(initialCategory ? 1 : 0);
@@ -82,7 +80,6 @@ const AddIntegrationDialog = ({
       setSelectedProvider(null);
       setIntegrationName('');
       setConfig({});
-      setWebhookSettings(DEFAULT_WEBHOOK_SETTINGS);
       setForwardUrl('');
     }
     setWebhookUrl('');
@@ -122,7 +119,6 @@ const AddIntegrationDialog = ({
             company_id: companyId,
             integration_name: integrationName,
             config,
-            webhook_settings: webhookSettings,
             forward_url: acceptsIncomingWebhook(selectedProvider.slug) ? forwardUrl : '',
             sync_interval_hours: syncIntervalHours
           })
@@ -149,7 +145,7 @@ const AddIntegrationDialog = ({
             provider_slug: selectedProvider.slug,
             integration_name: integrationName || selectedProvider.name,
             config,
-            webhook_settings: webhookSettings,
+            webhook_settings: DEFAULT_WEBHOOK_SETTINGS,
             forward_url: acceptsIncomingWebhook(selectedProvider.slug) ? forwardUrl : '',
             sync_interval_hours: syncIntervalHours
           })
@@ -258,8 +254,6 @@ const AddIntegrationDialog = ({
             onIntegrationNameChange={setIntegrationName}
             config={config}
             onConfigChange={setConfig}
-            webhookSettings={webhookSettings}
-            onWebhookSettingsChange={setWebhookSettings}
             forwardUrl={forwardUrl}
             onForwardUrlChange={setForwardUrl}
             visiblePasswords={visiblePasswords}

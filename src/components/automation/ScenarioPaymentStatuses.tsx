@@ -32,11 +32,11 @@ const ScenarioPaymentStatuses = ({ source, value, onChange }: ScenarioPaymentSta
         );
       })}
       {!enabled.length && (
-        <p className="text-xs text-destructive">В интеграции выключены все уведомления о статусах — сценарий не запустится</p>
+        <p className="text-xs text-destructive">Интеграция не принимает уведомления о статусах — сценарий не запустится</p>
       )}
       {disabled.length > 0 && (
         <p className="text-xs text-muted-foreground">
-          Выключены в настройках интеграции: {disabled.map((o) => o.label).join(', ')}. Включите их там, чтобы выбрать здесь
+          Не принимаются для этой интеграции: {disabled.map((o) => o.label).join(', ')}
         </p>
       )}
       <p className="text-xs text-muted-foreground">

@@ -50,7 +50,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         'notify_on_authorized': True,
         'notify_on_confirmed': True,
         'notify_on_rejected': True,
-        'notify_on_refunded': True
+        'notify_on_refunded': True,
+        'notify_on_canceled': True
     })
     
     if not company_id or not provider_slug:

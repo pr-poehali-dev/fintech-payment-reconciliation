@@ -14,10 +14,6 @@ import {
   FieldConfig,
   PROVIDER_FIELDS,
   Provider,
-  TBANK_NOTIFY_OPTIONS,
-  ECOMKASSA_GATEWAY_NOTIFY_OPTIONS,
-  ALFABANK_NOTIFY_OPTIONS,
-  TOCHKA_ACQUIRING_NOTIFY_OPTIONS,
   acceptsIncomingWebhook
 } from './providerFieldsConfig';
 
@@ -30,8 +26,6 @@ interface IntegrationConfigStepProps {
   onIntegrationNameChange: (value: string) => void;
   config: ConfigState;
   onConfigChange: (config: ConfigState) => void;
-  webhookSettings: Record<string, boolean>;
-  onWebhookSettingsChange: (settings: Record<string, boolean>) => void;
   forwardUrl: string;
   onForwardUrlChange: (value: string) => void;
   visiblePasswords: Record<string, boolean>;
@@ -51,8 +45,6 @@ const IntegrationConfigStep = ({
   onIntegrationNameChange,
   config,
   onConfigChange,
-  webhookSettings,
-  onWebhookSettingsChange,
   forwardUrl,
   onForwardUrlChange,
   visiblePasswords,
@@ -283,30 +275,6 @@ const IntegrationConfigStep = ({
           config={config}
           onConfigChange={onConfigChange}
         />
-      )}
-
-      {['tbank', 'alfabank', 'tochka_acquiring', 'ecomkassa_gateway'].includes(selectedProvider.slug) && (
-        <div className="space-y-2">
-          <Label>Уведомления о статусах платежей</Label>
-          <div className="space-y-2">
-            {(selectedProvider.slug === 'tbank'
-              ? TBANK_NOTIFY_OPTIONS
-              : selectedProvider.slug === 'alfabank'
-                ? ALFABANK_NOTIFY_OPTIONS
-                : selectedProvider.slug === 'tochka_acquiring'
-                  ? TOCHKA_ACQUIRING_NOTIFY_OPTIONS
-                  : ECOMKASSA_GATEWAY_NOTIFY_OPTIONS).map(({ key, label }) => (
-              <label key={key} className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={!!webhookSettings[key]}
-                  onChange={(e) => onWebhookSettingsChange({ ...webhookSettings, [key]: e.target.checked })}
-                />
-                <span className="text-sm">{label}</span>
-              </label>
-            ))}
-          </div>
-        </div>
       )}
 
       {acceptsIncomingWebhook(selectedProvider.slug) && (
