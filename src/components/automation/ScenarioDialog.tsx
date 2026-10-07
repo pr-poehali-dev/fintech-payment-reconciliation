@@ -9,7 +9,10 @@ import { useAuth } from '@/contexts/AuthContext';
 import CrmMappingBlock from './CrmMappingBlock';
 import MoyklassMappingBlock from './MoyklassMappingBlock';
 import ScenarioAgentBlock, { agentProblems } from './ScenarioAgentBlock';
-import { TEMPLATE_VAT_OPTIONS, VAT_IN_SCENARIO } from '@/components/admin/actionTemplatesConfig';
+import ScenarioStep from './ScenarioStep';
+import ScenarioSourceSelect from './ScenarioSourceSelect';
+import ScenarioTemplateFields from './ScenarioTemplateFields';
+import ScenarioCorrectionFields from './ScenarioCorrectionFields';
 import {
   ACTIONS,
   AGENT_MAPPING_FIELDS,
@@ -17,7 +20,6 @@ import {
   ActionTemplateOption,
   ActionType,
   CorrectionSettings,
-  DEFAULT_CRM_MAPPING,
   DEFAULT_DISCREPANCY_DELAY,
   DISCREPANCY_DELAY_OPTIONS,
   IntegrationOption,
@@ -62,16 +64,6 @@ const emptyForm: ScenarioForm = {
   field_mapping: {},
   correction_settings: {}
 };
-
-const Step = ({ n, title, children }: { n: number; title: string; children: React.ReactNode }) => (
-  <div className="space-y-2">
-    <Label className="flex items-center gap-2">
-      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/15 text-[11px] font-bold text-primary">{n}</span>
-      {title}
-    </Label>
-    {children}
-  </div>
-);
 
 const ScenarioDialog = ({ open, onOpenChange, scenario, prefill, integrations, templates: allTemplates, isSaving, onSave }: ScenarioDialogProps) => {
   const [form, setForm] = useState<ScenarioForm>(emptyForm);
@@ -221,7 +213,7 @@ const ScenarioDialog = ({ open, onOpenChange, scenario, prefill, integrations, t
             />
           </div>
 
-          <Step n={step++} title="Источник">
+          <ScenarioStep n={step++} title="Источник">
             <div className="grid grid-cols-3 gap-2">
               {(Object.keys(TRIGGERS) as TriggerType[]).map((key) => (
                 <button
@@ -238,50 +230,24 @@ const ScenarioDialog = ({ open, onOpenChange, scenario, prefill, integrations, t
               ))}
             </div>
             <p className="text-xs text-muted-foreground">{trigger.description}</p>
-          </Step>
+          </ScenarioStep>
 
           {trigger.sourceCategories && (
-            <Step n={step++} title="Интеграция-источник">
-              <Select
-                value={form.source_integration_id ? String(form.source_integration_id) : ''}
-                onValueChange={(v) => {
-                  const picked = integrations.find((i) => i.id === Number(v));
-                  const pickedProvider = picked?.providerSlug;
-                  const prevProvider = sourceIntegration?.providerSlug;
-                  const crmDefaults = trigger.needsMapping && (pickedProvider === 'bitrix24' || pickedProvider === 'amocrm')
-                    && (!form.field_mapping.items_mode || (prevProvider !== pickedProvider && !!prevProvider));
-                  const pickedCrm = picked?.providerSlug === 'moyklass' || picked?.providerSlug === 'realtycalendar';
-                  const prefix = picked?.providerSlug === 'realtycalendar' ? 'booking.' : 'payment.';
-                  const mkDefaults = pickedCrm && !String(form.field_mapping.order_id || '').startsWith(prefix);
-                  setForm({
-                    ...form,
-                    source_integration_id: Number(v),
-                    field_mapping: crmDefaults
-                      ? { ...DEFAULT_CRM_MAPPING }
-                      : mkDefaults
-                        ? sourceDefaults(picked?.providerSlug, picked?.stage)
-                        : !pickedCrm && trigger.sourceCategories?.includes('payments') && !trigger.needsMapping
-                          ? {}
-                          : form.field_mapping
-                  });
-                }}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder={sourceOptions.length ? 'Выберите интеграцию' : 'Нет подходящих интеграций'} />
-                </SelectTrigger>
-                <SelectContent>
-                  {sourceOptions.map((i) => (
-                    <SelectItem key={i.id} value={String(i.id)}>
-                      {i.name} · <span className="text-muted-foreground">{i.providerName}</span>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </Step>
+            <ScenarioStep n={step++} title="Интеграция-источник">
+              <ScenarioSourceSelect
+                form={form}
+                setForm={setForm}
+                integrations={integrations}
+                sourceOptions={sourceOptions}
+                sourceIntegration={sourceIntegration}
+                trigger={trigger}
+                sourceDefaults={sourceDefaults}
+              />
+            </ScenarioStep>
           )}
 
           {form.trigger_type === 'discrepancy' && (
-            <Step n={step++} title="Когда считать, что чека нет">
+            <ScenarioStep n={step++} title="Когда считать, что чека нет">
               <Select
                 value={String(delayMinutes)}
                 onValueChange={(v) => setForm({ ...form, field_mapping: { ...form.field_mapping, delay_minutes: Number(v) } })}
@@ -301,10 +267,10 @@ const ScenarioDialog = ({ open, onOpenChange, scenario, prefill, integrations, t
                 Проверяются оплаченные платежи всех платёжек компании. Если за это время не пришёл ни чек кассы, ни чек ОФД —
                 пробиваем чек по корзине платежа. Нет корзины — чек не пробиваем, задание останавливается с ошибкой.
               </p>
-            </Step>
+            </ScenarioStep>
           )}
 
-          <Step n={step++} title="Действие">
+          <ScenarioStep n={step++} title="Действие">
             <div className={`grid gap-2 ${actionKeys.length > 1 ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1'}`}>
               {actionKeys.map((key) => (
                 <button
@@ -320,76 +286,26 @@ const ScenarioDialog = ({ open, onOpenChange, scenario, prefill, integrations, t
                 </button>
               ))}
             </div>
-          </Step>
+          </ScenarioStep>
 
-          <Step n={step++} title="Шаблон действия">
-            <Select value={form.action_template} onValueChange={(v) => setForm({ ...form, action_template: v as ActionTemplate })}>
-              <SelectTrigger>
-                <SelectValue placeholder={templates.length ? 'Выберите шаблон' : 'Нет доступных шаблонов'} />
-              </SelectTrigger>
-              <SelectContent>
-                {templates.map((t) => (
-                  <SelectItem key={t.code} value={t.code}>
-                    {t.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {currentTemplate?.description && <p className="text-xs text-muted-foreground">{currentTemplate.description}</p>}
-            {askEmail && (
-              <div className="space-y-1 pt-2">
-                <Label>Почта по умолчанию</Label>
-                <Input
-                  type="email"
-                  placeholder="receipts@company.ru"
-                  value={cs.default_email || ''}
-                  onChange={(e) => setCs({ default_email: e.target.value })}
-                />
-                <p className={`text-xs ${emailInvalid ? 'text-destructive' : 'text-muted-foreground'}`}>
-                  {emailInvalid
-                    ? 'Проверьте адрес почты'
-                    : isCorrection
-                      ? 'Подставится в чек как почта компании и покупателя, если их нет'
-                      : 'Подставится в чек, если у покупателя нет почты или телефона'}
-                </p>
-              </div>
-            )}
-            {askVat && (
-              <div className="space-y-1 pt-2">
-                <Label>НДС, если в платеже нет товаров</Label>
-                <Select value={cs.vat || 'none'} onValueChange={(v) => setCs({ vat: v })}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {TEMPLATE_VAT_OPTIONS.filter((o) => o.value !== VAT_IN_SCENARIO).map((o) => (
-                      <SelectItem key={o.value} value={o.value}>
-                        {o.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground">
-                  Чек пробьётся одной позицией на сумму платежа с этой ставкой. Если товары есть — ставка берётся из них
-                </p>
-              </div>
-            )}
-            {askCashier && (
-              <div className="space-y-1 pt-2">
-                <Label>Кассир в чеке (необязательно)</Label>
-                <Input
-                  placeholder="Например, Иванов Иван"
-                  maxLength={100}
-                  value={cs.cashier_name || ''}
-                  onChange={(e) => setCs({ cashier_name: e.target.value })}
-                />
-                <p className="text-xs text-muted-foreground">Если пусто — касса подставит кассира магазина</p>
-              </div>
-            )}
-          </Step>
+          <ScenarioStep n={step++} title="Шаблон действия">
+            <ScenarioTemplateFields
+              actionTemplate={form.action_template}
+              onTemplateChange={(v) => setForm({ ...form, action_template: v })}
+              templates={templates}
+              currentTemplate={currentTemplate}
+              cs={cs}
+              setCs={setCs}
+              askEmail={askEmail}
+              emailInvalid={emailInvalid}
+              askVat={askVat}
+              askCashier={askCashier}
+              isCorrection={isCorrection}
+            />
+          </ScenarioStep>
 
           {isAgent && currentTemplate && (
-            <Step n={step++} title="Агентский чек">
+            <ScenarioStep n={step++} title="Агентский чек">
               <ScenarioAgentBlock
                 template={currentTemplate}
                 values={cs.agent || {}}
@@ -399,48 +315,24 @@ const ScenarioDialog = ({ open, onOpenChange, scenario, prefill, integrations, t
               {agentMissing.length > 0 && (
                 <p className="text-xs text-destructive">Заполните или исправьте: {agentMissing.join(', ')}</p>
               )}
-            </Step>
+            </ScenarioStep>
           )}
 
           {isCorrection && (
-            <Step n={step++} title="Чек коррекции">
-              <div className="space-y-3 rounded-lg border border-primary/30 bg-primary/5 p-4">
-                <p className="text-xs text-muted-foreground">
-                  Самостоятельная коррекция · протокол {isV5 ? 'v5 (ФФД 1.2)' : 'v4 (ФФД 1.05)'}. Дата основания — {dateLabel}. Место расчётов — адрес магазина в Екомкассе.
-                </p>
-                {!askNumber && !askName && (
-                  <p className="text-xs text-muted-foreground">Все поля коррекции заданы в шаблоне — заполнять ничего не нужно</p>
-                )}
-                {askNumber && (
-                  <div className="space-y-1">
-                    <Label>Номер документа-основания{isV5 ? ' (необязательно)' : ''}</Label>
-                    <Input
-                      placeholder="Например, 1 или номер акта"
-                      maxLength={32}
-                      value={cs.correction_base_number || ''}
-                      onChange={(e) => setCs({ correction_base_number: e.target.value })}
-                    />
-                  </div>
-                )}
-                {askName && (
-                  <div className="space-y-1">
-                    <Label>Описание коррекции</Label>
-                    <Input
-                      placeholder="Не пробит чек при оплате"
-                      value={cs.correction_base_name || ''}
-                      onChange={(e) => setCs({ correction_base_name: e.target.value })}
-                    />
-                    <p className="text-xs text-muted-foreground">Причина коррекции — попадёт в чек</p>
-                  </div>
-                )}
-                {correctionMissing.length > 0 && (
-                  <p className="text-xs text-destructive">Заполните: {correctionMissing.join(', ')}</p>
-                )}
-              </div>
-            </Step>
+            <ScenarioStep n={step++} title="Чек коррекции">
+              <ScenarioCorrectionFields
+                cs={cs}
+                setCs={setCs}
+                isV5={isV5}
+                dateLabel={dateLabel}
+                askNumber={askNumber}
+                askName={askName}
+                correctionMissing={correctionMissing}
+              />
+            </ScenarioStep>
           )}
 
-          <Step n={step++} title="Касса">
+          <ScenarioStep n={step++} title="Касса">
             <Select
               value={form.target_integration_id ? String(form.target_integration_id) : ''}
               onValueChange={(v) => setForm({ ...form, target_integration_id: Number(v) })}
@@ -456,10 +348,10 @@ const ScenarioDialog = ({ open, onOpenChange, scenario, prefill, integrations, t
                 ))}
               </SelectContent>
             </Select>
-          </Step>
+          </ScenarioStep>
 
           {isMoyklass && form.source_integration_id && currentCompany && (
-            <Step n={step++} title={`Сопоставление полей ${isRk ? 'RealtyCalendar' : '«Мой Класс»'}`}>
+            <ScenarioStep n={step++} title={`Сопоставление полей ${isRk ? 'RealtyCalendar' : '«Мой Класс»'}`}>
               <MoyklassMappingBlock
                 companyId={currentCompany.id}
                 integrationId={form.source_integration_id}
@@ -469,11 +361,11 @@ const ScenarioDialog = ({ open, onOpenChange, scenario, prefill, integrations, t
                 onChange={(m) => setForm({ ...form, field_mapping: m })}
                 templatePaymentMethod={currentTemplate?.payment_method}
               />
-            </Step>
+            </ScenarioStep>
           )}
 
           {trigger.needsMapping && (
-            <Step n={step++} title="Сопоставление полей">
+            <ScenarioStep n={step++} title="Сопоставление полей">
               {!form.source_integration_id ? (
                 <p className="text-xs text-muted-foreground">Выберите интеграцию-источник — подгрузим её поля</p>
               ) : isBitrix && currentCompany ? (
@@ -493,7 +385,7 @@ const ScenarioDialog = ({ open, onOpenChange, scenario, prefill, integrations, t
               ) : (
                 <p className="text-xs text-muted-foreground">Загрузка полей доступна для Битрикс24 и AmoCRM</p>
               )}
-            </Step>
+            </ScenarioStep>
           )}
         </div>
 
