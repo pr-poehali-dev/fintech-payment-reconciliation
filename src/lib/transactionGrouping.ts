@@ -197,6 +197,13 @@ export const groupTransactions = (transactions: Transaction[]): TransactionGroup
         deals.push({ value: money.reduce((s, t) => s + amountOf(t), 0), covered: true });
         return;
       }
+      // Несколько операций платежа в одной сделке (продажа + отмена/возврат) - складываем их:
+      // +100 и −100 дают 0, а не сумму одной случайной строки.
+      const payments = docs.filter((t) => t.type === 'payment');
+      if (payments.length > 1) {
+        deals.push({ value: payments.reduce((s, t) => s + amountOf(t), 0), covered: false });
+        return;
+      }
       const representative = [...docs].sort((a, b) => (sumRepresentativeOrder[a.type] ?? 9) - (sumRepresentativeOrder[b.type] ?? 9))[0];
       deals.push({ value: amountOf(representative), covered: false });
     });
