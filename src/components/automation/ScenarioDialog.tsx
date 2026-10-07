@@ -100,12 +100,28 @@ const ScenarioDialog = ({ open, onOpenChange, scenario, prefill, integrations, t
     ? integrations.filter((i) => trigger.sourceCategories?.includes(i.category) || (!!i.providerSlug && trigger.sourceCategories?.includes(i.providerSlug)))
     : [];
   const targetOptions = integrations.filter((i) => TARGET_CATEGORIES.includes(i.category));
-  const templates = allTemplates.filter((t) => t.action_type === form.action_type);
+  // Чеки - только под версию ФФД кассы: выбранной в сценарии, иначе всех подключённых касс.
+  // У касс без указанной версии - по умолчанию v4 (ФФД 1.1), как при отправке чека.
+  const targetKassa = targetOptions.find((i) => i.id === form.target_integration_id);
+  const kassaVersions = new Set((targetKassa ? [targetKassa] : targetOptions).map((i) => i.protocolVersion || 'v4'));
+  const templates = allTemplates.filter(
+    (t) =>
+      t.action_type === form.action_type &&
+      (form.action_type !== 'create_receipt' || !kassaVersions.size || kassaVersions.has(t.protocol_version || 'v4'))
+  );
   // Выключенный в админке шаблон остаётся видимым у сценария, который уже на нём настроен.
   if (scenario && form.action_template && !templates.some((t) => t.code === form.action_template) && scenario.action_type === form.action_type) {
     templates.push({ code: form.action_template, name: scenario.action_template_name || form.action_template, action_type: form.action_type, description: null });
   }
+  const ffdLabel = form.action_type === 'create_receipt' && kassaVersions.size === 1
+    ? (kassaVersions.has('v5') ? 'ФФД 1.2' : 'ФФД 1.1')
+    : null;
   const currentTemplate = templates.find((t) => t.code === form.action_template);
+  const templateMismatch = open && !scenario && !!form.action_template && !currentTemplate && templates.length > 0;
+  useEffect(() => {
+    if (templateMismatch) setForm((f) => ({ ...f, action_template: templates[0].code }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [templateMismatch]);
   const isCorrection = form.action_type === 'create_receipt' && currentTemplate?.receipt_type === 'correction';
   const isV5 = currentTemplate?.protocol_version === 'v5';
   const cs = form.correction_settings || {};
@@ -316,6 +332,9 @@ const ScenarioDialog = ({ open, onOpenChange, scenario, prefill, integrations, t
               askCashier={askCashier}
               isCorrection={isCorrection}
             />
+            {ffdLabel && (
+              <p className="text-xs text-muted-foreground">Показаны шаблоны под {ffdLabel} — по настройке {targetKassa ? 'выбранной кассы' : 'подключённой кассы'}</p>
+            )}
           </ScenarioStep>
 
           {isAgent && currentTemplate && (

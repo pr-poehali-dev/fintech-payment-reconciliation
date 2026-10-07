@@ -45,6 +45,7 @@ export interface IntegrationOption {
   category: string;
   stage?: string;
   webhookSettings?: Record<string, boolean>;
+  protocolVersion?: string;
 }
 
 // sourceCategories: категории интеграций для выбора источника (null - внутренний источник)

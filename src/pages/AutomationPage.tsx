@@ -31,7 +31,7 @@ interface IntegrationRow {
   provider_slug: string;
   category_slug: string;
   status: string;
-  config?: { stage?: string };
+  config?: { stage?: string; protocol_version?: string };
   webhook_settings?: Record<string, boolean> | null;
 }
 
@@ -75,7 +75,7 @@ const AutomationPage = ({ prefillSourceId, onPrefillUsed }: AutomationPageProps 
     setIntegrations(
       ((iData.user_integrations || []) as IntegrationRow[])
         .filter((i) => i.status === 'active')
-        .map((i) => ({ id: i.id, name: i.integration_name, providerName: i.provider_name, providerSlug: i.provider_slug, category: i.category_slug, stage: i.config?.stage, webhookSettings: i.webhook_settings || undefined }))
+        .map((i) => ({ id: i.id, name: i.integration_name, providerName: i.provider_name, providerSlug: i.provider_slug, category: i.category_slug, stage: i.config?.stage, protocolVersion: i.config?.protocol_version, webhookSettings: i.webhook_settings || undefined }))
     );
     setIsLoading(false);
   }, [api, companyId]);
