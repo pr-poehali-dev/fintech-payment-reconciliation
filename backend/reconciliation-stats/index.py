@@ -196,17 +196,16 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         # doc_datetime, receipt_id уже проставлен при создании такого платежа) -
         # иначе платёж "переезжает" на день дозагрузки и выпадает из сверки за
         # реальный день продажи, создавая ложное расхождение с чеками.
+        # Отмена/возврат оплаченного платежа - отдельная операция (минус в день отмены),
+        # как в реестре транзакций: продажа и возврат сверяются со своими чеками по дням.
         cur.execute(f'''
-            WITH latest AS (
-                SELECT
-                    wp.integration_id,
-                    wp.payment_id,
-                    MAX(wp.amount) AS amount,
-                    MIN(((COALESCE(er.doc_datetime, wp.created_at) AT TIME ZONE 'UTC') AT TIME ZONE %s)::date) AS payment_date,
-                    (array_agg(wp.status ORDER BY wp.created_at DESC))[1] AS latest_status,
-                    (array_agg(wp.payment_provider ORDER BY wp.created_at DESC))[1] AS payment_provider,
-                    MAX(ui.integration_name) AS integration_name,
-                    MAX(p.slug) AS provider_slug
+            WITH rows AS (
+                SELECT wp.*, ui.integration_name, p.slug AS provider_slug, er.doc_datetime AS receipt_dt,
+                       CASE WHEN wp.status IN ('REFUNDED', 'CANCELED') AND EXISTS (
+                                SELECT 1 FROM {SCHEMA}.webhook_payments s
+                                WHERE s.integration_id = wp.integration_id AND s.payment_id = wp.payment_id
+                                  AND s.status IN ('AUTHORIZED', 'CONFIRMED') AND s.removed_at IS NULL)
+                            THEN 'refund' ELSE 'sale' END AS op
                 FROM {SCHEMA}.webhook_payments wp
                 JOIN {SCHEMA}.user_integrations ui ON ui.id = wp.integration_id
                 JOIN {SCHEMA}.integration_providers p ON p.id = ui.provider_id
@@ -214,12 +213,27 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 LEFT JOIN {SCHEMA}.ecomkassa_receipts er ON er.id = wp.receipt_id
                 WHERE wp.company_id = %s AND c.slug = 'payments'
                   AND wp.removed_at IS NULL AND ui.status = 'active'
-                GROUP BY wp.integration_id, wp.payment_id
+            ), latest AS (
+                SELECT
+                    integration_id, payment_id, op,
+                    MAX(amount) AS amount,
+                    MIN(((COALESCE(receipt_dt, created_at) AT TIME ZONE 'UTC') AT TIME ZONE %s)::date) AS payment_date,
+                    CASE WHEN op = 'refund' THEN 'REFUND_OP'
+                         WHEN bool_or(status IN ('AUTHORIZED', 'CONFIRMED')) THEN
+                              (array_agg(status ORDER BY (status IN ('AUTHORIZED', 'CONFIRMED')) DESC, created_at DESC))[1]
+                         ELSE (array_agg(status ORDER BY created_at DESC))[1] END AS latest_status,
+                    (array_agg(payment_provider ORDER BY created_at DESC))[1] AS payment_provider,
+                    MAX(integration_name) AS integration_name,
+                    MAX(provider_slug) AS provider_slug,
+                    (array_agg(status ORDER BY created_at DESC))[1] AS refund_status
+                FROM rows
+                GROUP BY integration_id, payment_id, op
             )
-            SELECT payment_date, latest_status, amount, payment_provider, integration_name, provider_slug
+            SELECT payment_date, CASE WHEN latest_status = 'REFUND_OP' THEN refund_status ELSE latest_status END,
+                   amount, payment_provider, integration_name, provider_slug, latest_status = 'REFUND_OP'
             FROM latest
             WHERE payment_date BETWEEN %s AND %s
-        ''', (company_tz, company_id, date_from, date_to))
+        ''', (company_id, company_tz, date_from, date_to))
 
         payments_rows = cur.fetchall()
         cur.execute(f'''
@@ -235,7 +249,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         # только по успешным платежам, у одной кассы их может быть больше 10.
         payments_by_provider: Dict[str, Dict[str, float]] = {}
 
-        for payment_date, latest_status, amount, payment_provider, integration_name, provider_slug in payments_rows:
+        for payment_date, latest_status, amount, payment_provider, integration_name, provider_slug, is_refund in payments_rows:
             payments_by_status[latest_status] = payments_by_status.get(latest_status, 0) + 1
             # Количество - по числу документов вне зависимости от статуса
             # (возврат тоже был платежом и должен быть виден в счётчике).
@@ -244,13 +258,14 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             amount_f = float(amount) if amount else 0.0
             # Сумма - нетто: вклад в выручку только у реально подтверждённых
             # денег, возврат/отмена дают 0 (деньги не задержались на счету).
-            contribution = amount_f if latest_status in ('AUTHORIZED', 'CONFIRMED') else 0.0
+            # Отмена/возврат оплаченного платежа - минус в день отмены (продажа своё уже внесла).
+            contribution = -amount_f if is_refund else (amount_f if latest_status in ('AUTHORIZED', 'CONFIRMED') else 0.0)
             payments_total += contribution
 
             day_key = payment_date.isoformat()
             daily_payments[day_key] = daily_payments.get(day_key, 0.0) + contribution
 
-            if latest_status in ('AUTHORIZED', 'CONFIRMED'):
+            if latest_status in ('AUTHORIZED', 'CONFIRMED') and not is_refund:
                 provider_key = payment_kind_label(provider_slug, payment_provider, integration_name, kind_names)
                 if provider_key not in payments_by_provider:
                     payments_by_provider[provider_key] = {'amount': 0.0, 'count': 0}
