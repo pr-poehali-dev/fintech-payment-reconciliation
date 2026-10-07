@@ -34,6 +34,53 @@ def get_token(login: str, password: str, protocol_version: str = 'v4') -> Option
         return None
 
 
+BLOCKED_MARKERS = ('block', 'lock', 'disabled', 'inactive', 'suspend', 'заблок', 'отключ')
+
+
+def get_token_detailed(login: str, password: str, protocol_version: str = 'v4') -> Dict[str, Any]:
+    '''
+    То же, что get_token, но возвращает причину отказа: {"token", "reason", "raw"}.
+    reason: wrong_credentials | blocked | unknown_login | other | network
+    '''
+    url = f'{BASE_URL}/fiscalorder/{protocol_version}/getToken'
+    data = json.dumps({'login': login, 'pass': password}).encode('utf-8')
+    req = urllib.request.Request(url, data=data, method='POST',
+                                 headers={'Content-Type': 'application/json; charset=utf-8'})
+    try:
+        with urllib.request.urlopen(req, timeout=15) as response:
+            raw = response.read().decode('utf-8')
+            status = response.status
+    except urllib.error.HTTPError as e:
+        raw = e.read().decode('utf-8') if e.fp else ''
+        status = e.code
+    except urllib.error.URLError as e:
+        print(f'[getToken] network error: {e}')
+        return {'token': None, 'reason': 'network', 'raw': str(e)}
+
+    print(f'[getToken] login={login} HTTP {status}: {raw[:1000]}')
+    try:
+        result = json.loads(raw)
+    except json.JSONDecodeError:
+        return {'token': None, 'reason': 'other', 'raw': raw[:300]}
+
+    if result.get('code') == 0 and result.get('token'):
+        return {'token': result['token'], 'reason': None, 'raw': None}
+
+    err = result.get('error') if isinstance(result.get('error'), dict) else result
+    text = str(err.get('text') or '')
+    code = err.get('code')
+    lowered = text.lower()
+    if any(m in lowered for m in BLOCKED_MARKERS):
+        reason = 'blocked'
+    elif code == 12 or 'wrongloginorpassword' in lowered:
+        reason = 'wrong_credentials'
+    elif 'could not find password info' in lowered:
+        reason = 'unknown_login'
+    else:
+        reason = 'other'
+    return {'token': None, 'reason': reason, 'raw': text or raw[:300], 'code': code}
+
+
 def fetch_firm_profile(token: str) -> Optional[Dict[str, Any]]:
     '''
     GET /api/mobile/v1/profile/firm - профиль организации со списком магазинов (stores),

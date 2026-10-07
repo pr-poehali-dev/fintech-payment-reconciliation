@@ -4,7 +4,7 @@ import re
 import psycopg2
 from typing import Dict, Any
 
-from ecomkassa_api import get_token, fetch_firm_profile, extract_stores, extract_firm_inn
+from ecomkassa_api import get_token_detailed, fetch_firm_profile, extract_stores, extract_firm_inn
 from auth_guard import guard
 
 CORS_HEADERS = {
@@ -65,12 +65,21 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             'isBase64Encoded': False
         }
 
-    token = get_token(login, password, protocol_version)
+    auth = get_token_detailed(login, password, protocol_version)
+    token = auth['token']
     if not token:
+        messages = {
+            'blocked': 'Ваша учётная запись в Екомкассе заблокирована. Обратитесь в поддержку Екомкассы',
+            'wrong_credentials': 'Неверный логин или пароль Екомкассы',
+            'unknown_login': 'Пользователь с таким логином в Екомкассе не найден',
+            'network': 'Екомкасса не отвечает, попробуйте позже',
+        }
+        error = messages.get(auth['reason']) or f"Екомкасса отказала во входе: {auth.get('raw')}"
         return {
             'statusCode': 200,
             'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
-            'body': json.dumps({'success': False, 'error': 'Неверный логин или пароль Екомкассы'}),
+            'body': json.dumps({'success': False, 'error': error, 'reason': auth['reason'],
+                                'provider_error': auth.get('raw')}, ensure_ascii=False),
             'isBase64Encoded': False
         }
 
