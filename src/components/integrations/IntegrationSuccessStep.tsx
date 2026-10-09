@@ -11,6 +11,7 @@ interface IntegrationSuccessStepProps {
   onCopyWebhookUrl: () => void;
   onFinish: () => void;
   onSetupReceipts?: () => void;
+  autoWebhook?: boolean;
 }
 
 const IntegrationSuccessStep = ({
@@ -19,7 +20,8 @@ const IntegrationSuccessStep = ({
   webhookUrl,
   onCopyWebhookUrl,
   onFinish,
-  onSetupReceipts
+  onSetupReceipts,
+  autoWebhook
 }: IntegrationSuccessStepProps) => {
   const offerReceipts = !!onSetupReceipts && suggestsReceiptScenario(selectedProvider.slug);
   return (
@@ -33,7 +35,17 @@ const IntegrationSuccessStep = ({
         </div>
       </div>
 
-      {acceptsIncomingWebhook(selectedProvider.slug) ? (
+      {autoWebhook ? (
+        <div className="bg-info/10 p-4 rounded-lg">
+          <div className="flex items-start gap-2">
+            <Icon name="Info" className="text-info mt-0.5" size={18} />
+            <p className="text-sm text-muted-foreground">
+              Уведомления об оплатах по платёжным ссылкам Точка будет присылать сама — настраивать вебхук не нужно.
+              Для чеков передавайте товары (Items) при создании платёжной ссылки
+            </p>
+          </div>
+        </div>
+      ) : acceptsIncomingWebhook(selectedProvider.slug) ? (
         <>
           <div>
             <Label>Ваш уникальный URL для вебхуков</Label>

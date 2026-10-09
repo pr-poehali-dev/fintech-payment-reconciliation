@@ -120,7 +120,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                    AND s.action_type IN ('create_receipt', 'create_order') AND s.status = 'stopped'
                    AND s.removed_at IS NULL
                  ORDER BY (s.action_type = 'create_receipt') DESC, s.updated_at DESC LIMIT 1) AS stopped_receipt_scenario,
-                CASE WHEN p.slug = 'tochka_account' AND ui.config->>'auth_method' = 'oauth' THEN (
+                CASE WHEN p.slug IN ('tochka_account', 'tochka_acquiring') AND ui.config->>'auth_method' = 'oauth' THEN (
                     SELECT CASE
                         WHEN g.id IS NULL OR g.refresh_token IS NULL THEN 'missing'
                         WHEN g.revoked_at IS NOT NULL OR g.updated_at < NOW() - INTERVAL '30 days' THEN 'expired'

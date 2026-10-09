@@ -107,7 +107,8 @@ def _fetch_tochka_cart(cur, company_id: int, payment: Dict[str, Any]) -> Optiona
     cur.execute(f'SELECT config FROM {SCHEMA}.user_integrations WHERE id = %s', (payment['integration_id'],))
     row = cur.fetchone()
     config = row[0] if row and isinstance(row[0], dict) else json.loads((row or [None])[0] or '{}')
-    op, err = tochka_acquiring_api.get_operation(str(config.get('api_token') or ''), str(payment['payment_id']), timeout=8)
+    token, token_err = tochka_acquiring_api.api_token(cur, company_id, config or {})
+    op, err = tochka_acquiring_api.get_operation(token, token_err, str(payment['payment_id']), timeout=8)
     if not op:
         return err
     tochka_acquiring_api.save_cart(cur, payment['integration_id'], company_id, str(payment['payment_id']), op)

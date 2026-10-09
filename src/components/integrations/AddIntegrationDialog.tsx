@@ -70,10 +70,11 @@ const AddIntegrationDialog = ({
     if (!open) return;
 
     if (restoredDraft && !restoredDraft.integrationId) {
-      const prov = allProviders.find(p => p.slug === 'tochka_account') || null;
+      const draftSlug = restoredDraft.providerSlug || 'tochka_account';
+      const prov = allProviders.find(p => p.slug === draftSlug) || null;
       setStep(2);
       setSelectedProvider(prov);
-      setSelectedCategory(categories.find(c => c.providers.some(p => p.slug === 'tochka_account')) || null);
+      setSelectedCategory(categories.find(c => c.providers.some(p => p.slug === draftSlug)) || null);
       setIntegrationName(restoredDraft.integrationName);
       setConfig(restoredDraft.config);
       setForwardUrl('');
@@ -278,6 +279,7 @@ const AddIntegrationDialog = ({
             onBeforeOAuthRedirect={() => saveTochkaDraft({
               companyId,
               integrationId: editingIntegration?.id ?? null,
+              providerSlug: selectedProvider.slug,
               integrationName,
               config: { ...config, auth_method: 'oauth' }
             })}
@@ -289,6 +291,7 @@ const AddIntegrationDialog = ({
             selectedProvider={selectedProvider}
             stage={String(config.stage || (selectedProvider.slug === 'realtycalendar' ? 'income' : 'payment_new'))}
             webhookUrl={webhookUrl}
+            autoWebhook={selectedProvider.slug === 'tochka_acquiring' && config.auth_method === 'oauth'}
             onCopyWebhookUrl={copyToClipboard}
             onFinish={handleFinish}
             onSetupReceipts={

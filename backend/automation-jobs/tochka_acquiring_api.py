@@ -15,6 +15,7 @@ import urllib.request
 from typing import Any, Dict, List, Optional, Tuple
 
 from russian_ca import RUSSIAN_TRUSTED_CA
+import tochka_oauth
 
 SCHEMA = 't_p83864310_fintech_payment_reco'
 API_BASE = 'https://enter.tochka.com/uapi/acquiring/v1.0'
@@ -77,8 +78,23 @@ def verify_jwt(token: str) -> Optional[Dict[str, Any]]:
         return None
 
 
-def get_operation(api_token: str, operation_id: str, timeout: float = 10) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+def api_token(cur, company_id: int, config: Dict[str, Any]) -> Tuple[str, Optional[str]]:
+    '''Токен для API эквайринга: JWT из настроек или доступ компании, выданный через вход в Точку (OAuth).'''
+    if config.get('auth_method') == 'oauth':
+        token, err = tochka_oauth.get_access_token(cur, company_id)
+        return token or '', err
+    return str(config.get('api_token') or ''), None
+
+
+def _token(cur, company_id: int, config: Dict[str, Any]) -> Tuple[str, Optional[str]]:
+    return api_token(cur, company_id, config)
+
+
+def get_operation(api_token: str, token_error: Optional[str], operation_id: str = '', timeout: float = 10
+                  ) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
     '''Get Payment Operation Info: статус, способ оплаты, покупатель и корзина (Items).'''
+    if not api_token:
+        return None, token_error or 'Нет токена Точки'
     req = urllib.request.Request(f'{API_BASE}/payments/{operation_id}',
                                  headers={'Authorization': f'Bearer {api_token}'})
     try:
@@ -181,7 +197,7 @@ def process(cur, integration_id: int, company_id: int, config: Dict[str, Any],
     if notify_key and not webhook_settings.get(notify_key, True):
         return True, None, None, data
 
-    op, op_error = get_operation(str(config.get('api_token') or ''), operation_id)
+    op, op_error = get_operation(*_token(cur, company_id, config), operation_id)
     if op:
         save_cart(cur, integration_id, company_id, operation_id, op)
     client = (op or {}).get('Client') or {}

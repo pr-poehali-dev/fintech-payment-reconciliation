@@ -55,6 +55,20 @@
         "error": "string"
       },
       "bodyMatcher": "partial"
+    },
+    {
+      "name": "Общий вебхук Точки с неверной подписью не обрабатывается",
+      "method": "POST",
+      "path": "/?source=tochka",
+      "headers": {
+        "Content-Type": "text/plain"
+      },
+      "body": "eyJhbGciOiJSUzI1NiJ9.e30.AAAA",
+      "expectedStatus": 200,
+      "expectedBody": {
+        "ok": true
+      },
+      "bodyMatcher": "partial"
     }
   ]
 }

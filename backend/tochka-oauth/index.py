@@ -25,6 +25,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     Подключение расчётного счёта Точки по OAuth 2.0 от имени компании.
     GET  ?action=status&company_id=..        -> подключена ли Точка у компании
     GET  ?action=authorize_url&company_id=.. -> ссылка на подтверждение доступа в Точке
+    GET  ?action=acquiring&company_id=..     -> торговые точки эквайринга + подписка на вебхук оплат
     POST { code, company_id }                -> обмен кода на токены и сохранение доступа
     '''
     denied = guard(event)
@@ -55,6 +56,25 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 if not url:
                     return _resp(200, {'success': False, 'error': err})
                 return _resp(200, {'success': True, 'authorize_url': url})
+
+            if action == 'acquiring':
+                token, err = tochka_oauth.get_access_token(cur, int(company_id))
+                conn.commit()
+                if not token:
+                    return _resp(200, {'success': False, 'error': err, 'oauth_required': True})
+                customers = tochka_oauth.business_customers(token)
+                if not customers:
+                    return _resp(200, {'success': False, 'error': 'Точка не вернула бизнес-клиента - подключитесь через Точку заново'})
+                points, forbidden = [], False
+                for c in customers:
+                    found, status = tochka_oauth.retailers(token, c['customer_code'])
+                    forbidden = forbidden or status in (401, 403)
+                    points += [{**p, 'customer_code': c['customer_code'], 'customer_name': c['name']} for p in found]
+                if forbidden and not points:
+                    return _resp(200, {'success': False, 'error': 'Нет доступа к интернет-эквайрингу - подключитесь через Точку заново и подтвердите все разрешения'})
+                webhook_error = tochka_oauth.ensure_webhook(token)
+                return _resp(200, {'success': True, 'customers': customers, 'retailers': points,
+                                   'webhook_ready': webhook_error is None, 'webhook_error': webhook_error})
 
             return _resp(400, {'error': 'Unknown action'})
 

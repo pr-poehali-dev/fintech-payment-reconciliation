@@ -206,10 +206,8 @@ export const RK_PAYMENT_SYSTEM_OPTIONS: FieldOption[] = [
 ];
 
 export const PROVIDER_FIELDS: Record<string, FieldConfig[]> = {
-  tochka_acquiring: [
-    { key: 'api_token', label: 'JWT-токен Точки', type: 'password', placeholder: 'eyJhbGciOi…', hint: 'Интернет-банк Точки → Интеграции и API → Подключить → токен с разрешением «Интернет-эквайринг». Проверим его у банка при сохранении' },
-    { key: 'merchant_id', label: 'Торговая точка (merchantId)', type: 'text', required: false, placeholder: '200000000012345', hint: 'Необязательно. Если точек несколько — укажите нужную, иначе принимаем оплаты всех точек' }
-  ],
+  // Токен, торговая точка и способ входа (JWT / вход через Точку) - в TochkaAcquiringPicker.
+  tochka_acquiring: [],
   alfabank: [
     { key: 'environment', label: 'Сервер банка', type: 'select', options: ALFABANK_ENV_OPTIONS, default: 'prod', required: false, hint: 'Адрес зависит от логина: уточните у поддержки Альфа-Банка, если не уверены' },
     { key: 'user_name', label: 'Логин API-пользователя', type: 'text', placeholder: 'r-shop-api', hint: 'Учётная запись магазина с окончанием -api из письма Альфа-Банка' },

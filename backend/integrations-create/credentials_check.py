@@ -124,6 +124,11 @@ def check_tochka_acquiring(config: Dict[str, Any]) -> Result:
     торговых точек эквайринга (retailers): 401 - токен неверный/просрочен; 403 на retailers -
     у токена нет права «Интернет-эквайринг» (без него корзину заказа не получить).
     '''
+    if config.get('auth_method') == 'oauth':
+        # Доступ и торговые точки уже проверены в форме через вход в Точку (tochka-oauth?action=acquiring).
+        if not str(config.get('customer_code') or '').strip():
+            return False, 'Подключитесь через Точку и дождитесь загрузки торговых точек'
+        return True, None
     token = str(config.get('api_token') or '').strip()
     if not token:
         return False, 'Вставьте JWT-токен Точки'

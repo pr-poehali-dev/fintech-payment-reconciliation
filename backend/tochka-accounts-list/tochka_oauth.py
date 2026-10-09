@@ -12,7 +12,7 @@ import os
 import urllib.error
 import urllib.parse
 import urllib.request
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from ru_trusted_ca import build_ssl_context
 
@@ -25,8 +25,13 @@ CONSENTS_URL = 'https://enter.tochka.com/uapi/v1.0/consents'
 SCOPE = 'accounts balances customers statements acquiring'
 PERMISSIONS = [
     'ReadAccountsBasic', 'ReadAccountsDetail', 'ReadBalances', 'ReadStatements',
-    'ReadCustomerData', 'ReadAcquiringData',
+    'ReadCustomerData', 'ReadAcquiringData', 'ManageWebhookData',
 ]
+API_BASE = 'https://enter.tochka.com/uapi'
+# Вебхук OAuth-приложения один на всех клиентов: в теле есть customerCode,
+# по нему webhook-receive находит интеграцию эквайринга нужной компании.
+WEBHOOK_URL = 'https://functions.poehali.dev/a923b457-57a6-4eb2-b566-9a9d65cb04e8?source=tochka'
+WEBHOOK_EVENTS = ['acquiringInternetPayment']
 
 _ssl = {}
 
@@ -169,3 +174,77 @@ def is_connected(cur, company_id: int) -> bool:
           AND revoked_at IS NULL AND updated_at > NOW() - INTERVAL '30 days'
     ''', (company_id, PROVIDER_SLUG))
     return cur.fetchone() is not None
+
+
+def _api(method: str, path: str, token: str, body: Optional[Dict[str, Any]] = None
+         ) -> Tuple[Optional[Dict[str, Any]], Optional[int], Optional[str]]:
+    data = json.dumps(body).encode('utf-8') if body is not None else None
+    headers = {'Authorization': f'Bearer {token}'}
+    if data is not None:
+        headers['Content-Type'] = 'application/json'
+    req = urllib.request.Request(f'{API_BASE}{path}', data=data, method=method, headers=headers)
+    try:
+        with urllib.request.urlopen(req, timeout=8, context=ssl_context()) as resp:
+            raw = resp.read().decode('utf-8')
+            return (json.loads(raw) if raw else {}), resp.status, None
+    except urllib.error.HTTPError as e:
+        text = e.read().decode('utf-8', 'replace') if e.fp else ''
+        print(f'[tochka-oauth] {method} {path} -> HTTP {e.code}: {text[:500]}')
+        return None, e.code, None
+    except Exception as e:
+        print(f'[tochka-oauth] {method} {path} -> {e}')
+        return None, None, str(e)[:120]
+
+
+def business_customers(token: str) -> List[Dict[str, Any]]:
+    data, _, _ = _api('GET', '/open-banking/v1.0/customers', token)
+    out = []
+    for c in ((data or {}).get('Data') or {}).get('Customer', []):
+        if c.get('customerType') == 'Business' and c.get('customerCode'):
+            out.append({'customer_code': str(c['customerCode']),
+                        'name': c.get('shortName') or c.get('fullName') or str(c['customerCode'])})
+    return out
+
+
+def retailers(token: str, customer_code: str) -> Tuple[List[Dict[str, Any]], Optional[int]]:
+    data, status, _ = _api('GET', f'/acquiring/v1.0/retailers?customerCode={customer_code}', token)
+    items = ((data or {}).get('Data') or {}).get('Retailer') or []
+    out = []
+    for r in items if isinstance(items, list) else []:
+        merchant = r.get('merchantId') or r.get('MerchantId')
+        if merchant:
+            out.append({'merchant_id': str(merchant), 'terminal_id': str(r.get('terminalId') or '') or None,
+                        'name': r.get('name') or r.get('retailerName') or r.get('shortName')})
+    return out, status
+
+
+def ensure_webhook(token: str) -> Optional[str]:
+    '''
+    Подписка приложения на оплаты по платёжным ссылкам (Create/Edit Webhook). Повторный вызов безопасен.
+    Вебхук принадлежит приложению (client_id), поэтому при отказе токену клиента пробуем токен приложения.
+    '''
+    err = _ensure_webhook(token)
+    if err:
+        app_token, _ = _token_request({'grant_type': 'client_credentials', 'scope': SCOPE})
+        if app_token and app_token.get('access_token'):
+            app_err = _ensure_webhook(app_token['access_token'])
+            if not app_err:
+                return None
+    return err
+
+
+def _ensure_webhook(token: str) -> Optional[str]:
+    client_id = os.environ.get('TOCHKA_CLIENT_ID', '')
+    data, status, err = _api('GET', f'/webhook/v1.0/{client_id}', token)
+    current = (data or {}).get('Data') or {}
+    events = current.get('webhooksList') or []
+    if current.get('url') == WEBHOOK_URL and all(e in events for e in WEBHOOK_EVENTS):
+        return None
+    body = {'webhooksList': sorted(set(events) | set(WEBHOOK_EVENTS)), 'url': WEBHOOK_URL}
+    method = 'POST' if current.get('url') else 'PUT'
+    _, status, err = _api(method, f'/webhook/v1.0/{client_id}', token, body)
+    if status == 200:
+        return None
+    if status == 403:
+        return 'Точка не дала права на вебхуки - подключитесь через Точку заново'
+    return err or f'Точка не создала вебхук (ошибка {status})'

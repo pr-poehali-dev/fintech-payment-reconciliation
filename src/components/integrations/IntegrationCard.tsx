@@ -65,6 +65,7 @@ const IntegrationCard = ({
   const syncing = loadingStatement === integration.id;
   const oauthStatus = integration.oauth_status;
   const oauthBroken = oauthStatus === 'expired' || oauthStatus === 'missing';
+  const oauthStops = integration.provider_slug === 'tochka_acquiring' ? 'оплаты и корзины для чеков не загружаются' : 'выписки не загружаются';
 
   const stop = (e: React.MouseEvent, fn: () => void) => {
     e.stopPropagation();
@@ -164,10 +165,10 @@ const IntegrationCard = ({
               />
               <span className="text-foreground">
                 {oauthStatus === 'missing'
-                  ? 'Доступ к Точке не подтверждён — выписки не загружаются'
+                  ? `Доступ к Точке не подтверждён — ${oauthStops}`
                   : oauthStatus === 'expired'
-                    ? 'Доступ к Точке истёк — выписки не загружаются. Подключите счёт заново'
-                    : 'Доступ к Точке скоро истечёт — подключите счёт заново, чтобы выписки не прервались'}
+                    ? `Доступ к Точке истёк — ${oauthStops}. Подключитесь заново`
+                    : 'Доступ к Точке скоро истечёт — подключитесь заново, чтобы работа не прервалась'}
               </span>
             </div>
             <Button

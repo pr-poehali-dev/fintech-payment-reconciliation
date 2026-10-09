@@ -7,6 +7,7 @@ const TTL_MS = 30 * 60 * 1000;
 export interface TochkaOAuthDraft {
   companyId: number;
   integrationId: number | null;
+  providerSlug?: string;
   integrationName: string;
   config: ConfigState;
   savedAt: number;

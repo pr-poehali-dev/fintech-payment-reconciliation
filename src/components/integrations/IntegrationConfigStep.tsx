@@ -8,6 +8,7 @@ import EcomkassaStorePicker from './EcomkassaStorePicker';
 import OfdKktPicker from './OfdKktPicker';
 import EcomkassaPaymentTypesPicker from './EcomkassaPaymentTypesPicker';
 import TochkaAuthMethodPicker from './TochkaAuthMethodPicker';
+import TochkaAcquiringPicker from './TochkaAcquiringPicker';
 import MoyklassPaymentTypesPicker from './MoyklassPaymentTypesPicker';
 import {
   ConfigState,
@@ -59,6 +60,7 @@ const IntegrationConfigStep = ({
   const currentFields = PROVIDER_FIELDS[selectedProvider.slug] || [];
   const isTbankAccount = selectedProvider.slug === 'tbank_account';
   const isTochkaAccount = selectedProvider.slug === 'tochka_account';
+  const isTochkaAcquiring = selectedProvider.slug === 'tochka_acquiring';
   const isEcomkassa = selectedProvider.slug === 'ecomkassa';
   const isEcomkassaGateway = selectedProvider.slug === 'ecomkassa_gateway';
   const isOfd = selectedProvider.slug === 'ofdru';
@@ -71,6 +73,12 @@ const IntegrationConfigStep = ({
     if (isTochkaAccount && config.auth_method === 'oauth'
       ? !String(config.account_number ?? '').trim()
       : isTochkaAccount && !String(config.api_token ?? '').trim()) {
+      return false;
+    }
+
+    if (isTochkaAcquiring && (config.auth_method === 'oauth'
+      ? !String(config.customer_code ?? '').trim()
+      : !String(config.api_token ?? '').trim())) {
       return false;
     }
 
@@ -269,6 +277,17 @@ const IntegrationConfigStep = ({
           onConfigChange={onConfigChange}
           visiblePassword={!!visiblePasswords.api_token}
           onTogglePasswordVisibility={() => onTogglePasswordVisibility('api_token')}
+        />
+      )}
+
+      {isTochkaAcquiring && (
+        <TochkaAcquiringPicker
+          companyId={companyId}
+          config={config}
+          onConfigChange={onConfigChange}
+          visiblePassword={!!visiblePasswords.api_token}
+          onTogglePasswordVisibility={() => onTogglePasswordVisibility('api_token')}
+          onBeforeOAuthRedirect={onBeforeOAuthRedirect}
         />
       )}
 

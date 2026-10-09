@@ -101,6 +101,23 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
     webhook_token = params.get('token', '')
 
+    # Общий вебхук OAuth-приложения Точки: интеграцию находим по customerCode/merchantId из подписанного JWT.
+    if not webhook_token and params.get('source') == 'tochka':
+        raw = event.get('body') or ''
+        if event.get('isBase64Encoded'):
+            import base64
+            raw = base64.b64decode(raw).decode('utf-8', errors='replace')
+        token_found, reply = tochka_acquiring_handler.resolve_app_webhook(raw)
+        if not token_found:
+            return {
+                'statusCode': 200,
+                'headers': {'Content-Type': 'application/json'},
+                'body': json.dumps({'ok': True, 'note': reply}, ensure_ascii=False),
+                'isBase64Encoded': False
+            }
+        webhook_token = token_found
+        params['token'] = token_found
+
     if not webhook_token:
         return {
             'statusCode': 400,
