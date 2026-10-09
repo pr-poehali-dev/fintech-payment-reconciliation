@@ -4,6 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import Icon from '@/components/ui/icon';
+import { prepareAuthWindow } from '@/lib/openExternalAuth';
 import { ConfigState } from './providerFieldsConfig';
 import functionUrls from '../../../backend/func2url.json';
 
@@ -129,6 +130,7 @@ const TochkaAuthMethodPicker = ({
   }, [isOAuth, companyId]);
 
   const connectOAuth = async () => {
+    const authWindow = prepareAuthWindow();
     setIsRedirecting(true);
     setError('');
     try {
@@ -136,11 +138,15 @@ const TochkaAuthMethodPicker = ({
       const data = await res.json();
       if (data.success && data.authorize_url) {
         onBeforeOAuthRedirect?.();
-        window.location.href = data.authorize_url;
+        if (authWindow.go(data.authorize_url)) return;
+        setError('Браузер заблокировал окно Точки — разрешите всплывающие окна для сайта или откройте кабинет в отдельной вкладке');
+        setIsRedirecting(false);
         return;
       }
+      authWindow.close();
       setError(data.error || 'Не удалось получить ссылку Точки');
     } catch {
+      authWindow.close();
       setError('Проблема с подключением к серверу');
     }
     setIsRedirecting(false);
