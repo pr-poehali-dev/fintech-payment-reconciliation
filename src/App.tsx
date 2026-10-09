@@ -14,7 +14,7 @@ import Landing from "./pages/Landing";
 import Login from "./pages/Login";
 import CreateCompany from "./pages/CreateCompany";
 import Admin from "./pages/Admin";
-import NotFound from "./pages/NotFound";
+import NotFound from "./pages/NotFoundPage";
 import WebhookLogsPage from "./pages/WebhookLogsPage";
 import InvitePage from "./pages/InvitePage";
 import TochkaOAuthCallback from "./pages/TochkaOAuthCallback";
