@@ -66,7 +66,9 @@ const IntegrationConfigStep = ({
       return false;
     }
 
-    if (isTochkaAccount && !String(config.api_token ?? '').trim()) {
+    if (isTochkaAccount && config.auth_method === 'oauth'
+      ? !String(config.account_number ?? '').trim()
+      : isTochkaAccount && !String(config.api_token ?? '').trim()) {
       return false;
     }
 
@@ -259,6 +261,7 @@ const IntegrationConfigStep = ({
 
       {isTochkaAccount && (
         <TochkaAuthMethodPicker
+          companyId={companyId}
           config={config}
           onConfigChange={onConfigChange}
           visiblePassword={!!visiblePasswords.api_token}

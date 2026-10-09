@@ -12,6 +12,7 @@ from datetime import datetime, timedelta
 
 from tbank_oauth import fetch_statement as fetch_tbank_statement
 from purpose_classifier import matches_keywords, get_purpose_keywords, operation_purpose_text
+import tochka_oauth
 from ru_trusted_ca import build_ssl_context
 from acquiring_settlement import process_acquiring_settlements
 from cron_report import record_cron_run
@@ -237,6 +238,11 @@ def fetch_tochka_account_statement(cur, integration_id: int, company_id: int, co
     # попадают при копировании токена - иначе latin-1 кодировка HTTP-заголовков
     # падает с UnicodeEncodeError до отправки запроса. См. tochka-accounts-list.
     api_token = re.sub(r'[^\x21-\x7e]', '', config.get('api_token', ''))
+    if config.get('auth_method') == 'oauth':
+        api_token, oauth_error = tochka_oauth.get_access_token(cur, company_id)
+        if not api_token:
+            print(f'[tochka] oauth token unavailable for company {company_id}: {oauth_error}')
+            return None
     account_id = config.get('account_number', '')
     keywords = get_purpose_keywords(config)
     base_url = 'https://enter.tochka.com/uapi/open-banking/v1.0'

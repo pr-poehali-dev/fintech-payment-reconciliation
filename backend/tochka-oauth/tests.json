@@ -1,0 +1,22 @@
+{
+  "tests": [
+    {
+      "name": "Без входа доступ закрыт",
+      "method": "GET",
+      "path": "/?action=status&company_id=1",
+      "expectedStatus": 401,
+      "expectedBody": {"error_code": "session_required"},
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Поддельная сессия не принимается",
+      "method": "POST",
+      "path": "/",
+      "headers": {"X-Session-Id": "fake-session-token", "Content-Type": "application/json"},
+      "body": {"code": "x", "company_id": 1},
+      "expectedStatus": 401,
+      "expectedBody": {"error_code": "session_required"},
+      "bodyMatcher": "partial"
+    }
+  ]
+}

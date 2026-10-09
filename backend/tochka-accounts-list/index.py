@@ -1,4 +1,5 @@
 import json
+import os
 import re
 import urllib.request
 import urllib.error
@@ -6,6 +7,7 @@ from typing import Dict, Any, List, Optional
 
 from ru_trusted_ca import build_ssl_context
 from auth_guard import guard
+import tochka_oauth
 
 CORS_HEADERS = {
     'Access-Control-Allow-Origin': '*',
@@ -117,12 +119,14 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     эквайринг у JWT-токена не всегда включены (генерируются отдельным чекбоксом
     в интернет-банке) - тогда Точка отвечает 403 "Forbidden by consent", это НЕ
     ошибка всего запроса, просто retailers возвращается пустым списком.
-    Args: api_token (JWT, полученный в интернет-банке Точки)
+    Args: api_token (JWT, полученный в интернет-банке Точки) или auth_method='oauth' + company_id
+    (токен берётся из доступа, выданного компанией через OAuth 2.0 Точки)
     Returns: success, accounts[] с полями account_id, account_number, currency,
     balance; retailers[] с полями merchant_id, terminal_id, name (может быть
     пустым, если у токена нет прав на эквайринг)
     '''
-    denied = guard(event, check_company=False)
+    # company_id передаётся только при OAuth - тогда проверяем, что пользователь сотрудник компании.
+    denied = guard(event)
     if denied:
         return denied
 
@@ -148,6 +152,24 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     # UnicodeEncodeError до того, как Точка вообще увидит токен. Чистим строго
     # до печатаемого ASCII, как и положено для JWT (base64url + точки).
     api_token = re.sub(r'[^\x21-\x7e]', '', raw_token)
+
+    # OAuth 2.0: токен не вводится руками, а берётся из сохранённого доступа компании.
+    if body.get('auth_method') == 'oauth':
+        import psycopg2
+        conn = psycopg2.connect(os.environ['DATABASE_URL'])
+        try:
+            cur = conn.cursor()
+            api_token, oauth_error = tochka_oauth.get_access_token(cur, int(body.get('company_id') or 0))
+            conn.commit()
+        finally:
+            conn.close()
+        if not api_token:
+            return {
+                'statusCode': 200,
+                'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+                'body': json.dumps({'success': False, 'error': oauth_error, 'oauth_required': True}, ensure_ascii=False),
+                'isBase64Encoded': False
+            }
 
     if not api_token:
         return {

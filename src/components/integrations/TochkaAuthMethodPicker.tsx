@@ -21,6 +21,7 @@ interface TochkaRetailer {
 }
 
 interface TochkaAuthMethodPickerProps {
+  companyId: number;
   config: ConfigState;
   onConfigChange: (config: ConfigState) => void;
   visiblePassword: boolean;
@@ -41,6 +42,7 @@ interface TochkaAuthMethodPickerProps {
 //   (например, нашему сервису от имени клиента). Появится позже, аналогично
 //   уже реализованному OAuth Т-Банка (T-Business ID).
 const TochkaAuthMethodPicker = ({
+  companyId,
   config,
   onConfigChange,
   visiblePassword,
@@ -56,9 +58,13 @@ const TochkaAuthMethodPicker = ({
   const accountNumber = config.account_number ? String(config.account_number) : '';
   const purposeKeywords = String(config.purpose_keywords ?? '');
   const isFirstRenderRef = useRef(true);
+  const isOAuth = authMethod === 'oauth';
+  const [oauthConnected, setOauthConnected] = useState<boolean | null>(null);
+  const [oauthConfigured, setOauthConfigured] = useState(true);
+  const [isRedirecting, setIsRedirecting] = useState(false);
 
   const fetchAccounts = async (token: string, silent = false) => {
-    if (!token.trim()) {
+    if (!isOAuth && !token.trim()) {
       if (!silent) setError('Вставьте JWT-токен');
       return;
     }
@@ -70,7 +76,7 @@ const TochkaAuthMethodPicker = ({
       const response = await fetch(functionUrls['tochka-accounts-list'], {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ api_token: token })
+        body: JSON.stringify(isOAuth ? { auth_method: 'oauth', company_id: companyId } : { api_token: token })
       });
       const data = await response.json();
 
@@ -104,6 +110,41 @@ const TochkaAuthMethodPicker = ({
   // - при вводе/вставке токена (в т.ч. в новой интеграции, где поле изначально
   //   пустое) - с debounce 600мс, чтобы не слать запрос на каждый символ.
   useEffect(() => {
+    if (!isOAuth) return;
+    setAccounts([]);
+    setRetailers([]);
+    setError('');
+    setOauthConnected(null);
+    fetch(`${functionUrls['tochka-oauth']}?action=status&company_id=${companyId}`)
+      .then((r) => r.json())
+      .then((data) => {
+        setOauthConfigured(data.configured !== false);
+        setOauthConnected(!!data.connected);
+        if (data.connected) fetchAccounts('', false);
+      })
+      .catch(() => setOauthConnected(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOAuth, companyId]);
+
+  const connectOAuth = async () => {
+    setIsRedirecting(true);
+    setError('');
+    try {
+      const res = await fetch(`${functionUrls['tochka-oauth']}?action=authorize_url&company_id=${companyId}`);
+      const data = await res.json();
+      if (data.success && data.authorize_url) {
+        window.location.href = data.authorize_url;
+        return;
+      }
+      setError(data.error || 'Не удалось получить ссылку Точки');
+    } catch {
+      setError('Проблема с подключением к серверу');
+    }
+    setIsRedirecting(false);
+  };
+
+  useEffect(() => {
+    if (isOAuth) return;
     if (isFirstRenderRef.current) {
       isFirstRenderRef.current = false;
       if (apiToken.trim()) fetchAccounts(apiToken, true);
@@ -137,18 +178,71 @@ const TochkaAuthMethodPicker = ({
           </button>
           <button
             type="button"
-            disabled
-            className="flex items-center gap-2 p-3 rounded-lg border border-border opacity-50 cursor-not-allowed text-left"
+            onClick={() => onConfigChange({ ...config, auth_method: 'oauth', api_token: '' })}
+            className={`flex items-center gap-2 p-3 rounded-lg border text-left transition-colors ${
+              isOAuth
+                ? 'border-primary bg-primary/5'
+                : 'border-border hover:border-primary/50'
+            }`}
           >
-            <Icon name="Link" size={16} className="text-muted-foreground" />
+            <Icon name="Link" size={16} className={isOAuth ? 'text-primary' : 'text-muted-foreground'} />
             <div>
-              <div className="text-sm font-medium">OAuth 2.0</div>
-              <div className="text-xs text-muted-foreground">Скоро</div>
+              <div className="text-sm font-medium">Вход через Точку</div>
+              <div className="text-xs text-muted-foreground">Без ручного токена</div>
             </div>
           </button>
         </div>
       </div>
 
+      {isOAuth && (
+        <div className="rounded-lg border border-border p-3 space-y-2">
+          {oauthConnected === null ? (
+            <p className="text-sm text-muted-foreground flex items-center gap-1.5">
+              <Icon name="Loader2" size={14} className="animate-spin" />
+              Проверяем подключение…
+            </p>
+          ) : !oauthConfigured ? (
+            <p className="text-sm text-muted-foreground">Вход через Точку ещё не настроен на платформе — пока используйте JWT-токен</p>
+          ) : (
+            <>
+              <p className="text-sm flex items-center gap-1.5">
+                <Icon
+                  name={oauthConnected ? 'CircleCheck' : 'Info'}
+                  size={15}
+                  className={oauthConnected ? 'text-success' : 'text-muted-foreground'}
+                />
+                {oauthConnected
+                  ? 'Доступ к Точке подтверждён'
+                  : 'Войдите в интернет-банк Точки и подтвердите доступ к счетам и выписке'}
+              </p>
+              <Button
+                type="button"
+                variant={oauthConnected ? 'outline' : 'default'}
+                size="sm"
+                onClick={connectOAuth}
+                disabled={isRedirecting}
+                className="gap-1.5"
+              >
+                <Icon name={isRedirecting ? 'Loader2' : 'ExternalLink'} size={14} className={isRedirecting ? 'animate-spin' : ''} />
+                {oauthConnected ? 'Подключить заново' : 'Подключить через Точку'}
+              </Button>
+              {!oauthConnected && (
+                <p className="text-xs text-muted-foreground">
+                  После подтверждения вы вернётесь в раздел «Интеграции» — откройте подключение Точки ещё раз и выберите счёт
+                </p>
+              )}
+              {isLoading && (
+                <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                  <Icon name="Loader2" size={12} className="animate-spin" />
+                  Загружаем счета…
+                </p>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
+      {!isOAuth && (
       <div>
         <Label htmlFor="tochka_api_token">JWT-токен</Label>
         <div className="relative">
@@ -179,6 +273,7 @@ const TochkaAuthMethodPicker = ({
           </p>
         )}
       </div>
+      )}
 
       {error && <p className="text-xs text-destructive">{error}</p>}
 
