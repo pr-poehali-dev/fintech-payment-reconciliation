@@ -110,6 +110,7 @@ def save_grant(cur, company_id: int, token_data: Dict[str, Any]) -> None:
             refresh_token = COALESCE(EXCLUDED.refresh_token, company_bank_oauth_grants.refresh_token),
             scope = EXCLUDED.scope,
             expires_at = EXCLUDED.expires_at,
+            revoked_at = NULL,
             updated_at = NOW()
     ''', (company_id, PROVIDER_SLUG, token_data['access_token'], token_data.get('refresh_token'),
           SCOPE, str(int(token_data.get('expires_in') or 86400))))
@@ -121,7 +122,7 @@ def get_access_token(cur, company_id: int) -> Tuple[Optional[str], Optional[str]
     по refresh_token (Точка выдаёт новую пару, старый refresh_token больше не годится).
     '''
     cur.execute(f'''
-        SELECT access_token, refresh_token, expires_at > NOW() + INTERVAL '10 minutes'
+        SELECT access_token, refresh_token, expires_at > NOW() + INTERVAL '10 minutes', revoked_at IS NOT NULL
         FROM {SCHEMA}.company_bank_oauth_grants
         WHERE company_id = %s AND provider_slug = %s
         FOR UPDATE
@@ -129,23 +130,42 @@ def get_access_token(cur, company_id: int) -> Tuple[Optional[str], Optional[str]
     row = cur.fetchone()
     if not row:
         return None, 'Точка не подключена через OAuth - нажмите «Подключить через Точку»'
-    access_token, refresh_token, fresh = row
+    access_token, refresh_token, fresh, revoked = row
+    if revoked:
+        return None, EXPIRED_MESSAGE
     if fresh:
         return access_token, None
     if not refresh_token:
-        return None, 'Доступ к Точке истёк - подключите счёт заново'
+        mark_revoked(cur, company_id)
+        return None, EXPIRED_MESSAGE
     data, err = _token_request({'grant_type': 'refresh_token', 'refresh_token': refresh_token})
     if not data or not data.get('access_token'):
-        return None, 'Доступ к Точке истёк - подключите счёт заново' if not err else f'Не удалось обновить доступ к Точке: {err}'
+        # Точка отвечает 400/401 на просроченный или отозванный refresh_token - дальше только переподключение.
+        if err and ('400' in err or '401' in err):
+            mark_revoked(cur, company_id)
+            return None, EXPIRED_MESSAGE
+        return None, f'Не удалось обновить доступ к Точке: {err}'
     save_grant(cur, company_id, data)
     cur.connection.commit()
     return data['access_token'], None
 
 
+EXPIRED_MESSAGE = 'Доступ к Точке истёк - подключите счёт заново'
+
+
+def mark_revoked(cur, company_id: int) -> None:
+    cur.execute(f'''
+        UPDATE {SCHEMA}.company_bank_oauth_grants SET revoked_at = NOW(), updated_at = NOW()
+        WHERE company_id = %s AND provider_slug = %s AND revoked_at IS NULL
+    ''', (company_id, PROVIDER_SLUG))
+    cur.connection.commit()
+
+
 def is_connected(cur, company_id: int) -> bool:
+    '''Доступ рабочий: есть refresh_token, Точка его не отклоняла и он моложе 30 дней.'''
     cur.execute(f'''
         SELECT 1 FROM {SCHEMA}.company_bank_oauth_grants
         WHERE company_id = %s AND provider_slug = %s AND refresh_token IS NOT NULL
-          AND updated_at > NOW() - INTERVAL '30 days'
+          AND revoked_at IS NULL AND updated_at > NOW() - INTERVAL '30 days'
     ''', (company_id, PROVIDER_SLUG))
     return cur.fetchone() is not None

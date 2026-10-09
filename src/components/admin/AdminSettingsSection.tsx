@@ -10,6 +10,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { formatDateTime } from '@/lib/formatDate';
 import functionUrls from '../../../backend/func2url.json';
 import PlatformAdminsCard from './PlatformAdminsCard';
+import MaintenanceCard from './MaintenanceCard';
 import CronSourcesList, { CronSource } from './CronSourcesList';
 
 const api = (functionUrls as Record<string, string>)['platform-settings'];
@@ -22,6 +23,9 @@ interface PlatformSettings {
   cron_last_result: { companies: number; failed: number } | null;
   metrika_counter_id: string | null;
   cron_sources: Record<string, boolean>;
+  maintenance_enabled: boolean;
+  maintenance_message: string | null;
+  maintenance_until: string | null;
 }
 
 interface CompanyOption {
@@ -131,6 +135,13 @@ const AdminSettingsSection = () => {
         <h2 className="text-3xl font-display font-bold text-foreground mb-2">Настройки</h2>
         <p className="text-muted-foreground">Параметры всей платформы</p>
       </div>
+
+      <MaintenanceCard
+        enabled={settings.maintenance_enabled}
+        message={settings.maintenance_message}
+        until={settings.maintenance_until}
+        onSaved={load}
+      />
 
       <Card className="border-border bg-card">
         <CardHeader>

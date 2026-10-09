@@ -34,4 +34,5 @@ export interface UserIntegration {
   forward_url?: string;
   receipts_enabled?: boolean;
   stopped_receipt_scenario?: { id: number; name: string } | null;
+  oauth_status?: 'ok' | 'expiring' | 'expired' | 'missing' | null;
 }

@@ -63,6 +63,8 @@ const IntegrationCard = ({
   const usesWebhook = !isEcomkassa && !isOFD && !isBank;
   const cfg = integration.config || {};
   const syncing = loadingStatement === integration.id;
+  const oauthStatus = integration.oauth_status;
+  const oauthBroken = oauthStatus === 'expired' || oauthStatus === 'missing';
 
   const stop = (e: React.MouseEvent, fn: () => void) => {
     e.stopPropagation();
@@ -147,6 +149,38 @@ const IntegrationCard = ({
             </Button>
           </div>
         </div>
+
+        {(oauthBroken || oauthStatus === 'expiring') && (
+          <div
+            className={`flex flex-col gap-2 rounded-lg border p-3 text-sm sm:flex-row sm:items-center sm:justify-between ${
+              oauthBroken ? 'border-destructive/40 bg-destructive/10' : 'border-warning/40 bg-warning/10'
+            }`}
+          >
+            <div className="flex items-start gap-2">
+              <Icon
+                name={oauthBroken ? 'ShieldAlert' : 'Clock'}
+                size={16}
+                className={`mt-0.5 shrink-0 ${oauthBroken ? 'text-destructive' : 'text-warning'}`}
+              />
+              <span className="text-foreground">
+                {oauthStatus === 'missing'
+                  ? 'Доступ к Точке не подтверждён — выписки не загружаются'
+                  : oauthStatus === 'expired'
+                    ? 'Доступ к Точке истёк — выписки не загружаются. Подключите счёт заново'
+                    : 'Доступ к Точке скоро истечёт — подключите счёт заново, чтобы выписки не прервались'}
+              </span>
+            </div>
+            <Button
+              size="sm"
+              variant={oauthBroken ? 'default' : 'outline'}
+              className="shrink-0 gap-1.5"
+              onClick={(e) => stop(e, () => onEdit(integration))}
+            >
+              <Icon name="ExternalLink" size={14} />
+              Подключить заново
+            </Button>
+          </div>
+        )}
 
         <div className="flex flex-wrap gap-2 text-xs">
           {isEcomkassa && (

@@ -173,7 +173,8 @@ def is_admin(cur, user_id) -> bool:
 def load_settings(cur) -> Dict[str, Any]:
     cur.execute(f'''
         SELECT s.managing_company_id, c.name, c.inn, s.cron_enabled, s.cron_token,
-               s.cron_last_tick_at, s.cron_last_result, s.updated_at, s.metrika_counter_id, s.cron_sources, s.cron_intervals
+               s.cron_last_tick_at, s.cron_last_result, s.updated_at, s.metrika_counter_id, s.cron_sources, s.cron_intervals,
+               s.maintenance_enabled, s.maintenance_message, s.maintenance_until
         FROM {SCHEMA}.platform_settings s
         LEFT JOIN {SCHEMA}.companies c ON c.id = s.managing_company_id
         WHERE s.id = 1
@@ -182,7 +183,9 @@ def load_settings(cur) -> Dict[str, Any]:
     return {
         'managing_company_id': r[0], 'managing_company_name': r[1], 'managing_company_inn': r[2],
         'cron_enabled': r[3], 'cron_token': r[4], 'cron_last_tick_at': r[5],
-        'cron_last_result': r[6], 'updated_at': r[7], 'metrika_counter_id': r[8], 'cron_sources': r[9] or {}, 'cron_intervals': r[10] or {}
+        'cron_last_result': r[6], 'updated_at': r[7], 'metrika_counter_id': r[8], 'cron_sources': r[9] or {}, 'cron_intervals': r[10] or {},
+        'maintenance_enabled': bool(r[11]), 'maintenance_message': r[12],
+        'maintenance_until': r[13].isoformat() if r[13] else None
     }
 
 
@@ -485,6 +488,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     GET ?requester_user_id=&section=banners - все баннеры для редактирования
     POST {action: "save_banner", requester_user_id, page, text, button_text, button_url, variant, is_active}
     POST {action: "save", requester_user_id, managing_company_id, cron_enabled, metrika_counter_id}
+    POST {action: "save_maintenance", requester_user_id, maintenance_enabled, maintenance_message, maintenance_until}
+         - режим техработ: сайт показывает заглушку всем, кроме администраторов платформы
     GET ?requester_user_id=&section=admins - сотрудники компании платформы и доступ к админке
     POST {action: "set_admin", requester_user_id, user_id, enabled} - дать/забрать доступ (только владелец)
     POST {action: "tick"} + заголовок X-Cron-Token - шаг планировщика по всем компаниям
@@ -531,7 +536,11 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 if row:
                     operator = {'name': row[0], 'inn': row[1], 'ogrn': row[2], 'address': row[3]}
             return respond(200, {'success': True, 'metrika_counter_id': settings.get('metrika_counter_id'),
-                                 'operator': operator})
+                                 'operator': operator, 'maintenance': {
+                                     'enabled': settings['maintenance_enabled'],
+                                     'message': settings['maintenance_message'],
+                                     'until': settings['maintenance_until'],
+                                 }})
 
         requester = body.get('requester_user_id') or params.get('requester_user_id')
         if not requester or not is_admin(cur, requester):
@@ -580,7 +589,19 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             conn.commit()
             return respond(200, {'success': True, 'members': platform_members(cur), 'can_manage': True})
 
-        if method == 'POST':
+        if method == 'POST' and body.get('action') == 'save_maintenance':
+            until = str(body.get('maintenance_until') or '').strip() or None
+            cur.execute(f'''
+                UPDATE {SCHEMA}.platform_settings
+                SET maintenance_enabled = %s, maintenance_message = %s, maintenance_until = %s::timestamptz,
+                    updated_by = %s, updated_at = NOW()
+                WHERE id = 1
+            ''', (bool(body.get('maintenance_enabled')), str(body.get('maintenance_message') or '').strip()[:500] or None,
+                  until, requester))
+            conn.commit()
+            settings = load_settings(cur)
+
+        elif method == 'POST':
             if body.get('action') != 'save':
                 return respond(400, {'error': 'Unknown action'})
             company_id = body.get('managing_company_id')

@@ -119,7 +119,16 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                  WHERE s.source_integration_id = ui.id AND s.trigger_type = 'new_payment'
                    AND s.action_type IN ('create_receipt', 'create_order') AND s.status = 'stopped'
                    AND s.removed_at IS NULL
-                 ORDER BY (s.action_type = 'create_receipt') DESC, s.updated_at DESC LIMIT 1) AS stopped_receipt_scenario
+                 ORDER BY (s.action_type = 'create_receipt') DESC, s.updated_at DESC LIMIT 1) AS stopped_receipt_scenario,
+                CASE WHEN p.slug = 'tochka_account' AND ui.config->>'auth_method' = 'oauth' THEN (
+                    SELECT CASE
+                        WHEN g.id IS NULL OR g.refresh_token IS NULL THEN 'missing'
+                        WHEN g.revoked_at IS NOT NULL OR g.updated_at < NOW() - INTERVAL '30 days' THEN 'expired'
+                        WHEN g.updated_at < NOW() - INTERVAL '25 days' THEN 'expiring'
+                        ELSE 'ok' END
+                    FROM (SELECT 1) one
+                    LEFT JOIN company_bank_oauth_grants g ON g.company_id = ui.company_id AND g.provider_slug = 'tochka_account'
+                ) END AS oauth_status
             FROM user_integrations ui
             JOIN integration_providers p ON p.id = ui.provider_id
             JOIN integration_categories c ON c.id = p.category_id
@@ -147,7 +156,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 'sync_interval_hours': row[14],
                 'last_synced_at': row[15].isoformat() if row[15] else None,
                 'receipts_enabled': bool(row[16]),
-                'stopped_receipt_scenario': row[17]
+                'stopped_receipt_scenario': row[17],
+                'oauth_status': row[18]
             })
         
         return {

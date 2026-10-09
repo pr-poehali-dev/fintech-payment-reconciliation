@@ -7,6 +7,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { BackfillProvider } from "@/contexts/BackfillContext";
 import RequireAuth from "@/components/RequireAuth";
+import MaintenanceGate from "@/components/MaintenanceGate";
 import RequireAdmin from "@/components/RequireAdmin";
 import YandexMetrika from "@/components/YandexMetrika";
 import Index from "./pages/Index";
@@ -31,6 +32,7 @@ const App = () => (
         <YandexMetrika />
         <AuthProvider>
           <BackfillProvider>
+            <MaintenanceGate>
             <Routes>
               <Route path="/" element={<Landing />} />
               <Route path="/login" element={<Login />} />
@@ -45,6 +47,7 @@ const App = () => (
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
             </Routes>
+            </MaintenanceGate>
           </BackfillProvider>
         </AuthProvider>
       </BrowserRouter>
