@@ -22,6 +22,7 @@ interface TochkaRetailer {
 
 interface TochkaAuthMethodPickerProps {
   companyId: number;
+  onBeforeOAuthRedirect?: () => void;
   config: ConfigState;
   onConfigChange: (config: ConfigState) => void;
   visiblePassword: boolean;
@@ -43,6 +44,7 @@ interface TochkaAuthMethodPickerProps {
 //   уже реализованному OAuth Т-Банка (T-Business ID).
 const TochkaAuthMethodPicker = ({
   companyId,
+  onBeforeOAuthRedirect,
   config,
   onConfigChange,
   visiblePassword,
@@ -133,6 +135,7 @@ const TochkaAuthMethodPicker = ({
       const res = await fetch(`${functionUrls['tochka-oauth']}?action=authorize_url&company_id=${companyId}`);
       const data = await res.json();
       if (data.success && data.authorize_url) {
+        onBeforeOAuthRedirect?.();
         window.location.href = data.authorize_url;
         return;
       }
@@ -228,7 +231,7 @@ const TochkaAuthMethodPicker = ({
               </Button>
               {!oauthConnected && (
                 <p className="text-xs text-muted-foreground">
-                  После подтверждения вы вернётесь в раздел «Интеграции» — откройте подключение Точки ещё раз и выберите счёт
+                  После подтверждения форма откроется снова — останется выбрать счёт
                 </p>
               )}
               {isLoading && (

@@ -1,9 +1,11 @@
+import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import Icon from '@/components/ui/icon';
 import AddIntegrationDialog from '@/components/integrations/AddIntegrationDialog';
 import DeleteIntegrationDialog from '@/components/integrations/DeleteIntegrationDialog';
 import IntegrationsCategoryList from '@/components/integrations/IntegrationsCategoryList';
 import { useIntegrationsPageData } from '@/components/integrations/useIntegrationsPageData';
+import { TochkaOAuthDraft, takeTochkaDraft } from '@/components/integrations/tochkaOAuthDraft';
 
 interface IntegrationsPageProps {
   onSetupReceipts?: (integrationId: number) => void;
@@ -38,6 +40,22 @@ const IntegrationsPage = ({ onSetupReceipts }: IntegrationsPageProps) => {
     togglingId,
     getCategoryIntegrations
   } = useIntegrationsPageData();
+  const [restoredDraft, setRestoredDraft] = useState<TochkaOAuthDraft | null>(null);
+
+  // Вернулись из Точки после подтверждения доступа - открываем ту же форму, чтобы сразу выбрать счёт.
+  useEffect(() => {
+    if (isLoading || !companyId || allProviders.length === 0) return;
+    const draft = takeTochkaDraft(companyId);
+    if (!draft) return;
+    const editing = draft.integrationId ? userIntegrations.find((i) => i.id === draft.integrationId) : null;
+    setRestoredDraft(draft);
+    if (editing) {
+      handleEdit(editing);
+    } else {
+      handleAddNew();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoading, companyId, allProviders.length]);
 
   if (isLoading) {
     return (
@@ -86,7 +104,10 @@ const IntegrationsPage = ({ onSetupReceipts }: IntegrationsPageProps) => {
 
       <AddIntegrationDialog
         open={showAddDialog}
-        onOpenChange={setShowAddDialog}
+        onOpenChange={(o) => {
+          setShowAddDialog(o);
+          if (!o) setRestoredDraft(null);
+        }}
         categories={categories}
         initialCategory={null}
         editingIntegration={editingIntegration}
@@ -95,6 +116,7 @@ const IntegrationsPage = ({ onSetupReceipts }: IntegrationsPageProps) => {
         companyId={companyId || 0}
         onSuccess={fetchIntegrations}
         onSetupReceipts={onSetupReceipts}
+        restoredDraft={restoredDraft}
       />
 
       <DeleteIntegrationDialog

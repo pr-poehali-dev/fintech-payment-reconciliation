@@ -34,6 +34,7 @@ interface IntegrationConfigStepProps {
   onBack: () => void;
   onCancel: () => void;
   onSubmit: () => void;
+  onBeforeOAuthRedirect?: () => void;
 }
 
 const IntegrationConfigStep = ({
@@ -52,7 +53,8 @@ const IntegrationConfigStep = ({
   isLoading,
   onBack,
   onCancel,
-  onSubmit
+  onSubmit,
+  onBeforeOAuthRedirect
 }: IntegrationConfigStepProps) => {
   const currentFields = PROVIDER_FIELDS[selectedProvider.slug] || [];
   const isTbankAccount = selectedProvider.slug === 'tbank_account';
@@ -262,6 +264,7 @@ const IntegrationConfigStep = ({
       {isTochkaAccount && (
         <TochkaAuthMethodPicker
           companyId={companyId}
+          onBeforeOAuthRedirect={onBeforeOAuthRedirect}
           config={config}
           onConfigChange={onConfigChange}
           visiblePassword={!!visiblePasswords.api_token}

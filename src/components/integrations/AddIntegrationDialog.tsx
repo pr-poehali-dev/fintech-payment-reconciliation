@@ -17,6 +17,7 @@ import IntegrationCategoryStep from './IntegrationCategoryStep';
 import IntegrationProviderStep from './IntegrationProviderStep';
 import IntegrationConfigStep from './IntegrationConfigStep';
 import IntegrationSuccessStep from './IntegrationSuccessStep';
+import { TochkaOAuthDraft, saveTochkaDraft } from './tochkaOAuthDraft';
 
 interface AddIntegrationDialogProps {
   open: boolean;
@@ -29,6 +30,7 @@ interface AddIntegrationDialogProps {
   companyId: number;
   onSuccess: () => void;
   onSetupReceipts?: (integrationId: number) => void;
+  restoredDraft?: TochkaOAuthDraft | null;
 }
 
 const AddIntegrationDialog = ({
@@ -41,7 +43,8 @@ const AddIntegrationDialog = ({
   connectedProviderIds,
   companyId,
   onSuccess,
-  onSetupReceipts
+  onSetupReceipts,
+  restoredDraft
 }: AddIntegrationDialogProps) => {
   const [createdIntegrationId, setCreatedIntegrationId] = useState<number | null>(null);
   const getInitialStep = () => {
@@ -66,13 +69,23 @@ const AddIntegrationDialog = ({
   useEffect(() => {
     if (!open) return;
 
-    if (editingIntegration) {
+    if (restoredDraft && !restoredDraft.integrationId) {
+      const prov = allProviders.find(p => p.slug === 'tochka_account') || null;
+      setStep(2);
+      setSelectedProvider(prov);
+      setSelectedCategory(categories.find(c => c.providers.some(p => p.slug === 'tochka_account')) || null);
+      setIntegrationName(restoredDraft.integrationName);
+      setConfig(restoredDraft.config);
+      setForwardUrl('');
+    } else if (editingIntegration) {
       const prov = allProviders.find(p => p.id === editingIntegration.provider_id) || null;
       setStep(2);
       setSelectedProvider(prov);
       setSelectedCategory(categories.find(c => c.providers.some(p => p.id === editingIntegration.provider_id)) || null);
       setIntegrationName(editingIntegration.integration_name || '');
-      setConfig(editingIntegration.config || buildDefaultConfig(prov?.slug || ''));
+      setConfig(restoredDraft?.integrationId === editingIntegration.id
+        ? restoredDraft.config
+        : editingIntegration.config || buildDefaultConfig(prov?.slug || ''));
       setForwardUrl(editingIntegration.forward_url || '');
     } else {
       setStep(initialCategory ? 1 : 0);
@@ -84,7 +97,7 @@ const AddIntegrationDialog = ({
     }
     setWebhookUrl('');
     setVisiblePasswords({});
-  }, [open, editingIntegration, initialCategory, allProviders, categories]);
+  }, [open, editingIntegration, initialCategory, allProviders, categories, restoredDraft]);
 
   const handlePickCategory = (category: Category) => {
     setSelectedCategory(category);
@@ -262,6 +275,12 @@ const AddIntegrationDialog = ({
             onBack={() => setStep(1)}
             onCancel={() => onOpenChange(false)}
             onSubmit={handleCreate}
+            onBeforeOAuthRedirect={() => saveTochkaDraft({
+              companyId,
+              integrationId: editingIntegration?.id ?? null,
+              integrationName,
+              config: { ...config, auth_method: 'oauth' }
+            })}
           />
         )}
 
